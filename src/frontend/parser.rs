@@ -482,7 +482,15 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
             end = self.prev_pos().unwrap_or(start);
             let token = self.take().await;
             match token.token {
-                Token::Assign => (),
+                Token::Assign => match expr_list.last() {
+                    Some(Expr::Identifier(_))
+                    | Some(Expr::MemberExpr(_))
+                    | Some(Expr::IndexExpr(_)) => (),
+                    _ => {
+                        errors.push(Error::unexpected(token));
+                        return (None, errors);
+                    }
+                },
                 Token::NewLine => break,
                 _ => {
                     errors.push(Error::unexpected(token));
