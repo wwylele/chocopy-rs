@@ -84,7 +84,174 @@ impl<GetCharFuture: Future<Output = Option<char>>, GetChar: FnMut() -> GetCharFu
     }
 }
 
-#[allow(clippy::cognitive_complexity)]
+async fn lex_string<
+    GetCharFuture: Future<Output = Option<char>>,
+    GetChar: FnMut() -> GetCharFuture,
+    PutTokenFuture: Future<Output = ()>,
+    PutToken: FnMut(Token, Position, Position) -> PutTokenFuture,
+>(
+    reader: &mut TextReader<GetChar>,
+    put_token: &mut PutToken,
+    start: Position,
+) {
+    reader.next().await;
+    let mut s = "".to_owned();
+    let mut is_id = true;
+    loop {
+        match reader.current_char().unwrap() {
+            // end quote
+            '\"' => {
+                reader.next().await;
+                break;
+            }
+            // escape
+            '\\' => {
+                is_id = false;
+                reader.next().await;
+                match reader.current_char().unwrap() {
+                    'n' => s.push('\n'),
+                    't' => s.push('\t'),
+                    '\\' => s.push('\\'),
+                    '\"' => s.push('\"'),
+                    c => {
+                        reader.next().await;
+                        put_token(
+                            Token::Unrecognized(c.to_string()),
+                            start,
+                            reader.previous_position(),
+                        )
+                        .await;
+                        break;
+                    }
+                }
+            }
+            // normal char
+            c @ ' '..='~' => {
+                if let 'a'..='z' | 'A'..='Z' | '_' | '0'..='9' = c {
+                } else {
+                    is_id = false;
+                }
+                s.push(c);
+            }
+            // unrecognized
+            c => {
+                reader.next().await;
+                put_token(
+                    Token::Unrecognized(c.to_string()),
+                    start,
+                    reader.previous_position(),
+                )
+                .await;
+                break;
+            }
+        }
+        reader.next().await;
+    }
+    let end = reader.previous_position();
+    if let Some('0'..='9') | None = s.chars().next() {
+        is_id = false;
+    }
+    put_token(
+        if is_id {
+            Token::IdString(s)
+        } else {
+            Token::StringLiteral(s)
+        },
+        start,
+        end,
+    )
+    .await;
+}
+
+async fn lex_line<
+    GetCharFuture: Future<Output = Option<char>>,
+    GetChar: FnMut() -> GetCharFuture,
+    PutTokenFuture: Future<Output = ()>,
+    PutToken: FnMut(Token, Position, Position) -> PutTokenFuture,
+>(
+    reader: &mut TextReader<GetChar>,
+    put_token: &mut PutToken,
+) {
+    while reader.current_char() != Some('\n') {
+        let start = reader.current_position();
+        match reader.current_char().unwrap() {
+            // Skip spaces
+            ' ' | '\t' => {
+                while reader.current_char() == Some(' ') || reader.current_char() == Some('\t') {
+                    reader.next().await;
+                }
+            }
+
+            // Skip comments
+            '#' => {
+                while reader.current_char() != Some('\n') {
+                    reader.next().await;
+                }
+            }
+
+            // Numbers
+            '0'..='9' => {
+                let mut s = "".to_owned();
+                while let c @ '0'..='9' = reader.current_char().unwrap() {
+                    s.push(c);
+                    reader.next().await;
+                }
+                let end = reader.previous_position();
+                match s.parse() {
+                    Ok(n) => put_token(Token::Number(n), start, end).await,
+                    Err(_) => put_token(Token::BadNumber, start, end).await,
+                }
+            }
+
+            // Words
+            'a'..='z' | 'A'..='Z' | '_' => {
+                let mut s = "".to_owned();
+                while let c @ 'a'..='z' | c @ 'A'..='Z' | c @ '_' | c @ '0'..='9' =
+                    reader.current_char().unwrap()
+                {
+                    s.push(c);
+                    reader.next().await;
+                }
+                let end = reader.previous_position();
+                put_token(
+                    KEYWORDS
+                        .get(&s[..])
+                        .cloned()
+                        .unwrap_or_else(|| Token::Identifier(s)),
+                    start,
+                    end,
+                )
+                .await;
+            }
+
+            // Strings
+            '\"' => {
+                lex_string(reader, put_token, start).await;
+            }
+
+            // Operators
+            c => {
+                reader.next().await;
+
+                let token = if let Some(operator) = OPERATORS.get(&c) {
+                    let second = reader.current_char().unwrap();
+                    if let Some(operator) = operator.get(&second) {
+                        reader.next().await;
+                        operator.clone()
+                    } else if let Some(operator) = operator.get(&'\0') {
+                        operator.clone()
+                    } else {
+                        Token::Unrecognized(c.to_string())
+                    }
+                } else {
+                    Token::Unrecognized(c.to_string())
+                };
+                put_token(token, start, reader.previous_position()).await;
+            }
+        }
+    }
+}
+
 pub async fn lex<
     GetCharFuture: Future<Output = Option<char>>,
     PutTokenFuture: Future<Output = ()>,
@@ -154,152 +321,8 @@ pub async fn lex<
             }
         }
 
-        // Parse normal tokens
-        while reader.current_char() != Some('\n') {
-            let start = reader.current_position();
-            match reader.current_char().unwrap() {
-                // Skip spaces
-                ' ' | '\t' => {
-                    while reader.current_char() == Some(' ') || reader.current_char() == Some('\t')
-                    {
-                        reader.next().await;
-                    }
-                }
-
-                // Skip comments
-                '#' => {
-                    while reader.current_char() != Some('\n') {
-                        reader.next().await;
-                    }
-                }
-
-                // Numbers
-                '0'..='9' => {
-                    let mut s = "".to_owned();
-                    while let c @ '0'..='9' = reader.current_char().unwrap() {
-                        s.push(c);
-                        reader.next().await;
-                    }
-                    let end = reader.previous_position();
-                    match s.parse() {
-                        Ok(n) => put_token(Token::Number(n), start, end).await,
-                        Err(_) => put_token(Token::BadNumber, start, end).await,
-                    }
-                }
-
-                // Words
-                'a'..='z' | 'A'..='Z' | '_' => {
-                    let mut s = "".to_owned();
-                    while let c @ 'a'..='z' | c @ 'A'..='Z' | c @ '_' | c @ '0'..='9' =
-                        reader.current_char().unwrap()
-                    {
-                        s.push(c);
-                        reader.next().await;
-                    }
-                    let end = reader.previous_position();
-                    put_token(
-                        KEYWORDS
-                            .get(&s[..])
-                            .cloned()
-                            .unwrap_or_else(|| Token::Identifier(s)),
-                        start,
-                        end,
-                    )
-                    .await;
-                }
-
-                // Strings
-                '\"' => {
-                    reader.next().await;
-                    let mut s = "".to_owned();
-                    let mut is_id = true;
-                    loop {
-                        match reader.current_char().unwrap() {
-                            // end quote
-                            '\"' => {
-                                reader.next().await;
-                                break;
-                            }
-                            // escape
-                            '\\' => {
-                                is_id = false;
-                                reader.next().await;
-                                match reader.current_char().unwrap() {
-                                    'n' => s.push('\n'),
-                                    't' => s.push('\t'),
-                                    '\\' => s.push('\\'),
-                                    '\"' => s.push('\"'),
-                                    c => {
-                                        reader.next().await;
-                                        put_token(
-                                            Token::Unrecognized(c.to_string()),
-                                            start,
-                                            reader.previous_position(),
-                                        )
-                                        .await;
-                                        break;
-                                    }
-                                }
-                            }
-                            // normal char
-                            c @ ' '..='~' => {
-                                if let 'a'..='z' | 'A'..='Z' | '_' | '0'..='9' = c {
-                                } else {
-                                    is_id = false;
-                                }
-                                s.push(c);
-                            }
-                            // unrecognized
-                            c => {
-                                reader.next().await;
-                                put_token(
-                                    Token::Unrecognized(c.to_string()),
-                                    start,
-                                    reader.previous_position(),
-                                )
-                                .await;
-                                break;
-                            }
-                        }
-                        reader.next().await;
-                    }
-                    let end = reader.previous_position();
-                    if let Some('0'..='9') | None = s.chars().next() {
-                        is_id = false;
-                    }
-                    put_token(
-                        if is_id {
-                            Token::IdString(s)
-                        } else {
-                            Token::StringLiteral(s)
-                        },
-                        start,
-                        end,
-                    )
-                    .await;
-                }
-
-                // Operators
-                c => {
-                    reader.next().await;
-
-                    let token = if let Some(operator) = OPERATORS.get(&c) {
-                        let second = reader.current_char().unwrap();
-                        if let Some(operator) = operator.get(&second) {
-                            reader.next().await;
-                            operator.clone()
-                        } else if let Some(operator) = operator.get(&'\0') {
-                            operator.clone()
-                        } else {
-                            Token::Unrecognized(c.to_string())
-                        }
-                    } else {
-                        Token::Unrecognized(c.to_string())
-                    };
-                    put_token(token, start, reader.previous_position()).await;
-                }
-            }
-        }
+        // Lex normal tokens
+        lex_line(&mut reader, &mut put_token).await;
 
         // Finish the line
         let new_line_begin = reader.current_position();

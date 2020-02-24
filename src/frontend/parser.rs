@@ -956,7 +956,81 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         )
     }
 
-    #[allow(clippy::cognitive_complexity)]
+    async fn parse_decl_in_func(&mut self) -> (Option<Vec<Declaration>>, Vec<Error>) {
+        let mut declarations = vec![];
+        let mut errors = vec![];
+
+        loop {
+            let head = self.take().await;
+            match head.token {
+                Token::Def => {
+                    self.push_back(head);
+                    let (func_def, mut error) = self.parse_func_def().await;
+                    if let Some(func_def) = func_def {
+                        declarations.push(Declaration::FuncDef(func_def));
+                    }
+                    errors.append(&mut error);
+                }
+                scope @ Token::Global | scope @ Token::Nonlocal => {
+                    let start = head.location.start;
+                    let token = self.take().await;
+                    let variable = if let Token::Identifier(name) = token.token {
+                        Id::Identifier(Identifier {
+                            base: NodeBase {
+                                location: token.location,
+                            },
+                            name,
+                        })
+                    } else {
+                        errors.push(Error::unexpected(token));
+                        return (None, errors);
+                    };
+
+                    let end = self.prev_pos().unwrap_or(start);
+
+                    let token = self.take().await;
+                    if token.token != Token::NewLine {
+                        errors.push(Error::unexpected(token));
+                        return (None, errors);
+                    }
+
+                    let base = NodeBase {
+                        location: Location { start, end },
+                    };
+
+                    let declaration = if scope == Token::Global {
+                        Declaration::GlobalDecl(GlobalDecl { base, variable })
+                    } else {
+                        Declaration::NonLocalDecl(NonLocalDecl { base, variable })
+                    };
+
+                    declarations.push(declaration);
+                }
+                _ => {
+                    let second = self.take().await;
+                    match second.token {
+                        Token::Colon => {
+                            self.push_back(second);
+                            self.push_back(head);
+                            let (var_def, mut error) = self.parse_var_def().await;
+                            if let Some(var_def) = var_def {
+                                declarations.push(Declaration::VarDef(var_def));
+                            }
+                            errors.append(&mut error);
+                        }
+                        _ => {
+                            self.push_back(second);
+                            self.push_back(head);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        (Some(declarations), errors)
+    }
+
     fn parse_func_def<'a>(&'a mut self) -> BoxedFuture<'a, (Option<FuncDef>, Vec<Error>)> {
         Box::pin(async move {
             let mut errors = vec![];
@@ -1060,75 +1134,13 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
             }
 
             // Parse declarations
-            let mut declarations = vec![];
-
-            loop {
-                let head = self.take().await;
-                match head.token {
-                    Token::Def => {
-                        self.push_back(head);
-                        let (func_def, mut error) = self.parse_func_def().await;
-                        if let Some(func_def) = func_def {
-                            declarations.push(Declaration::FuncDef(func_def));
-                        }
-                        errors.append(&mut error);
-                    }
-                    scope @ Token::Global | scope @ Token::Nonlocal => {
-                        let start = head.location.start;
-                        let token = self.take().await;
-                        let variable = if let Token::Identifier(name) = token.token {
-                            Id::Identifier(Identifier {
-                                base: NodeBase {
-                                    location: token.location,
-                                },
-                                name,
-                            })
-                        } else {
-                            errors.push(Error::unexpected(token));
-                            return (None, errors);
-                        };
-
-                        let end = self.prev_pos().unwrap_or(start);
-
-                        let token = self.take().await;
-                        if token.token != Token::NewLine {
-                            errors.push(Error::unexpected(token));
-                            return (None, errors);
-                        }
-
-                        let base = NodeBase {
-                            location: Location { start, end },
-                        };
-
-                        let declaration = if scope == Token::Global {
-                            Declaration::GlobalDecl(GlobalDecl { base, variable })
-                        } else {
-                            Declaration::NonLocalDecl(NonLocalDecl { base, variable })
-                        };
-
-                        declarations.push(declaration);
-                    }
-                    _ => {
-                        let second = self.take().await;
-                        match second.token {
-                            Token::Colon => {
-                                self.push_back(second);
-                                self.push_back(head);
-                                let (var_def, mut error) = self.parse_var_def().await;
-                                if let Some(var_def) = var_def {
-                                    declarations.push(Declaration::VarDef(var_def));
-                                }
-                                errors.append(&mut error);
-                            }
-                            _ => {
-                                self.push_back(second);
-                                self.push_back(head);
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
+            let (declarations, mut error) = self.parse_decl_in_func().await;
+            errors.append(&mut error);
+            let declarations = if let Some(declarations) = declarations {
+                declarations
+            } else {
+                return (None, errors);
+            };
 
             // Parse statements
             let (stmt_list, mut error) = self.parse_stmt_list().await;
