@@ -1,4 +1,5 @@
 use super::token::*;
+use super::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -29,11 +30,43 @@ pub struct AssignStmt {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub enum BinaryOp {
+    #[serde(rename = "or")]
+    Or,
+    #[serde(rename = "and")]
+    And,
+    #[serde(rename = "+")]
+    Add,
+    #[serde(rename = "-")]
+    Sub,
+    #[serde(rename = "*")]
+    Mul,
+    #[serde(rename = "//")]
+    Div,
+    #[serde(rename = "%")]
+    Mod,
+    #[serde(rename = "==")]
+    Eq,
+    #[serde(rename = "!=")]
+    Ne,
+    #[serde(rename = "<")]
+    Lt,
+    #[serde(rename = ">")]
+    Gt,
+    #[serde(rename = "<=")]
+    Le,
+    #[serde(rename = ">=")]
+    Ge,
+    #[serde(rename = "is")]
+    Is,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct BinaryExpr {
     #[serde(flatten)]
     pub base: NodeBase,
     pub left: Expr,
-    pub operator: String,
+    pub operator: BinaryOp,
     pub right: Expr,
 }
 
@@ -338,10 +371,18 @@ pub struct TypedVar {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub enum UnaryOp {
+    #[serde(rename = "-")]
+    Negative,
+    #[serde(rename = "not")]
+    Not,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct UnaryExpr {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub operator: String,
+    pub operator: UnaryOp,
     pub operand: Expr,
 }
 
@@ -396,13 +437,13 @@ mod tests {
                             base: NodeBase::new(1, 1, 1, 1),
                             value: 1,
                         }),
-                        operator: "+".to_owned(),
+                        operator: BinaryOp::Add,
                         right: Expr::IntegerLiteral(IntegerLiteral {
                             base: NodeBase::new(1, 5, 1, 5),
                             value: 2,
                         }),
                     })),
-                    operator: "+".to_owned(),
+                    operator: BinaryOp::Add,
                     right: Expr::IntegerLiteral(IntegerLiteral {
                         base: NodeBase::new(1, 9, 1, 9),
                         value: 3,
