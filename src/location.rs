@@ -1,7 +1,5 @@
-use serde::{
-    de::{Deserialize, Deserializer},
-    ser::{Serialize, Serializer},
-};
+use serde::{Deserialize, Serialize};
+use std::convert::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Position {
@@ -9,7 +7,8 @@ pub struct Position {
     pub col: u32,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(from = "[u32; 4]", into = "[u32; 4]")]
 pub struct Location {
     pub start: Position,
     pub end: Position,
@@ -24,23 +23,15 @@ impl Location {
     }
 }
 
-impl Serialize for Location {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let array = [self.start.row, self.start.col, self.end.row, self.end.col];
-        array.serialize(serializer)
+impl From<Location> for [u32; 4] {
+    fn from(l: Location) -> Self {
+        [l.start.row, l.start.col, l.end.row, l.end.col]
     }
 }
 
-impl<'de> Deserialize<'de> for Location {
-    fn deserialize<D>(deserializer: D) -> Result<Location, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let array = <[u32; 4] as Deserialize<'de>>::deserialize(deserializer)?;
-        Ok(Location {
+impl From<[u32; 4]> for Location {
+    fn from(array: [u32; 4]) -> Self {
+        Location {
             start: Position {
                 row: array[0],
                 col: array[1],
@@ -49,6 +40,6 @@ impl<'de> Deserialize<'de> for Location {
                 row: array[2],
                 col: array[3],
             },
-        })
+        }
     }
 }
