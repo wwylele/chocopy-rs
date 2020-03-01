@@ -1,4 +1,4 @@
-use super::*;
+use crate::location::*;
 use lazy_static::*;
 use std::collections::HashMap;
 

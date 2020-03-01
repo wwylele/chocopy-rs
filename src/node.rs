@@ -1,5 +1,4 @@
-use super::token::*;
-use super::*;
+use crate::location::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -125,18 +124,6 @@ pub enum Declaration {
 #[serde(tag = "kind")]
 pub enum Error {
     CompilerError(CompilerError),
-}
-
-impl Error {
-    pub fn unexpected(token: ComplexToken) -> Error {
-        Error::CompilerError(CompilerError {
-            base: NodeBase {
-                location: token.location,
-            },
-            message: "unexptected token".to_owned(),
-            syntax: true,
-        })
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]

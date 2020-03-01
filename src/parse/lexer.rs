@@ -1,5 +1,5 @@
 use super::token::*;
-use super::*;
+use crate::location::*;
 use std::cmp::Ordering;
 use std::future::*;
 

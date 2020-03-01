@@ -1,10 +1,22 @@
-use super::node::*;
 use super::token::*;
-use super::*;
+use crate::location::*;
+use crate::node::*;
 use std::cmp::Ordering;
 use std::collections::vec_deque::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
+
+impl Error {
+    pub fn unexpected(token: ComplexToken) -> Error {
+        Error::CompilerError(CompilerError {
+            base: NodeBase {
+                location: token.location,
+            },
+            message: "unexptected token".to_owned(),
+            syntax: true,
+        })
+    }
+}
 
 macro_rules! parse_expr_unary {
     ($name:ident, $parse_next:ident, $operator_token:expr => $operator_str:expr) => {

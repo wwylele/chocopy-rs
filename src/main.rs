@@ -1,13 +1,16 @@
-mod frontend;
+mod check;
+mod location;
+mod node;
+mod parse;
 
-use frontend::node::*;
-use frontend::*;
+use location::*;
+use node::*;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 fn main() {
     let file = std::env::args().nth(1).unwrap();
-    let ast = frontend::process(&file).unwrap();
+    let ast = parse::process(&file).unwrap();
 
     let Ast::Program(Program {
         errors: ErrorInfo::Errors(Errors { errors, .. }),
