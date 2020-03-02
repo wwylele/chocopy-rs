@@ -1,0 +1,17 @@
+[package]
+name = "chocopy-rs-std"
+version = "0.1.0"
+authors = ["Weiyi Wang <wwylele@gmail.com>"]
+edition = "2018"
+
+[lib]
+name = "chocopy_rs_std"
+crate-type = ["staticlib"]
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
+[dependencies]

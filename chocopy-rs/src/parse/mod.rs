@@ -68,7 +68,7 @@ mod tests {
     fn sample() {
         let mut passed = true;
 
-        let mut files = std::fs::read_dir("pa1-chocopy-parser-wars/src/test/data/pa1/sample")
+        let mut files = std::fs::read_dir("../pa1-chocopy-parser-wars/src/test/data/pa1/sample")
             .unwrap()
             .map(|f| f.unwrap())
             .filter(|f| f.file_name().to_str().unwrap().ends_with(".py"))

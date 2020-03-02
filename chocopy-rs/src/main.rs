@@ -1,4 +1,5 @@
 mod check;
+mod gen;
 mod location;
 mod node;
 mod parse;
@@ -9,6 +10,9 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 fn main() {
+    //gen::gen("xxx").unwrap();
+    //return;
+
     let file = std::env::args().nth(1).unwrap();
     let ast = parse::process(&file).unwrap();
 
