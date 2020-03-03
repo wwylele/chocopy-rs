@@ -1,3 +1,6 @@
 [submodule "pa1-chocopy-parser-wars"]
 	path = pa1-chocopy-parser-wars
 	url = https://github.com/nyu-compiler-construction/pa1-chocopy-parser-wars.git
+[submodule "chocopy-wars"]
+	path = chocopy-wars
+	url = git@github.com:nyu-compiler-construction/pa2-chocopy-semantic-analysis-wars.git
