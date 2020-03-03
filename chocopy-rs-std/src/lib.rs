@@ -133,6 +133,7 @@ pub unsafe extern "C" fn input() -> *mut u8 {
 }
 
 #[no_mangle]
+#[cfg(not(test))]
 pub unsafe extern "C" fn main() {
     println!("ChocoPy program starting.");
     chocopy_main();
