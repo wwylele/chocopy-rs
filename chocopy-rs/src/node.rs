@@ -120,10 +120,22 @@ pub struct ClassType {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[serde(tag = "kind")]
+pub struct ClassValueType {
+    #[serde(rename = "className")]
+    pub class_name: String,
+}
+
+fn is_not(b: &bool) -> bool {
+    !*b
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct CompilerError {
     #[serde(flatten)]
     pub base: NodeBase,
     pub message: String,
+    #[serde(default, skip_serializing_if = "is_not")]
     pub syntax: bool,
 }
 
@@ -158,8 +170,8 @@ pub enum ErrorInfo {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct Expr {
-    #[serde(rename = "inferred_type", skip_serializing_if = "Option::is_none")]
-    pub inferred_type: Option<i32>,
+    #[serde(rename = "inferredType", skip_serializing_if = "Option::is_none")]
+    pub inferred_type: Option<Type>,
     #[serde(flatten)]
     pub content: ExprContent,
 }
@@ -239,6 +251,13 @@ pub struct FuncDef {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub struct FuncType {
+    pub parameters: Vec<ValueType>,
+    #[serde(rename = "returnType")]
+    pub return_type: ValueType,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct GlobalDecl {
     #[serde(flatten)]
     pub base: NodeBase,
@@ -308,6 +327,12 @@ pub struct ListType {
     pub base: NodeBase,
     #[serde(rename = "elementType")]
     pub element_type: TypeAnnotation,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub struct ListValueType {
+    #[serde(rename = "elementType")]
+    pub element_type: Box<ValueType>,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -396,6 +421,14 @@ pub enum Tv {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind")]
+pub enum Type {
+    ClassValueType(ClassValueType),
+    ListValueType(ListValueType),
+    FuncType(FuncType),
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[serde(tag = "kind")]
 pub enum TypeAnnotation {
     ClassType(ClassType),
     ListType(Box<ListType>),
@@ -424,6 +457,13 @@ pub struct UnaryExpr {
     pub base: NodeBase,
     pub operator: UnaryOp,
     pub operand: Expr,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[serde(tag = "kind")]
+pub enum ValueType {
+    ClassValueType(ClassValueType),
+    ListValueType(ListValueType),
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
