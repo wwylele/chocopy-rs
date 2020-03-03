@@ -584,21 +584,22 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
             return (None, errors);
         }
 
-        let mut end = self.prev_pos().unwrap_or(start);
         let token = self.take().await;
         let value = if token.token == Token::NewLine {
+            self.push_back(token);
             None
         } else {
             self.push_back(token);
             let (expr, mut error) = self.parse_expr1().await;
             errors.append(&mut error);
             if let Some(expr) = expr {
-                end = self.prev_pos().unwrap_or(start);
                 Some(expr)
             } else {
                 return (None, errors);
             }
         };
+
+        let end = self.prev_pos().unwrap_or(start);
 
         let token = self.take().await;
         if token.token != Token::NewLine {

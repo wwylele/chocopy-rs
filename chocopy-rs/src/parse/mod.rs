@@ -68,41 +68,50 @@ mod tests {
     fn sample() {
         let mut passed = true;
 
-        let mut files = std::fs::read_dir("../chocopy-wars/src/test/data/pa1/sample")
-            .unwrap()
-            .map(|f| f.unwrap())
-            .filter(|f| f.file_name().to_str().unwrap().ends_with(".py"))
-            .map(|f| f.path())
-            .collect::<Vec<_>>();
+        let test_dirs = [
+            "../chocopy-wars/src/test/data/pa1/sample",
+            "../chocopy-wars/src/test/data/pa1/student_contributed",
+            "../chocopy-wars/src/test/data/pa2/sample",
+        ];
 
-        files.sort();
+        for dir in &test_dirs {
+            println!("Testing Directory {}", dir);
+            let mut files = std::fs::read_dir(dir)
+                .unwrap()
+                .map(|f| f.unwrap())
+                .filter(|f| f.file_name().to_str().unwrap().ends_with(".py"))
+                .map(|f| f.path())
+                .collect::<Vec<_>>();
 
-        for source_file in files {
-            let mut ast_file = source_file.clone();
-            let mut file_name = ast_file.file_name().unwrap().to_owned();
-            print!("Testing {} ---- ", file_name.to_str().unwrap());
-            stdout().flush().unwrap();
-            file_name.push(".ast");
-            ast_file.set_file_name(file_name);
+            files.sort();
 
-            let ast_string = String::from_utf8(std::fs::read(ast_file).unwrap()).unwrap();
-            let ast_reference = serde_json::from_str::<Ast>(&ast_string).unwrap();
+            for source_file in files {
+                let mut ast_file = source_file.clone();
+                let mut file_name = ast_file.file_name().unwrap().to_owned();
+                print!("Testing {} ---- ", file_name.to_str().unwrap());
+                stdout().flush().unwrap();
+                file_name.push(".ast");
+                ast_file.set_file_name(file_name);
 
-            let (sender, receiver) = std::sync::mpsc::channel();
-            std::thread::spawn(move || {
-                sender.send(process(source_file.as_os_str().to_str().unwrap()).unwrap())
-            });
+                let ast_string = String::from_utf8(std::fs::read(ast_file).unwrap()).unwrap();
+                let ast_reference = serde_json::from_str::<Ast>(&ast_string).unwrap();
 
-            if let Ok(ast) = receiver.recv_timeout(std::time::Duration::from_secs(1)) {
-                if compare_ast(&ast, &ast_reference) {
-                    println!("\x1b[32mOK\x1b[0m");
+                let (sender, receiver) = std::sync::mpsc::channel();
+                std::thread::spawn(move || {
+                    sender.send(process(source_file.as_os_str().to_str().unwrap()).unwrap())
+                });
+
+                if let Ok(ast) = receiver.recv_timeout(std::time::Duration::from_secs(1)) {
+                    if compare_ast(&ast, &ast_reference) {
+                        println!("\x1b[32mOK\x1b[0m");
+                    } else {
+                        println!("\x1b[31mError\x1b[0m");
+                        passed = false;
+                    }
                 } else {
-                    println!("\x1b[31mError\x1b[0m");
+                    println!("\x1b[31mTimeout\x1b[0m");
                     passed = false;
                 }
-            } else {
-                println!("\x1b[31mTimeout\x1b[0m");
-                passed = false;
             }
         }
         assert_eq!(passed, true);

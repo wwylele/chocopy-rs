@@ -56,11 +56,11 @@ fn main() {
             if let Some(line) = &line {
                 println!("    | {}", line);
                 print!("    | ");
-                for _ in 0..std::cmp::max(start.col - 1, 0) {
+                for _ in 0..std::cmp::max(start.col as i64 - 1, 0) {
                     print!(" ");
                 }
 
-                for _ in 0..std::cmp::max(end.col - start.col + 1, 1) {
+                for _ in 0..std::cmp::max(end.col as i64 - start.col as i64 + 1, 1) {
                     print!("^");
                 }
 
