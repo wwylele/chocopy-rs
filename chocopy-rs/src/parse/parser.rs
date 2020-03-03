@@ -9,9 +9,7 @@ use std::pin::Pin;
 impl Error {
     pub fn unexpected(token: ComplexToken) -> Error {
         Error::CompilerError(CompilerError {
-            base: NodeBase {
-                location: token.location,
-            },
+            base: NodeBase::from_location(token.location),
             message: "unexptected token".to_owned(),
             syntax: true,
         })
@@ -33,9 +31,7 @@ macro_rules! parse_expr_unary {
                 let end = self.prev_pos().unwrap_or(start);
                 if let Some(operand) = expr {
                     Expr::UnaryExpr(Box::new(UnaryExpr {
-                        base: NodeBase {
-                            location: Location { start, end },
-                        },
+                        base: NodeBase::from_positions(start, end),
                         operator: $operator_str,
                         operand,
                     }))
@@ -94,7 +90,7 @@ macro_rules! parse_expr_binary {
                 let end = self.prev_pos().unwrap_or(start);
 
                 expr = Expr::BinaryExpr(Box::new(BinaryExpr{
-                    base: NodeBase{location: Location{start, end}},
+                    base: NodeBase::from_positions(start, end),
                     left: expr,
                     operator,
                     right
@@ -248,9 +244,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
             (
                 Some(Expr::IfExpr(Box::new(IfExpr {
-                    base: NodeBase {
-                        location: Location { start, end },
-                    },
+                    base: NodeBase::from_positions(start, end),
                     condition,
                     then_expr,
                     else_expr,
@@ -302,9 +296,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         let end = self.prev_pos().unwrap_or(start);
         (
             Some(Expr::BinaryExpr(Box::new(BinaryExpr {
-                base: NodeBase {
-                    location: Location { start, end },
-                },
+                base: NodeBase::from_positions(start, end),
                 left,
                 operator,
                 right,
@@ -367,16 +359,14 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     }
 
                     let end = self.prev_pos().unwrap_or(start);
-                    let base = NodeBase {
-                        location: Location { start, end },
-                    };
-                    expr = match expr {
-                        Expr::Identifier(function) => Expr::CallExpr(CallExpr {
+                    let base = NodeBase::from_positions(start, end);
+                    expr = match expr.content {
+                        ExprContent::Identifier(function) => Expr::CallExpr(CallExpr {
                             base,
                             function: Id::Identifier(function),
                             args,
                         }),
-                        Expr::MemberExpr(method) => {
+                        ExprContent::MemberExpr(method) => {
                             Expr::MethodCallExpr(Box::new(MethodCallExpr {
                                 base,
                                 method: Method::MemberExpr(*method),
@@ -407,9 +397,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     let end = self.prev_pos().unwrap_or(start);
 
                     expr = Expr::IndexExpr(Box::new(IndexExpr {
-                        base: NodeBase {
-                            location: Location { start, end },
-                        },
+                        base: NodeBase::from_positions(start, end),
                         list: expr,
                         index,
                     }));
@@ -418,9 +406,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     let token = self.take().await;
                     let member = if let Token::Identifier(name) = token.token {
                         Id::Identifier(Identifier {
-                            base: NodeBase {
-                                location: token.location,
-                            },
+                            base: NodeBase::from_location(token.location),
                             name,
                         })
                     } else {
@@ -431,9 +417,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     let end = self.prev_pos().unwrap_or(start);
 
                     expr = Expr::MemberExpr(Box::new(MemberExpr {
-                        base: NodeBase {
-                            location: Location { start, end },
-                        },
+                        base: NodeBase::from_positions(start, end),
                         object: expr,
                         member,
                     }));
@@ -455,9 +439,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         // Parse atomic expression, (), and []
         let token = self.take().await;
         let end = self.prev_pos().unwrap_or(start);
-        let base = NodeBase {
-            location: Location { start, end },
-        };
+        let base = NodeBase::from_positions(start, end);
         let expr = match token.token {
             Token::Identifier(name) => Expr::Identifier(Identifier { base, name }),
             Token::None => Expr::NoneLiteral(NoneLiteral { base }),
@@ -506,9 +488,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                 }
 
                 let end = self.prev_pos().unwrap_or(start);
-                let base = NodeBase {
-                    location: Location { start, end },
-                };
+                let base = NodeBase::from_positions(start, end);
                 Expr::ListExpr(ListExpr { base, elements })
             }
             _ => {
@@ -537,10 +517,10 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
             end = self.prev_pos().unwrap_or(start);
             let token = self.take().await;
             match token.token {
-                Token::Assign => match expr_list.last() {
-                    Some(Expr::Identifier(_))
-                    | Some(Expr::MemberExpr(_))
-                    | Some(Expr::IndexExpr(_)) => (),
+                Token::Assign => match expr_list.last().map(|e| &e.content) {
+                    Some(ExprContent::Identifier(_))
+                    | Some(ExprContent::MemberExpr(_))
+                    | Some(ExprContent::IndexExpr(_)) => (),
                     _ => {
                         errors.push(Error::unexpected(token));
                         return (None, errors);
@@ -553,9 +533,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                 }
             }
         }
-        let base = NodeBase {
-            location: Location { start, end },
-        };
+        let base = NodeBase::from_positions(start, end);
         let stmt = match expr_list.len().cmp(&1) {
             Ordering::Equal => Some(Stmt::ExprStmt(ExprStmt {
                 base,
@@ -609,9 +587,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
         (
             Some(ReturnStmt {
-                base: NodeBase {
-                    location: Location { start, end },
-                },
+                base: NodeBase::from_positions(start, end),
                 value,
             }),
             errors,
@@ -680,9 +656,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         let end = self.prev_pos().unwrap_or(start);
         (
             Some(WhileStmt {
-                base: NodeBase {
-                    location: Location { start, end },
-                },
+                base: NodeBase::from_positions(start, end),
                 condition,
                 body,
             }),
@@ -703,9 +677,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         let token = self.take().await;
         let identifier = if let Token::Identifier(name) = token.token {
             Id::Identifier(Identifier {
-                base: NodeBase {
-                    location: token.location,
-                },
+                base: NodeBase::from_location(token.location),
                 name,
             })
         } else {
@@ -738,9 +710,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         let end = self.prev_pos().unwrap_or(start);
         (
             Some(ForStmt {
-                base: NodeBase {
-                    location: Location { start, end },
-                },
+                base: NodeBase::from_positions(start, end),
                 identifier,
                 iterable,
                 body,
@@ -806,9 +776,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
             let end = self.prev_pos().unwrap_or(start);
             (
                 Some(IfStmt {
-                    base: NodeBase {
-                        location: Location { start, end },
-                    },
+                    base: NodeBase::from_positions(start, end),
                     condition,
                     then_body,
                     else_body,
@@ -956,9 +924,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         let token = self.take().await;
         let name = if let Token::Identifier(name) = token.token {
             Id::Identifier(Identifier {
-                base: NodeBase {
-                    location: token.location,
-                },
+                base: NodeBase::from_location(token.location),
                 name,
             })
         } else {
@@ -975,9 +941,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         let token = self.take().await;
         let super_class = if let Token::Identifier(name) = token.token {
             Id::Identifier(Identifier {
-                base: NodeBase {
-                    location: token.location,
-                },
+                base: NodeBase::from_location(token.location),
                 name,
             })
         } else {
@@ -1029,9 +993,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
         (
             Some(ClassDef {
-                base: NodeBase {
-                    location: Location { start, end },
-                },
+                base: NodeBase::from_positions(start, end),
                 name,
                 super_class,
                 declarations,
@@ -1062,9 +1024,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     let token = self.take().await;
                     let variable = if let Token::Identifier(name) = token.token {
                         Id::Identifier(Identifier {
-                            base: NodeBase {
-                                location: token.location,
-                            },
+                            base: NodeBase::from_location(token.location),
                             name,
                         })
                     } else {
@@ -1082,9 +1042,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                         continue;
                     }
 
-                    let base = NodeBase {
-                        location: Location { start, end },
-                    };
+                    let base = NodeBase::from_positions(start, end);
 
                     let declaration = if scope == Token::Global {
                         Declaration::GlobalDecl(GlobalDecl { base, variable })
@@ -1136,9 +1094,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
             let token = self.take().await;
             let name = if let Token::Identifier(name) = token.token {
                 Id::Identifier(Identifier {
-                    base: NodeBase {
-                        location: token.location,
-                    },
+                    base: NodeBase::from_location(token.location),
                     name,
                 })
             } else {
@@ -1183,9 +1139,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
             let token = self.take().await;
             let return_type = match token.token {
                 Token::Colon => TypeAnnotation::ClassType(ClassType {
-                    base: NodeBase {
-                        location: token.location,
-                    },
+                    base: NodeBase::from_location(token.location),
                     class_name: "<None>".to_owned(),
                 }),
                 Token::Arrow => {
@@ -1247,9 +1201,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
             (
                 Some(FuncDef {
-                    base: NodeBase {
-                        location: Location { start, end },
-                    },
+                    base: NodeBase::from_positions(start, end),
                     name,
                     params,
                     return_type,
@@ -1280,9 +1232,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         }
 
         let token = self.take().await;
-        let base = NodeBase {
-            location: token.location,
-        };
+        let base = NodeBase::from_location(token.location);
         let value = match token.token {
             Token::None => Literal::NoneLiteral(NoneLiteral { base }),
             Token::True => Literal::BooleanLiteral(BooleanLiteral { base, value: true }),
@@ -1308,9 +1258,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
         (
             Some(VarDef {
-                base: NodeBase {
-                    location: Location { start, end },
-                },
+                base: NodeBase::from_positions(start, end),
                 var: Tv::TypedVar(typed_var),
                 value,
             }),
@@ -1331,9 +1279,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     let end = self.prev_pos().unwrap_or(start);
                     (
                         Some(TypeAnnotation::ClassType(ClassType {
-                            base: NodeBase {
-                                location: Location { start, end },
-                            },
+                            base: NodeBase::from_positions(start, end),
                             class_name,
                         })),
                         errors,
@@ -1357,9 +1303,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     let end = self.prev_pos().unwrap_or(start);
                     (
                         Some(TypeAnnotation::ListType(Box::new(ListType {
-                            base: NodeBase {
-                                location: Location { start, end },
-                            },
+                            base: NodeBase::from_positions(start, end),
                             element_type,
                         }))),
                         errors,
@@ -1381,9 +1325,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         let token = self.take().await;
         let identifier = if let Token::Identifier(name) = token.token {
             Id::Identifier(Identifier {
-                base: NodeBase {
-                    location: token.location,
-                },
+                base: NodeBase::from_location(token.location),
                 name,
             })
         } else {
@@ -1409,9 +1351,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
         (
             Some(TypedVar {
-                base: NodeBase {
-                    location: Location { start, end },
-                },
+                base: NodeBase::from_positions(start, end),
                 identifier,
                 type_,
             }),
@@ -1499,9 +1439,7 @@ pub async fn parse<GetTokenFuture: Future<Output = ComplexToken>>(
     let statements = statements.unwrap_or_default();
 
     Ast::Program(Program {
-        base: NodeBase {
-            location: Location { start, end },
-        },
+        base: NodeBase::from_positions(start, end),
         declarations,
         statements,
         errors: ErrorInfo::Errors(Errors {

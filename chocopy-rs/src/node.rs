@@ -4,12 +4,29 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct NodeBase {
     pub location: Location,
+    #[serde(rename = "errorMsg", skip_serializing_if = "Option::is_none")]
+    pub error_msg: Option<String>,
 }
 
 impl NodeBase {
     pub fn new(sr: u32, sc: u32, er: u32, ec: u32) -> NodeBase {
         NodeBase {
             location: Location::new(sr, sc, er, ec),
+            error_msg: None,
+        }
+    }
+
+    pub fn from_positions(start: Position, end: Position) -> NodeBase {
+        NodeBase {
+            location: Location { start, end },
+            error_msg: None,
+        }
+    }
+
+    pub fn from_location(location: Location) -> NodeBase {
+        NodeBase {
+            location,
+            error_msg: None,
         }
     }
 }
@@ -140,8 +157,44 @@ pub enum ErrorInfo {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub struct Expr {
+    #[serde(rename = "inferred_type", skip_serializing_if = "Option::is_none")]
+    pub inferred_type: Option<i32>,
+    #[serde(flatten)]
+    pub content: ExprContent,
+}
+
+macro_rules! expr_init {
+    ($name:ident, $type:ty) => {
+        pub fn $name(e: $type) -> Expr {
+            Expr {
+                inferred_type: None,
+                content: ExprContent::$name(e),
+            }
+        }
+    };
+}
+
+#[allow(non_snake_case)]
+impl Expr {
+    expr_init!(BinaryExpr, Box<BinaryExpr>);
+    expr_init!(IntegerLiteral, IntegerLiteral);
+    expr_init!(BooleanLiteral, BooleanLiteral);
+    expr_init!(CallExpr, CallExpr);
+    expr_init!(Identifier, Identifier);
+    expr_init!(IfExpr, Box<IfExpr>);
+    expr_init!(IndexExpr, Box<IndexExpr>);
+    expr_init!(ListExpr, ListExpr);
+    expr_init!(MemberExpr, Box<MemberExpr>);
+    expr_init!(MethodCallExpr, Box<MethodCallExpr>);
+    expr_init!(NoneLiteral, NoneLiteral);
+    expr_init!(StringLiteral, StringLiteral);
+    expr_init!(UnaryExpr, Box<UnaryExpr>);
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind")]
-pub enum Expr {
+pub enum ExprContent {
     BinaryExpr(Box<BinaryExpr>),
     IntegerLiteral(IntegerLiteral),
     BooleanLiteral(BooleanLiteral),

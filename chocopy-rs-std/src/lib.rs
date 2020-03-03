@@ -66,10 +66,6 @@ pub unsafe extern "C" fn free_obj(pointer: *mut u8) {
     dealloc(pointer, Layout::from_size_align(size, 8).unwrap());
 }
 
-extern "C" {
-    fn chocopy_main();
-}
-
 pub unsafe extern "C" fn len(pointer: *mut u8) -> u32 {
     let object = pointer as *mut ArrayObject;
     let prototype = (*object).object.prototype;
@@ -132,6 +128,10 @@ pub unsafe extern "C" fn input() -> *mut u8 {
     pointer
 }
 
+extern "C" {
+    #[cfg(not(test))]
+    fn chocopy_main();
+}
 #[no_mangle]
 #[cfg(not(test))]
 pub unsafe extern "C" fn main() {

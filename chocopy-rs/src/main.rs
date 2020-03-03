@@ -30,6 +30,7 @@ fn main() {
                 base:
                     NodeBase {
                         location: Location { start, .. },
+                        ..
                     },
                 ..
             } = e;
