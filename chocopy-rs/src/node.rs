@@ -579,6 +579,15 @@ pub enum TypeAnnotation {
     ListType(Box<ListType>),
 }
 
+impl TypeAnnotation {
+    pub fn core_type_mut(&mut self) -> &mut ClassType {
+        match self {
+            TypeAnnotation::ClassType(c) => c,
+            TypeAnnotation::ListType(l) => l.element_type.core_type_mut(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct TypedVar {
     #[serde(flatten)]
