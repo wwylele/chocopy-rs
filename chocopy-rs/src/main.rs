@@ -11,7 +11,7 @@ use std::io::{BufRead, BufReader};
 
 fn main() {
     let file = std::env::args().nth(1).unwrap();
-    let ast = parse::process(&file).unwrap();
+    let ast = check::check(parse::process(&file).unwrap());
 
     let Ast::Program(Program {
         errors: ErrorInfo::Errors(Errors { errors, .. }),
@@ -68,7 +68,7 @@ fn main() {
                 println!();
             }
         }
-    } else {
-        println!("{}", serde_json::to_string_pretty(&ast).unwrap());
     }
+
+    println!("{}", serde_json::to_string_pretty(&ast).unwrap());
 }

@@ -1,4 +1,5 @@
 use crate::location::*;
+use enum_dispatch::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -31,10 +32,42 @@ impl NodeBase {
     }
 }
 
+#[enum_dispatch(Node)]
+pub trait Node {
+    fn base(&self) -> &NodeBase;
+    fn base_mut(&mut self) -> &mut NodeBase;
+}
+
+macro_rules! impl_node {
+    ($type:ty) => {
+        impl Node for $type {
+            fn base(&self) -> &NodeBase {
+                &self.base
+            }
+
+            fn base_mut(&mut self) -> &mut NodeBase {
+                &mut self.base
+            }
+        }
+    };
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind")]
 pub enum Ast {
     Program(Program),
+}
+
+impl Ast {
+    pub fn program(&self) -> &Program {
+        let Ast::Program(program) = self;
+        program
+    }
+
+    pub fn program_mut(&mut self) -> &mut Program {
+        let Ast::Program(program) = self;
+        program
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -44,6 +77,8 @@ pub struct AssignStmt {
     pub targets: Vec<Expr>,
     pub value: Expr,
 }
+
+impl_node!(AssignStmt);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub enum BinaryOp {
@@ -86,12 +121,16 @@ pub struct BinaryExpr {
     pub right: Expr,
 }
 
+impl_node!(BinaryExpr);
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct BooleanLiteral {
     #[serde(flatten)]
     pub base: NodeBase,
     pub value: bool,
 }
+
+impl_node!(BooleanLiteral);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct CallExpr {
@@ -100,6 +139,8 @@ pub struct CallExpr {
     pub function: Id,
     pub args: Vec<Expr>,
 }
+
+impl_node!(CallExpr);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct ClassDef {
@@ -111,6 +152,8 @@ pub struct ClassDef {
     pub declarations: Vec<Declaration>,
 }
 
+impl_node!(ClassDef);
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct ClassType {
     #[serde(flatten)]
@@ -118,6 +161,8 @@ pub struct ClassType {
     #[serde(rename = "className")]
     pub class_name: String,
 }
+
+impl_node!(ClassType);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind")]
@@ -139,6 +184,9 @@ pub struct CompilerError {
     pub syntax: bool,
 }
 
+impl_node!(CompilerError);
+
+#[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind")]
 pub enum Declaration {
@@ -149,6 +197,23 @@ pub enum Declaration {
     VarDef(VarDef),
 }
 
+impl Declaration {
+    pub fn name_mut(&mut self) -> &mut Identifier {
+        match self {
+            Declaration::ClassDef(ClassDef { name, .. }) => name,
+            Declaration::FuncDef(FuncDef { name, .. }) => name,
+            Declaration::GlobalDecl(GlobalDecl { variable, .. }) => variable,
+            Declaration::NonLocalDecl(NonLocalDecl { variable, .. }) => variable,
+            Declaration::VarDef(VarDef {
+                var: Tv::TypedVar(TypedVar { identifier, .. }),
+                ..
+            }) => identifier,
+        }
+        .id_mut()
+    }
+}
+
+#[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind")]
 pub enum Error {
@@ -162,6 +227,9 @@ pub struct Errors {
     pub errors: Vec<Error>,
 }
 
+impl_node!(Errors);
+
+#[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind")]
 pub enum ErrorInfo {
@@ -174,6 +242,16 @@ pub struct Expr {
     pub inferred_type: Option<Type>,
     #[serde(flatten)]
     pub content: ExprContent,
+}
+
+impl Node for Expr {
+    fn base(&self) -> &NodeBase {
+        &self.content.base()
+    }
+
+    fn base_mut(&mut self) -> &mut NodeBase {
+        self.content.base_mut()
+    }
 }
 
 macro_rules! expr_init {
@@ -204,6 +282,7 @@ impl Expr {
     expr_init!(UnaryExpr, Box<UnaryExpr>);
 }
 
+#[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind")]
 pub enum ExprContent {
@@ -229,6 +308,8 @@ pub struct ExprStmt {
     pub expr: Expr,
 }
 
+impl_node!(ExprStmt);
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct ForStmt {
     #[serde(flatten)]
@@ -237,6 +318,8 @@ pub struct ForStmt {
     pub iterable: Expr,
     pub body: Vec<Stmt>,
 }
+
+impl_node!(ForStmt);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct FuncDef {
@@ -249,6 +332,8 @@ pub struct FuncDef {
     pub declarations: Vec<Declaration>,
     pub statements: Vec<Stmt>,
 }
+
+impl_node!(FuncDef);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct FuncType {
@@ -264,10 +349,25 @@ pub struct GlobalDecl {
     pub variable: Id,
 }
 
+impl_node!(GlobalDecl);
+
+#[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind")]
 pub enum Id {
     Identifier(Identifier),
+}
+
+impl Id {
+    pub fn id(&self) -> &Identifier {
+        let Id::Identifier(id) = self;
+        id
+    }
+
+    pub fn id_mut(&mut self) -> &mut Identifier {
+        let Id::Identifier(id) = self;
+        id
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -276,6 +376,8 @@ pub struct Identifier {
     pub base: NodeBase,
     pub name: String,
 }
+
+impl_node!(Identifier);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct IfExpr {
@@ -288,6 +390,8 @@ pub struct IfExpr {
     pub else_expr: Expr,
 }
 
+impl_node!(IfExpr);
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct IfStmt {
     #[serde(flatten)]
@@ -299,6 +403,8 @@ pub struct IfStmt {
     pub else_body: Vec<Stmt>,
 }
 
+impl_node!(IfStmt);
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct IndexExpr {
     #[serde(flatten)]
@@ -307,6 +413,8 @@ pub struct IndexExpr {
     pub index: Expr,
 }
 
+impl_node!(IndexExpr);
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct IntegerLiteral {
     #[serde(flatten)]
@@ -314,12 +422,16 @@ pub struct IntegerLiteral {
     pub value: i32,
 }
 
+impl_node!(IntegerLiteral);
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct ListExpr {
     #[serde(flatten)]
     pub base: NodeBase,
     pub elements: Vec<Expr>,
 }
+
+impl_node!(ListExpr);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct ListType {
@@ -329,12 +441,15 @@ pub struct ListType {
     pub element_type: TypeAnnotation,
 }
 
+impl_node!(ListType);
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct ListValueType {
     #[serde(rename = "elementType")]
     pub element_type: Box<ValueType>,
 }
 
+#[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind")]
 pub enum Literal {
@@ -352,6 +467,9 @@ pub struct MemberExpr {
     pub member: Id,
 }
 
+impl_node!(MemberExpr);
+
+#[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind")]
 pub enum Method {
@@ -366,11 +484,15 @@ pub struct MethodCallExpr {
     pub args: Vec<Expr>,
 }
 
+impl_node!(MethodCallExpr);
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct NoneLiteral {
     #[serde(flatten)]
     pub base: NodeBase,
 }
+
+impl_node!(NoneLiteral);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct NonLocalDecl {
@@ -378,6 +500,8 @@ pub struct NonLocalDecl {
     pub base: NodeBase,
     pub variable: Id,
 }
+
+impl_node!(NonLocalDecl);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct Program {
@@ -388,6 +512,8 @@ pub struct Program {
     pub errors: ErrorInfo,
 }
 
+impl_node!(Program);
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct ReturnStmt {
     #[serde(flatten)]
@@ -395,6 +521,9 @@ pub struct ReturnStmt {
     pub value: Option<Expr>,
 }
 
+impl_node!(ReturnStmt);
+
+#[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind")]
 pub enum Stmt {
@@ -413,10 +542,25 @@ pub struct StringLiteral {
     pub value: String,
 }
 
+impl_node!(StringLiteral);
+
+#[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind")]
 pub enum Tv {
     TypedVar(TypedVar),
+}
+
+impl Tv {
+    pub fn tv(&self) -> &TypedVar {
+        let Tv::TypedVar(tv) = self;
+        tv
+    }
+
+    pub fn tv_mut(&mut self) -> &mut TypedVar {
+        let Tv::TypedVar(tv) = self;
+        tv
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -427,6 +571,7 @@ pub enum Type {
     FuncType(FuncType),
 }
 
+#[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind")]
 pub enum TypeAnnotation {
@@ -442,6 +587,8 @@ pub struct TypedVar {
     #[serde(rename = "type")]
     pub type_: TypeAnnotation,
 }
+
+impl_node!(TypedVar);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub enum UnaryOp {
@@ -459,11 +606,35 @@ pub struct UnaryExpr {
     pub operand: Expr,
 }
 
+impl_node!(UnaryExpr);
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind")]
 pub enum ValueType {
     ClassValueType(ClassValueType),
     ListValueType(ListValueType),
+}
+
+impl ValueType {
+    pub fn from_annotation(t: &TypeAnnotation) -> ValueType {
+        match t {
+            TypeAnnotation::ClassType(c) => ValueType::ClassValueType(ClassValueType {
+                class_name: c.class_name.clone(),
+            }),
+            TypeAnnotation::ListType(c) => ValueType::ListValueType(ListValueType {
+                element_type: Box::new(ValueType::from_annotation(&c.element_type)),
+            }),
+        }
+    }
+}
+
+impl From<ValueType> for Type {
+    fn from(t: ValueType) -> Type {
+        match t {
+            ValueType::ClassValueType(c) => Type::ClassValueType(c),
+            ValueType::ListValueType(c) => Type::ListValueType(c),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -474,6 +645,8 @@ pub struct VarDef {
     pub value: Literal,
 }
 
+impl_node!(VarDef);
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct WhileStmt {
     #[serde(flatten)]
@@ -481,6 +654,8 @@ pub struct WhileStmt {
     pub condition: Expr,
     pub body: Vec<Stmt>,
 }
+
+impl_node!(WhileStmt);
 
 #[cfg(test)]
 mod tests {

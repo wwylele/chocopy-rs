@@ -73,6 +73,7 @@ name = "chocopy-rs"
 version = "0.1.0"
 dependencies = [
  "async-std",
+ "enum_dispatch",
  "faerie",
  "futures",
  "lazy_static",
@@ -131,6 +132,18 @@ dependencies = [
  "autocfg",
  "cfg-if",
  "lazy_static",
+]
+
+[[package]]
+name = "enum_dispatch"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97c676e703d999177c8de93e98dc09d6f4f3f0bb087d4384c3deca69bbe6a99d"
+dependencies = [
+ "once_cell",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
