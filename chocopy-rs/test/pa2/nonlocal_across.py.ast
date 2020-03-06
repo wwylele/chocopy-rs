@@ -1,0 +1,102 @@
+{
+  "kind" : "Program",
+  "location" : [ 1, 1, 9, 1 ],
+  "declarations" : [ {
+    "kind" : "FuncDef",
+    "location" : [ 1, 1, 8, 9 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 1, 5, 1, 5 ],
+      "name" : "x"
+    },
+    "params" : [ ],
+    "returnType" : {
+      "kind" : "ClassType",
+      "location" : [ 1, 8, 1, 8 ],
+      "className" : "<None>"
+    },
+    "declarations" : [ {
+      "kind" : "VarDef",
+      "location" : [ 2, 5, 2, 14 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 2, 5, 2, 9 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 2, 5, 2, 5 ],
+          "name" : "a"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 2, 7, 2, 9 ],
+          "className" : "str"
+        }
+      },
+      "value" : {
+        "kind" : "StringLiteral",
+        "location" : [ 2, 13, 2, 14 ],
+        "value" : ""
+      }
+    }, {
+      "kind" : "FuncDef",
+      "location" : [ 3, 5, 7, 13 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 3, 9, 3, 9 ],
+        "name" : "y"
+      },
+      "params" : [ ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 3, 12, 3, 12 ],
+        "className" : "<None>"
+      },
+      "declarations" : [ {
+        "kind" : "FuncDef",
+        "location" : [ 4, 9, 6, 20 ],
+        "name" : {
+          "kind" : "Identifier",
+          "location" : [ 4, 13, 4, 13 ],
+          "name" : "z"
+        },
+        "params" : [ ],
+        "returnType" : {
+          "kind" : "ClassType",
+          "location" : [ 4, 16, 4, 16 ],
+          "className" : "<None>"
+        },
+        "declarations" : [ {
+          "kind" : "NonLocalDecl",
+          "location" : [ 5, 13, 5, 22 ],
+          "variable" : {
+            "kind" : "Identifier",
+            "location" : [ 5, 22, 5, 22 ],
+            "name" : "a"
+          }
+        } ],
+        "statements" : [ {
+          "kind" : "AssignStmt",
+          "location" : [ 6, 13, 6, 19 ],
+          "targets" : [ {
+            "kind" : "Identifier",
+            "location" : [ 6, 13, 6, 13 ],
+            "name" : "a"
+          } ],
+          "value" : {
+            "kind" : "StringLiteral",
+            "location" : [ 6, 17, 6, 19 ],
+            "value" : "a"
+          }
+        } ]
+      } ],
+      "statements" : [ ]
+    } ],
+    "statements" : [ ]
+  } ],
+  "statements" : [ ],
+  "errors" : {
+    "errors" : [ ],
+    "kind" : "Errors",
+    "location" : [ 0, 0, 0, 0 ]
+  }
+}

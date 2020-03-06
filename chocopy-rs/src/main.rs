@@ -60,12 +60,7 @@ fn main() {
                 for _ in 0..std::cmp::max(start.col as i64 - 1, 0) {
                     print!(" ");
                 }
-
-                for _ in 0..std::cmp::max(end.col as i64 - start.col as i64 + 1, 1) {
-                    print!("^");
-                }
-
-                println!();
+                println!("^");
             }
         }
     }

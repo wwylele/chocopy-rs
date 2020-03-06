@@ -1,0 +1,153 @@
+{
+  "kind" : "Program",
+  "location" : [ 1, 1, 14, 1 ],
+  "declarations" : [ {
+    "kind" : "VarDef",
+    "location" : [ 1, 1, 1, 10 ],
+    "var" : {
+      "kind" : "TypedVar",
+      "location" : [ 1, 1, 1, 6 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 1, 1, 1, 1 ],
+        "name" : "k"
+      },
+      "type" : {
+        "kind" : "ClassType",
+        "location" : [ 1, 4, 1, 6 ],
+        "className" : "int"
+      }
+    },
+    "value" : {
+      "kind" : "IntegerLiteral",
+      "location" : [ 1, 10, 1, 10 ],
+      "value" : 2
+    }
+  }, {
+    "kind" : "FuncDef",
+    "location" : [ 2, 1, 13, 9 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 2, 5, 2, 5 ],
+      "name" : "f"
+    },
+    "params" : [ ],
+    "returnType" : {
+      "kind" : "ClassType",
+      "location" : [ 2, 8, 2, 8 ],
+      "className" : "<None>"
+    },
+    "declarations" : [ {
+      "kind" : "VarDef",
+      "location" : [ 3, 5, 3, 14 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 3, 5, 3, 10 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 3, 5, 3, 5 ],
+          "name" : "h"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 3, 8, 3, 10 ],
+          "className" : "int"
+        }
+      },
+      "value" : {
+        "kind" : "IntegerLiteral",
+        "location" : [ 3, 14, 3, 14 ],
+        "value" : 1
+      }
+    }, {
+      "kind" : "FuncDef",
+      "location" : [ 4, 5, 12, 13 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 4, 9, 4, 9 ],
+        "name" : "k"
+      },
+      "params" : [ ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 4, 12, 4, 12 ],
+        "className" : "<None>"
+      },
+      "declarations" : [ {
+        "kind" : "FuncDef",
+        "location" : [ 5, 9, 11, 17 ],
+        "name" : {
+          "kind" : "Identifier",
+          "location" : [ 5, 13, 5, 13 ],
+          "name" : "h"
+        },
+        "params" : [ ],
+        "returnType" : {
+          "kind" : "ClassType",
+          "location" : [ 5, 16, 5, 16 ],
+          "className" : "<None>"
+        },
+        "declarations" : [ {
+          "kind" : "FuncDef",
+          "location" : [ 6, 13, 10, 21 ],
+          "name" : {
+            "kind" : "Identifier",
+            "location" : [ 6, 17, 6, 17 ],
+            "name" : "i"
+          },
+          "params" : [ ],
+          "returnType" : {
+            "kind" : "ClassType",
+            "location" : [ 6, 20, 6, 20 ],
+            "className" : "<None>"
+          },
+          "declarations" : [ {
+            "kind" : "NonLocalDecl",
+            "location" : [ 7, 17, 7, 26 ],
+            "variable" : {
+              "kind" : "Identifier",
+              "location" : [ 7, 26, 7, 26 ],
+              "errorMsg" : "Not a nonlocal variable: h",
+              "name" : "h"
+            }
+          }, {
+            "kind" : "GlobalDecl",
+            "location" : [ 8, 17, 8, 24 ],
+            "variable" : {
+              "kind" : "Identifier",
+              "location" : [ 8, 24, 8, 24 ],
+              "name" : "k"
+            }
+          } ],
+          "statements" : [ {
+            "kind" : "AssignStmt",
+            "location" : [ 9, 17, 9, 21 ],
+            "targets" : [ {
+              "kind" : "Identifier",
+              "location" : [ 9, 17, 9, 17 ],
+              "name" : "h"
+            } ],
+            "value" : {
+              "kind" : "IntegerLiteral",
+              "location" : [ 9, 21, 9, 21 ],
+              "value" : 2
+            }
+          } ]
+        } ],
+        "statements" : [ ]
+      } ],
+      "statements" : [ ]
+    } ],
+    "statements" : [ ]
+  } ],
+  "statements" : [ ],
+  "errors" : {
+    "errors" : [ {
+      "kind" : "CompilerError",
+      "location" : [ 7, 26, 7, 26 ],
+      "message" : "Not a nonlocal variable: h"
+    } ],
+    "kind" : "Errors",
+    "location" : [ 0, 0, 0, 0 ]
+  }
+}

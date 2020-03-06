@@ -1,0 +1,323 @@
+{
+  "kind" : "Program",
+  "location" : [ 1, 1, 11, 9 ],
+  "declarations" : [ {
+    "kind" : "ClassDef",
+    "location" : [ 1, 1, 5, 0 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 1, 7, 1, 7 ],
+      "name" : "a"
+    },
+    "superClass" : {
+      "kind" : "Identifier",
+      "location" : [ 1, 9, 1, 14 ],
+      "name" : "object"
+    },
+    "declarations" : [ {
+      "kind" : "FuncDef",
+      "location" : [ 2, 5, 3, 13 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 2, 9, 2, 9 ],
+        "name" : "b"
+      },
+      "params" : [ {
+        "kind" : "TypedVar",
+        "location" : [ 2, 11, 2, 17 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 2, 11, 2, 14 ],
+          "name" : "self"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 2, 17, 2, 17 ],
+          "className" : "a"
+        }
+      } ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 2, 19, 2, 19 ],
+        "className" : "<None>"
+      },
+      "declarations" : [ ],
+      "statements" : [ ]
+    } ]
+  }, {
+    "kind" : "VarDef",
+    "location" : [ 5, 1, 5, 11 ],
+    "var" : {
+      "kind" : "TypedVar",
+      "location" : [ 5, 1, 5, 4 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 5, 1, 5, 1 ],
+        "name" : "x"
+      },
+      "type" : {
+        "kind" : "ClassType",
+        "location" : [ 5, 4, 5, 4 ],
+        "className" : "a"
+      }
+    },
+    "value" : {
+      "kind" : "NoneLiteral",
+      "location" : [ 5, 8, 5, 11 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "<None>"
+      }
+    }
+  } ],
+  "statements" : [ {
+    "kind" : "AssignStmt",
+    "location" : [ 6, 1, 6, 7 ],
+    "targets" : [ {
+      "kind" : "MemberExpr",
+      "location" : [ 6, 1, 6, 3 ],
+      "errorMsg" : "There is no attribute named `b` in class `a`",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "object"
+      },
+      "object" : {
+        "kind" : "Identifier",
+        "location" : [ 6, 1, 6, 1 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "a"
+        },
+        "name" : "x"
+      },
+      "member" : {
+        "kind" : "Identifier",
+        "location" : [ 6, 3, 6, 3 ],
+        "name" : "b"
+      }
+    } ],
+    "value" : {
+      "kind" : "IntegerLiteral",
+      "location" : [ 6, 7, 6, 7 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "int"
+      },
+      "value" : 3
+    }
+  }, {
+    "kind" : "AssignStmt",
+    "location" : [ 7, 1, 7, 7 ],
+    "targets" : [ {
+      "kind" : "MemberExpr",
+      "location" : [ 7, 1, 7, 3 ],
+      "errorMsg" : "There is no attribute named `c` in class `a`",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "object"
+      },
+      "object" : {
+        "kind" : "Identifier",
+        "location" : [ 7, 1, 7, 1 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "a"
+        },
+        "name" : "x"
+      },
+      "member" : {
+        "kind" : "Identifier",
+        "location" : [ 7, 3, 7, 3 ],
+        "name" : "c"
+      }
+    } ],
+    "value" : {
+      "kind" : "IntegerLiteral",
+      "location" : [ 7, 7, 7, 7 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "int"
+      },
+      "value" : 4
+    }
+  }, {
+    "kind" : "AssignStmt",
+    "location" : [ 8, 1, 8, 8 ],
+    "targets" : [ {
+      "kind" : "MemberExpr",
+      "location" : [ 8, 1, 8, 5 ],
+      "errorMsg" : "Cannot access member of non-class type `[int]`",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "object"
+      },
+      "object" : {
+        "kind" : "ListExpr",
+        "location" : [ 8, 1, 8, 3 ],
+        "inferredType" : {
+          "kind" : "ListValueType",
+          "elementType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          }
+        },
+        "elements" : [ {
+          "kind" : "IntegerLiteral",
+          "location" : [ 8, 2, 8, 2 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          },
+          "value" : 3
+        } ]
+      },
+      "member" : {
+        "kind" : "Identifier",
+        "location" : [ 8, 5, 8, 5 ],
+        "name" : "d"
+      }
+    } ],
+    "value" : {
+      "kind" : "IntegerLiteral",
+      "location" : [ 8, 8, 8, 8 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "int"
+      },
+      "value" : 5
+    }
+  }, {
+    "kind" : "AssignStmt",
+    "location" : [ 9, 1, 9, 7 ],
+    "targets" : [ {
+      "kind" : "MemberExpr",
+      "location" : [ 9, 1, 9, 3 ],
+      "errorMsg" : "There is no attribute named `d` in class `int`",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "object"
+      },
+      "object" : {
+        "kind" : "IntegerLiteral",
+        "location" : [ 9, 1, 9, 1 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "int"
+        },
+        "value" : 3
+      },
+      "member" : {
+        "kind" : "Identifier",
+        "location" : [ 9, 3, 9, 3 ],
+        "name" : "d"
+      }
+    } ],
+    "value" : {
+      "kind" : "IntegerLiteral",
+      "location" : [ 9, 7, 9, 7 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "int"
+      },
+      "value" : 6
+    }
+  }, {
+    "kind" : "AssignStmt",
+    "location" : [ 10, 1, 10, 10 ],
+    "targets" : [ {
+      "kind" : "MemberExpr",
+      "location" : [ 10, 1, 10, 6 ],
+      "errorMsg" : "There is no attribute named `d` in class `<None>`",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "object"
+      },
+      "object" : {
+        "kind" : "NoneLiteral",
+        "location" : [ 10, 1, 10, 4 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "<None>"
+        }
+      },
+      "member" : {
+        "kind" : "Identifier",
+        "location" : [ 10, 6, 10, 6 ],
+        "name" : "d"
+      }
+    } ],
+    "value" : {
+      "kind" : "IntegerLiteral",
+      "location" : [ 10, 10, 10, 10 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "int"
+      },
+      "value" : 7
+    }
+  }, {
+    "kind" : "AssignStmt",
+    "location" : [ 11, 1, 11, 8 ],
+    "targets" : [ {
+      "kind" : "MemberExpr",
+      "location" : [ 11, 1, 11, 4 ],
+      "errorMsg" : "There is no attribute named `d` in class `<Empty>`",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "object"
+      },
+      "object" : {
+        "kind" : "ListExpr",
+        "location" : [ 11, 1, 11, 2 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "<Empty>"
+        },
+        "elements" : [ ]
+      },
+      "member" : {
+        "kind" : "Identifier",
+        "location" : [ 11, 4, 11, 4 ],
+        "name" : "d"
+      }
+    } ],
+    "value" : {
+      "kind" : "IntegerLiteral",
+      "location" : [ 11, 8, 11, 8 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "int"
+      },
+      "value" : 8
+    }
+  } ],
+  "errors" : {
+    "errors" : [ {
+      "kind" : "CompilerError",
+      "location" : [ 6, 1, 6, 3 ],
+      "message" : "There is no attribute named `b` in class `a`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 7, 1, 7, 3 ],
+      "message" : "There is no attribute named `c` in class `a`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 8, 1, 8, 5 ],
+      "message" : "Cannot access member of non-class type `[int]`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 9, 1, 9, 3 ],
+      "message" : "There is no attribute named `d` in class `int`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 10, 1, 10, 6 ],
+      "message" : "There is no attribute named `d` in class `<None>`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 11, 1, 11, 4 ],
+      "message" : "There is no attribute named `d` in class `<Empty>`"
+    } ],
+    "kind" : "Errors",
+    "location" : [ 0, 0, 0, 0 ]
+  }
+}

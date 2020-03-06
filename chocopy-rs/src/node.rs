@@ -1,6 +1,10 @@
 use crate::location::*;
 use enum_dispatch::*;
+use lazy_static::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::convert::*;
+use std::fmt::{self, Display, Formatter};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct NodeBase {
@@ -32,10 +36,48 @@ impl NodeBase {
     }
 }
 
+pub struct ClassInfo {
+    pub super_class: String,
+    pub items: HashMap<String, Type>,
+}
+
+pub enum EnvSlot {
+    Local(ValueType),
+    Func(FuncType),
+    NonLocal,
+    Global,
+}
+
+pub struct LocalEnv(pub Vec<HashMap<String, EnvSlot>>);
+pub struct ClassEnv(pub HashMap<String, ClassInfo>);
+
 #[enum_dispatch(Node)]
 pub trait Node {
     fn base(&self) -> &NodeBase;
     fn base_mut(&mut self) -> &mut NodeBase;
+    fn analyze(
+        &mut self,
+        errors: &mut Vec<Error>,
+        o: &mut LocalEnv,
+        m: &ClassEnv,
+        r: &Option<ValueType>,
+    ) -> Option<ValueType>;
+}
+
+macro_rules! impl_default_analyze {
+    ($type:ty) => {
+        impl $type {
+            fn analyze_impl(
+                &mut self,
+                _: &mut Vec<Error>,
+                _: &LocalEnv,
+                _: &ClassEnv,
+                _: &Option<ValueType>,
+            ) -> Option<ValueType> {
+                None
+            }
+        }
+    };
 }
 
 macro_rules! impl_node {
@@ -47,6 +89,16 @@ macro_rules! impl_node {
 
             fn base_mut(&mut self) -> &mut NodeBase {
                 &mut self.base
+            }
+
+            fn analyze(
+                &mut self,
+                errors: &mut Vec<Error>,
+                o: &mut LocalEnv,
+                m: &ClassEnv,
+                r: &Option<ValueType>,
+            ) -> Option<ValueType> {
+                self.analyze_impl(errors, o, m, r)
             }
         }
     };
@@ -153,6 +205,7 @@ pub struct ClassDef {
 }
 
 impl_node!(ClassDef);
+impl_default_analyze!(ClassDef);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct ClassType {
@@ -163,12 +216,19 @@ pub struct ClassType {
 }
 
 impl_node!(ClassType);
+impl_default_analyze!(ClassType);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind")]
 pub struct ClassValueType {
     #[serde(rename = "className")]
     pub class_name: String,
+}
+
+impl Display for ClassValueType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", &self.class_name)
+    }
 }
 
 fn is_not(b: &bool) -> bool {
@@ -185,6 +245,7 @@ pub struct CompilerError {
 }
 
 impl_node!(CompilerError);
+impl_default_analyze!(CompilerError);
 
 #[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -228,6 +289,7 @@ pub struct Errors {
 }
 
 impl_node!(Errors);
+impl_default_analyze!(Errors);
 
 #[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -251,6 +313,18 @@ impl Node for Expr {
 
     fn base_mut(&mut self) -> &mut NodeBase {
         self.content.base_mut()
+    }
+
+    fn analyze(
+        &mut self,
+        errors: &mut Vec<Error>,
+        o: &mut LocalEnv,
+        m: &ClassEnv,
+        r: &Option<ValueType>,
+    ) -> Option<ValueType> {
+        let t = self.content.analyze(errors, o, m, r);
+        self.inferred_type = t.clone().map(Into::into);
+        t
     }
 }
 
@@ -320,6 +394,7 @@ pub struct ForStmt {
 }
 
 impl_node!(ForStmt);
+impl_default_analyze!(ForStmt);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct FuncDef {
@@ -334,6 +409,7 @@ pub struct FuncDef {
 }
 
 impl_node!(FuncDef);
+impl_default_analyze!(FuncDef);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct FuncType {
@@ -350,6 +426,7 @@ pub struct GlobalDecl {
 }
 
 impl_node!(GlobalDecl);
+impl_default_analyze!(GlobalDecl);
 
 #[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -404,6 +481,7 @@ pub struct IfStmt {
 }
 
 impl_node!(IfStmt);
+impl_default_analyze!(IfStmt);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct IndexExpr {
@@ -442,6 +520,7 @@ pub struct ListType {
 }
 
 impl_node!(ListType);
+impl_default_analyze!(ListType);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct ListValueType {
@@ -449,10 +528,65 @@ pub struct ListValueType {
     pub element_type: Box<ValueType>,
 }
 
+impl Display for ListValueType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "[{}]", self.element_type)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub struct Literal {
+    #[serde(rename = "inferredType", skip_serializing_if = "Option::is_none")]
+    pub inferred_type: Option<Type>,
+    #[serde(flatten)]
+    pub content: LiteralContent,
+}
+
+impl Node for Literal {
+    fn base(&self) -> &NodeBase {
+        &self.content.base()
+    }
+
+    fn base_mut(&mut self) -> &mut NodeBase {
+        self.content.base_mut()
+    }
+
+    fn analyze(
+        &mut self,
+        errors: &mut Vec<Error>,
+        o: &mut LocalEnv,
+        m: &ClassEnv,
+        r: &Option<ValueType>,
+    ) -> Option<ValueType> {
+        let t = self.content.analyze(errors, o, m, r);
+        self.inferred_type = t.clone().map(Into::into);
+        t
+    }
+}
+
+macro_rules! literal_init {
+    ($name:ident) => {
+        pub fn $name(e: $name) -> Literal {
+            Literal {
+                inferred_type: None,
+                content: LiteralContent::$name(e),
+            }
+        }
+    };
+}
+
+#[allow(non_snake_case)]
+impl Literal {
+    literal_init!(IntegerLiteral);
+    literal_init!(BooleanLiteral);
+    literal_init!(NoneLiteral);
+    literal_init!(StringLiteral);
+}
+
 #[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind")]
-pub enum Literal {
+pub enum LiteralContent {
     IntegerLiteral(IntegerLiteral),
     BooleanLiteral(BooleanLiteral),
     NoneLiteral(NoneLiteral),
@@ -502,6 +636,7 @@ pub struct NonLocalDecl {
 }
 
 impl_node!(NonLocalDecl);
+impl_default_analyze!(NonLocalDecl);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct Program {
@@ -522,6 +657,7 @@ pub struct ReturnStmt {
 }
 
 impl_node!(ReturnStmt);
+impl_default_analyze!(ReturnStmt);
 
 #[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -598,6 +734,7 @@ pub struct TypedVar {
 }
 
 impl_node!(TypedVar);
+impl_default_analyze!(TypedVar);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub enum UnaryOp {
@@ -624,6 +761,15 @@ pub enum ValueType {
     ListValueType(ListValueType),
 }
 
+impl Display for ValueType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            ValueType::ClassValueType(v) => v.fmt(f),
+            ValueType::ListValueType(v) => v.fmt(f),
+        }
+    }
+}
+
 impl ValueType {
     pub fn from_annotation(t: &TypeAnnotation) -> ValueType {
         match t {
@@ -642,6 +788,17 @@ impl From<ValueType> for Type {
         match t {
             ValueType::ClassValueType(c) => Type::ClassValueType(c),
             ValueType::ListValueType(c) => Type::ListValueType(c),
+        }
+    }
+}
+
+impl TryFrom<Type> for ValueType {
+    type Error = ();
+    fn try_from(t: Type) -> Result<ValueType, ()> {
+        match t {
+            Type::ClassValueType(c) => Ok(ValueType::ClassValueType(c)),
+            Type::ListValueType(c) => Ok(ValueType::ListValueType(c)),
+            _ => Err(()),
         }
     }
 }
@@ -665,6 +822,31 @@ pub struct WhileStmt {
 }
 
 impl_node!(WhileStmt);
+impl_default_analyze!(WhileStmt);
+
+lazy_static! {
+    pub static ref TYPE_OBJECT: ValueType = ValueType::ClassValueType(ClassValueType {
+        class_name: "object".to_owned(),
+    });
+    pub static ref TYPE_NONE: ValueType = ValueType::ClassValueType(ClassValueType {
+        class_name: "<None>".to_owned(),
+    });
+    pub static ref TYPE_EMPTY: ValueType = ValueType::ClassValueType(ClassValueType {
+        class_name: "<Empty>".to_owned(),
+    });
+    pub static ref TYPE_STR: ValueType = ValueType::ClassValueType(ClassValueType {
+        class_name: "str".to_owned(),
+    });
+    pub static ref TYPE_INT: ValueType = ValueType::ClassValueType(ClassValueType {
+        class_name: "int".to_owned(),
+    });
+    pub static ref TYPE_BOOL: ValueType = ValueType::ClassValueType(ClassValueType {
+        class_name: "bool".to_owned(),
+    });
+    pub static ref TYPE_NONE_LIST: ValueType = ValueType::ListValueType(ListValueType {
+        element_type: Box::new(TYPE_NONE.clone())
+    });
+}
 
 #[cfg(test)]
 mod tests {

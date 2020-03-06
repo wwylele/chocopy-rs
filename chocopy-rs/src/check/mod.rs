@@ -1,3 +1,5 @@
+mod analyze;
+
 use crate::node::*;
 use std::collections::{HashMap, HashSet};
 use std::convert::*;
@@ -52,6 +54,13 @@ fn error_global(name: &str) -> String {
     format!("Not a global variable: {}", name)
 }
 
+fn error_return(name: &str) -> String {
+    format!(
+        "All paths in this function/method must have a return statement: {}",
+        name
+    )
+}
+
 fn error_from(node: &impl Node) -> Error {
     let base = node.base();
     Error::CompilerError(CompilerError {
@@ -59,11 +68,6 @@ fn error_from(node: &impl Node) -> Error {
         message: base.error_msg.clone().unwrap(),
         syntax: false,
     })
-}
-
-struct ClassInfo {
-    super_class: String,
-    items: HashMap<String, Type>,
 }
 
 fn check_var_def(v: &mut VarDef, errors: &mut Vec<Error>, classes: &HashMap<String, ClassInfo>) {
@@ -74,6 +78,25 @@ fn check_var_def(v: &mut VarDef, errors: &mut Vec<Error>, classes: &HashMap<Stri
         core_type.base_mut().error_msg = Some(msg);
         errors.push(error_from(core_type));
     }
+}
+
+fn always_return(statements: &[Stmt]) -> bool {
+    for statement in statements {
+        match statement {
+            Stmt::ReturnStmt(_) => return true,
+            Stmt::IfStmt(IfStmt {
+                then_body,
+                else_body,
+                ..
+            }) => {
+                if always_return(then_body) && always_return(else_body) {
+                    return true;
+                }
+            }
+            _ => (),
+        }
+    }
+    false
 }
 
 fn check_func(
@@ -119,6 +142,7 @@ fn check_func(
         errors.push(error_from(core_type));
     }
 
+    let mut nonlocal_remove = HashSet::new();
     // semantic rule: 1, 2(local/function), 3, 11(local)
     for decl in &mut f.declarations {
         let name = decl.name_mut();
@@ -154,6 +178,7 @@ fn check_func(
                     id.base_mut().error_msg = Some(msg);
                     errors.push(error_from(id));
                 }
+                nonlocal_remove.insert(id.name.clone());
             }
             Declaration::NonLocalDecl(v) => {
                 let id = v.variable.id_mut();
@@ -170,16 +195,29 @@ fn check_func(
                     id.base_mut().error_msg = Some(msg);
                     errors.push(error_from(id));
                 }
+                nonlocal_remove.insert(id.name.clone());
             }
             _ => unreachable!(),
         }
     }
 
-    // TODO
-    // semantic rule: 8, 9
+    // semantic rule: 9
+    if let TypeAnnotation::ClassType(c) = &f.return_type {
+        if let "int" | "str" | "bool" = c.class_name.as_str() {
+            if !always_return(&f.statements) {
+                let msg = error_return(&f.name.id().name);
+                f.name.base_mut().error_msg = Some(msg);
+                errors.push(error_from(&f.name));
+            }
+        }
+    }
 
     // recursion
-    let nonlocals = nonlocals.union(&locals).cloned().collect();
+    let nonlocals = nonlocals
+        .union(&locals)
+        .filter(|v| !nonlocal_remove.contains(*v))
+        .cloned()
+        .collect();
     for decl in &mut f.declarations {
         if let Declaration::FuncDef(f) = decl {
             check_func(f, errors, classes, globals, &nonlocals);
@@ -199,6 +237,28 @@ pub fn check(mut ast: Ast) -> Ast {
     id_set.insert("len".to_owned());
 
     let mut classes: HashMap<String, ClassInfo> = HashMap::new();
+    let mut global_env: HashMap<String, EnvSlot> = HashMap::new();
+    global_env.insert(
+        "print".to_owned(),
+        EnvSlot::Func(FuncType {
+            parameters: vec![TYPE_OBJECT.clone()],
+            return_type: TYPE_NONE.clone(),
+        }),
+    );
+    global_env.insert(
+        "input".to_owned(),
+        EnvSlot::Func(FuncType {
+            parameters: vec![],
+            return_type: TYPE_STR.clone(),
+        }),
+    );
+    global_env.insert(
+        "len".to_owned(),
+        EnvSlot::Func(FuncType {
+            parameters: vec![TYPE_OBJECT.clone()],
+            return_type: TYPE_INT.clone(),
+        }),
+    );
 
     let add_basic_type = |classes: &mut HashMap<String, ClassInfo>, name: &str| {
         classes.insert(
@@ -211,9 +271,7 @@ pub fn check(mut ast: Ast) -> Ast {
                         parameters: vec![ValueType::ClassValueType(ClassValueType {
                             class_name: name.to_owned(),
                         })],
-                        return_type: ValueType::ClassValueType(ClassValueType {
-                            class_name: "<None>".to_owned(),
-                        }),
+                        return_type: TYPE_NONE.clone(),
                     }),
                 ))
                 .collect(),
@@ -353,6 +411,7 @@ pub fn check(mut ast: Ast) -> Ast {
     add_basic_type(&mut classes, "int");
     add_basic_type(&mut classes, "bool");
     add_basic_type(&mut classes, "<None>");
+    add_basic_type(&mut classes, "<Empty>");
 
     // Pass B
     // semantic rules: 11(global/class variable)
@@ -361,7 +420,13 @@ pub fn check(mut ast: Ast) -> Ast {
     for decl in &mut ast.program_mut().declarations {
         if let Declaration::VarDef(v) = decl {
             check_var_def(v, &mut errors, &classes);
-            globals.insert(v.var.tv().identifier.id().name.clone());
+            let tv = v.var.tv();
+            let name = &tv.identifier.id().name;
+            globals.insert(name.clone());
+            global_env.insert(
+                name.clone(),
+                EnvSlot::Local(ValueType::from_annotation(&tv.type_)),
+            );
         } else if let Declaration::ClassDef(c) = decl {
             for decl in &mut c.declarations {
                 if let Declaration::VarDef(v) = decl {
@@ -372,10 +437,21 @@ pub fn check(mut ast: Ast) -> Ast {
     }
 
     // Pass C
-    // semantic rules: 1(function), 2, 3, 8, 9, 11(function)
+    // semantic rules: 1(function), 2, 3, 9, 11(function)
     for decl in &mut ast.program_mut().declarations {
         if let Declaration::FuncDef(f) = decl {
-            check_func(f, &mut errors, &classes, &globals, &HashSet::new())
+            check_func(f, &mut errors, &classes, &globals, &HashSet::new());
+            global_env.insert(
+                f.name.id().name.clone(),
+                EnvSlot::Func(FuncType {
+                    parameters: f
+                        .params
+                        .iter()
+                        .map(|tv| ValueType::from_annotation(&tv.tv().type_))
+                        .collect(),
+                    return_type: ValueType::from_annotation(&f.return_type),
+                }),
+            );
         } else if let Declaration::ClassDef(c) = decl {
             for decl in &mut c.declarations {
                 if let Declaration::FuncDef(f) = decl {
@@ -383,6 +459,15 @@ pub fn check(mut ast: Ast) -> Ast {
                 }
             }
         }
+    }
+
+    // Pass D
+    // semantic rules: 8, 10
+    // and type checking
+    if errors.is_empty() {
+        let mut env = LocalEnv(vec![global_env]);
+        ast.program_mut()
+            .analyze(&mut errors, &mut env, &ClassEnv(classes), &None);
     }
 
     ast.program_mut().errors = ErrorInfo::Errors(Errors {
@@ -399,7 +484,7 @@ mod tests {
     #[test]
     fn sample() {
         let mut passed = true;
-        let test_dirs = ["../chocopy-wars/src/test/data/pa2/sample"];
+        let test_dirs = ["../chocopy-wars/src/test/data/pa2/sample", "test/pa2"];
         for dir in &test_dirs {
             println!("Testing Directory {}", dir);
             let mut files = std::fs::read_dir(dir)
