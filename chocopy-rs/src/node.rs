@@ -657,7 +657,6 @@ pub struct ReturnStmt {
 }
 
 impl_node!(ReturnStmt);
-impl_default_analyze!(ReturnStmt);
 
 #[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]

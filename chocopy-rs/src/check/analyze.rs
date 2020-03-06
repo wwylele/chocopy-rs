@@ -601,6 +601,36 @@ impl MethodCallExpr {
     }
 }
 
+impl ReturnStmt {
+    pub fn analyze_impl(
+        &mut self,
+        errors: &mut Vec<Error>,
+        o: &mut LocalEnv,
+        m: &ClassEnv,
+        r: &Option<ValueType>,
+    ) -> Option<ValueType> {
+        // Reference program: do not analyze the expression on top-level return
+        if let Some(return_expected) = r {
+            let return_type = if let Some(value) = &mut self.value {
+                value.analyze(errors, o, m, r).unwrap()
+            } else {
+                TYPE_NONE.clone()
+            };
+            if !m.is_compatible(&return_type, return_expected) {
+                let msg = error_assign(return_expected, &return_type);
+                self.base_mut().error_msg = Some(msg);
+                errors.push(error_from(self));
+            }
+        } else {
+            let msg = "Return statement cannot appear at the top level".to_owned();
+            self.base_mut().error_msg = Some(msg);
+            errors.push(error_from(self));
+        }
+
+        None
+    }
+}
+
 impl Program {
     pub fn analyze_impl(
         &mut self,
