@@ -1,0 +1,258 @@
+{
+  "kind" : "Program",
+  "location" : [ 1, 1, 20, 2 ],
+  "declarations" : [ {
+    "kind" : "VarDef",
+    "location" : [ 1, 1, 1, 10 ],
+    "var" : {
+      "kind" : "TypedVar",
+      "location" : [ 1, 1, 1, 6 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 1, 1, 1, 1 ],
+        "name" : "s"
+      },
+      "type" : {
+        "kind" : "ClassType",
+        "location" : [ 1, 4, 1, 6 ],
+        "className" : "int"
+      }
+    },
+    "value" : {
+      "kind" : "IntegerLiteral",
+      "location" : [ 1, 10, 1, 10 ],
+      "value" : 0
+    }
+  }, {
+    "kind" : "FuncDef",
+    "location" : [ 2, 1, 6, 0 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 2, 5, 2, 5 ],
+      "name" : "f"
+    },
+    "params" : [ ],
+    "returnType" : {
+      "kind" : "ClassType",
+      "location" : [ 2, 8, 2, 8 ],
+      "className" : "<None>"
+    },
+    "declarations" : [ {
+      "kind" : "VarDef",
+      "location" : [ 3, 5, 3, 14 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 3, 5, 3, 10 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 3, 5, 3, 5 ],
+          "name" : "l"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 3, 8, 3, 10 ],
+          "className" : "int"
+        }
+      },
+      "value" : {
+        "kind" : "IntegerLiteral",
+        "location" : [ 3, 14, 3, 14 ],
+        "value" : 3
+      }
+    } ],
+    "statements" : [ {
+      "kind" : "ForStmt",
+      "location" : [ 4, 5, 6, 0 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 4, 9, 4, 9 ],
+        "name" : "s"
+      },
+      "iterable" : {
+        "kind" : "Identifier",
+        "location" : [ 4, 14, 4, 14 ],
+        "name" : "l"
+      },
+      "body" : [ ]
+    } ]
+  }, {
+    "kind" : "FuncDef",
+    "location" : [ 6, 1, 11, 0 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 6, 5, 6, 5 ],
+      "name" : "h"
+    },
+    "params" : [ ],
+    "returnType" : {
+      "kind" : "ClassType",
+      "location" : [ 6, 8, 6, 8 ],
+      "className" : "<None>"
+    },
+    "declarations" : [ {
+      "kind" : "VarDef",
+      "location" : [ 7, 5, 7, 19 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 7, 5, 7, 12 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 7, 5, 7, 5 ],
+          "name" : "l"
+        },
+        "type" : {
+          "kind" : "ListType",
+          "location" : [ 7, 8, 7, 12 ],
+          "elementType" : {
+            "kind" : "ClassType",
+            "location" : [ 7, 9, 7, 11 ],
+            "className" : "int"
+          }
+        }
+      },
+      "value" : {
+        "kind" : "NoneLiteral",
+        "location" : [ 7, 16, 7, 19 ]
+      }
+    } ],
+    "statements" : [ {
+      "kind" : "ForStmt",
+      "location" : [ 8, 5, 11, 0 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 8, 9, 8, 9 ],
+        "name" : "s"
+      },
+      "iterable" : {
+        "kind" : "Identifier",
+        "location" : [ 8, 14, 8, 14 ],
+        "name" : "l"
+      },
+      "body" : [ ]
+    } ]
+  }, {
+    "kind" : "FuncDef",
+    "location" : [ 11, 1, 15, 0 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 11, 5, 11, 5 ],
+      "name" : "i"
+    },
+    "params" : [ ],
+    "returnType" : {
+      "kind" : "ClassType",
+      "location" : [ 11, 8, 11, 8 ],
+      "className" : "<None>"
+    },
+    "declarations" : [ {
+      "kind" : "VarDef",
+      "location" : [ 12, 5, 12, 19 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 12, 5, 12, 12 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 12, 5, 12, 5 ],
+          "name" : "l"
+        },
+        "type" : {
+          "kind" : "ListType",
+          "location" : [ 12, 8, 12, 12 ],
+          "elementType" : {
+            "kind" : "ClassType",
+            "location" : [ 12, 9, 12, 11 ],
+            "className" : "int"
+          }
+        }
+      },
+      "value" : {
+        "kind" : "NoneLiteral",
+        "location" : [ 12, 16, 12, 19 ]
+      }
+    } ],
+    "statements" : [ {
+      "kind" : "ForStmt",
+      "location" : [ 13, 5, 15, 0 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 13, 9, 13, 9 ],
+        "name" : "h"
+      },
+      "iterable" : {
+        "kind" : "Identifier",
+        "location" : [ 13, 14, 13, 14 ],
+        "name" : "l"
+      },
+      "body" : [ ]
+    } ]
+  }, {
+    "kind" : "FuncDef",
+    "location" : [ 15, 1, 20, 1 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 15, 5, 15, 5 ],
+      "name" : "g"
+    },
+    "params" : [ ],
+    "returnType" : {
+      "kind" : "ClassType",
+      "location" : [ 15, 8, 15, 8 ],
+      "className" : "<None>"
+    },
+    "declarations" : [ {
+      "kind" : "GlobalDecl",
+      "location" : [ 16, 5, 16, 12 ],
+      "variable" : {
+        "kind" : "Identifier",
+        "location" : [ 16, 12, 16, 12 ],
+        "name" : "s"
+      }
+    }, {
+      "kind" : "VarDef",
+      "location" : [ 17, 5, 17, 19 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 17, 5, 17, 12 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 17, 5, 17, 5 ],
+          "name" : "l"
+        },
+        "type" : {
+          "kind" : "ListType",
+          "location" : [ 17, 8, 17, 12 ],
+          "elementType" : {
+            "kind" : "ClassType",
+            "location" : [ 17, 9, 17, 11 ],
+            "className" : "int"
+          }
+        }
+      },
+      "value" : {
+        "kind" : "NoneLiteral",
+        "location" : [ 17, 16, 17, 19 ]
+      }
+    } ],
+    "statements" : [ {
+      "kind" : "ForStmt",
+      "location" : [ 18, 5, 20, 1 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 18, 9, 18, 9 ],
+        "name" : "s"
+      },
+      "iterable" : {
+        "kind" : "Identifier",
+        "location" : [ 18, 14, 18, 14 ],
+        "name" : "l"
+      },
+      "body" : [ ]
+    } ]
+  } ],
+  "statements" : [ ],
+  "errors" : {
+    "errors" : [ ],
+    "kind" : "Errors",
+    "location" : [ 0, 0, 0, 0 ]
+  }
+}

@@ -394,7 +394,6 @@ pub struct ForStmt {
 }
 
 impl_node!(ForStmt);
-impl_default_analyze!(ForStmt);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct FuncDef {
@@ -481,7 +480,6 @@ pub struct IfStmt {
 }
 
 impl_node!(IfStmt);
-impl_default_analyze!(IfStmt);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct IndexExpr {
@@ -821,7 +819,6 @@ pub struct WhileStmt {
 }
 
 impl_node!(WhileStmt);
-impl_default_analyze!(WhileStmt);
 
 lazy_static! {
     pub static ref TYPE_OBJECT: ValueType = ValueType::ClassValueType(ClassValueType {

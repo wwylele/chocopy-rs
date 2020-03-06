@@ -167,6 +167,10 @@ impl LocalEnv {
     }
 }
 
+fn error_variable(name: &str) -> String {
+    format!("Not a variable: {}", name)
+}
+
 // Only for variable
 impl Identifier {
     pub fn analyze_impl(
@@ -178,7 +182,7 @@ impl Identifier {
     ) -> Option<ValueType> {
         match o.get(&self.name) {
             None | Some((Type::FuncType(_), _)) => {
-                let msg = format!("Not a variable: {}", &self.name);
+                let msg = error_variable(&self.name);
                 self.base_mut().error_msg = Some(msg);
                 errors.push(error_from(self));
                 Some(TYPE_OBJECT.clone())
@@ -190,6 +194,13 @@ impl Identifier {
 
 fn error_assign(left: &ValueType, right: &ValueType) -> String {
     format!("Expected type `{}`; got type `{}`", &left, &right)
+}
+
+fn error_nonlocal(name: &str) -> String {
+    format!(
+        "Cannot assign to variable that is not explicitly declared in this scope: {}",
+        name
+    )
 }
 
 impl AssignStmt {
@@ -207,7 +218,7 @@ impl AssignStmt {
             let left: ValueType = self.targets[i].analyze(errors, o, m, r).unwrap();
             if let ExprContent::Identifier(Identifier { name, .. }) = &self.targets[i].content {
                 if let Some((_, Assignable(false))) = o.get(name) {
-                    let msg = format!("Cannot assign to variable that is not explicitly declared in this scope: {}", name);
+                    let msg = error_nonlocal(name);
                     self.targets[i].base_mut().error_msg = Some(msg);
                     errors.push(error_from(&self.targets[i]));
                 }
@@ -626,6 +637,118 @@ impl ReturnStmt {
             self.base_mut().error_msg = Some(msg);
             errors.push(error_from(self));
         }
+
+        None
+    }
+}
+
+fn analyze(
+    statements: &mut [Stmt],
+    errors: &mut Vec<Error>,
+    o: &mut LocalEnv,
+    m: &ClassEnv,
+    r: &Option<ValueType>,
+) {
+    for statement in statements {
+        statement.analyze(errors, o, m, r);
+    }
+}
+
+fn error_condition(condition: &ValueType) -> String {
+    format!("Condition expression cannot be of type `{}`", condition)
+}
+
+impl IfStmt {
+    pub fn analyze_impl(
+        &mut self,
+        errors: &mut Vec<Error>,
+        o: &mut LocalEnv,
+        m: &ClassEnv,
+        r: &Option<ValueType>,
+    ) -> Option<ValueType> {
+        let condition = self.condition.analyze(errors, o, m, r).unwrap();
+        if condition != *TYPE_BOOL {
+            let msg = error_condition(&condition);
+            self.base_mut().error_msg = Some(msg);
+            errors.push(error_from(self));
+        }
+
+        analyze(&mut self.then_body, errors, o, m, r);
+        analyze(&mut self.else_body, errors, o, m, r);
+
+        None
+    }
+}
+
+impl WhileStmt {
+    pub fn analyze_impl(
+        &mut self,
+        errors: &mut Vec<Error>,
+        o: &mut LocalEnv,
+        m: &ClassEnv,
+        r: &Option<ValueType>,
+    ) -> Option<ValueType> {
+        let condition = self.condition.analyze(errors, o, m, r).unwrap();
+        if condition != *TYPE_BOOL {
+            let msg = error_condition(&condition);
+            self.base_mut().error_msg = Some(msg);
+            errors.push(error_from(self));
+        }
+
+        analyze(&mut self.body, errors, o, m, r);
+
+        None
+    }
+}
+
+impl ForStmt {
+    pub fn analyze_impl(
+        &mut self,
+        errors: &mut Vec<Error>,
+        o: &mut LocalEnv,
+        m: &ClassEnv,
+        r: &Option<ValueType>,
+    ) -> Option<ValueType> {
+        let iterable = self.iterable.analyze(errors, o, m, r).unwrap();
+        let element_type = if iterable == *TYPE_STR {
+            Some(&iterable)
+        } else if let ValueType::ListValueType(ListValueType { element_type }) = &iterable {
+            Some(&**element_type)
+        } else {
+            let msg = format!("Cannot iterate over value of type `{}`", &iterable);
+            self.base_mut().error_msg = Some(msg);
+            errors.push(error_from(self));
+            None
+        };
+
+        if let Some(element_type) = element_type {
+            let id = self.identifier.id_mut();
+            let variable = match o.get(&id.name) {
+                None | Some((Type::FuncType(_), _)) => None,
+                Some((t, assignable)) => Some((t.try_into().unwrap(), assignable)),
+            };
+
+            if let Some((variable, Assignable(assignable))) = variable {
+                if m.is_compatible(element_type, &variable) {
+                    //id.
+                    if !assignable {
+                        let msg = error_nonlocal(&id.name);
+                        id.base_mut().error_msg = Some(msg);
+                        errors.push(error_from(id));
+                    }
+                } else {
+                    let msg = error_assign(&variable, element_type);
+                    self.base_mut().error_msg = Some(msg);
+                    errors.push(error_from(self));
+                }
+            } else {
+                let msg = error_variable(&id.name);
+                self.base_mut().error_msg = Some(msg);
+                errors.push(error_from(self));
+            }
+        }
+
+        analyze(&mut self.body, errors, o, m, r);
 
         None
     }

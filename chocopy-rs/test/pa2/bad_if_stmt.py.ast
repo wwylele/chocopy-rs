@@ -1,0 +1,95 @@
+{
+  "kind" : "Program",
+  "location" : [ 1, 1, 9, 1 ],
+  "declarations" : [ ],
+  "statements" : [ {
+    "kind" : "IfStmt",
+    "location" : [ 1, 1, 9, 1 ],
+    "condition" : {
+      "kind" : "IntegerLiteral",
+      "location" : [ 1, 4, 1, 4 ],
+      "value" : 1
+    },
+    "thenBody" : [ {
+      "kind" : "ExprStmt",
+      "location" : [ 2, 5, 2, 8 ],
+      "expr" : {
+        "kind" : "BinaryExpr",
+        "location" : [ 2, 5, 2, 8 ],
+        "left" : {
+          "kind" : "IntegerLiteral",
+          "location" : [ 2, 5, 2, 5 ],
+          "value" : 1
+        },
+        "operator" : "+",
+        "right" : {
+          "kind" : "StringLiteral",
+          "location" : [ 2, 7, 2, 8 ],
+          "value" : ""
+        }
+      }
+    } ],
+    "elseBody" : [ {
+      "kind" : "IfStmt",
+      "location" : [ 3, 1, 9, 1 ],
+      "condition" : {
+        "kind" : "IntegerLiteral",
+        "location" : [ 3, 6, 3, 6 ],
+        "value" : 2
+      },
+      "thenBody" : [ {
+        "kind" : "ExprStmt",
+        "location" : [ 4, 5, 4, 8 ],
+        "expr" : {
+          "kind" : "BinaryExpr",
+          "location" : [ 4, 5, 4, 8 ],
+          "left" : {
+            "kind" : "IntegerLiteral",
+            "location" : [ 4, 5, 4, 5 ],
+            "value" : 3
+          },
+          "operator" : "+",
+          "right" : {
+            "kind" : "StringLiteral",
+            "location" : [ 4, 7, 4, 8 ],
+            "value" : ""
+          }
+        }
+      }, {
+        "kind" : "IfStmt",
+        "location" : [ 5, 5, 7, 0 ],
+        "condition" : {
+          "kind" : "IntegerLiteral",
+          "location" : [ 5, 8, 5, 8 ],
+          "value" : 4
+        },
+        "thenBody" : [ ],
+        "elseBody" : [ ]
+      } ],
+      "elseBody" : [ {
+        "kind" : "ExprStmt",
+        "location" : [ 8, 5, 8, 9 ],
+        "expr" : {
+          "kind" : "BinaryExpr",
+          "location" : [ 8, 5, 8, 9 ],
+          "left" : {
+            "kind" : "IntegerLiteral",
+            "location" : [ 8, 5, 8, 5 ],
+            "value" : 9
+          },
+          "operator" : "+",
+          "right" : {
+            "kind" : "StringLiteral",
+            "location" : [ 8, 7, 8, 9 ],
+            "value" : "2"
+          }
+        }
+      } ]
+    } ]
+  } ],
+  "errors" : {
+    "errors" : [ ],
+    "kind" : "Errors",
+    "location" : [ 0, 0, 0, 0 ]
+  }
+}

@@ -1,0 +1,173 @@
+{
+  "kind" : "Program",
+  "location" : [ 1, 1, 9, 1 ],
+  "declarations" : [ ],
+  "statements" : [ {
+    "kind" : "IfStmt",
+    "location" : [ 1, 1, 9, 1 ],
+    "errorMsg" : "Condition expression cannot be of type `int`",
+    "condition" : {
+      "kind" : "IntegerLiteral",
+      "location" : [ 1, 4, 1, 4 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "int"
+      },
+      "value" : 1
+    },
+    "thenBody" : [ {
+      "kind" : "ExprStmt",
+      "location" : [ 2, 5, 2, 8 ],
+      "expr" : {
+        "kind" : "BinaryExpr",
+        "location" : [ 2, 5, 2, 8 ],
+        "errorMsg" : "Cannot apply operator `+` on types `int` and `str`",
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "int"
+        },
+        "left" : {
+          "kind" : "IntegerLiteral",
+          "location" : [ 2, 5, 2, 5 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          },
+          "value" : 1
+        },
+        "operator" : "+",
+        "right" : {
+          "kind" : "StringLiteral",
+          "location" : [ 2, 7, 2, 8 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "str"
+          },
+          "value" : ""
+        }
+      }
+    } ],
+    "elseBody" : [ {
+      "kind" : "IfStmt",
+      "location" : [ 3, 1, 9, 1 ],
+      "errorMsg" : "Condition expression cannot be of type `int`",
+      "condition" : {
+        "kind" : "IntegerLiteral",
+        "location" : [ 3, 6, 3, 6 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "int"
+        },
+        "value" : 2
+      },
+      "thenBody" : [ {
+        "kind" : "ExprStmt",
+        "location" : [ 4, 5, 4, 8 ],
+        "expr" : {
+          "kind" : "BinaryExpr",
+          "location" : [ 4, 5, 4, 8 ],
+          "errorMsg" : "Cannot apply operator `+` on types `int` and `str`",
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          },
+          "left" : {
+            "kind" : "IntegerLiteral",
+            "location" : [ 4, 5, 4, 5 ],
+            "inferredType" : {
+              "kind" : "ClassValueType",
+              "className" : "int"
+            },
+            "value" : 3
+          },
+          "operator" : "+",
+          "right" : {
+            "kind" : "StringLiteral",
+            "location" : [ 4, 7, 4, 8 ],
+            "inferredType" : {
+              "kind" : "ClassValueType",
+              "className" : "str"
+            },
+            "value" : ""
+          }
+        }
+      }, {
+        "kind" : "IfStmt",
+        "location" : [ 5, 5, 7, 0 ],
+        "errorMsg" : "Condition expression cannot be of type `int`",
+        "condition" : {
+          "kind" : "IntegerLiteral",
+          "location" : [ 5, 8, 5, 8 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          },
+          "value" : 4
+        },
+        "thenBody" : [ ],
+        "elseBody" : [ ]
+      } ],
+      "elseBody" : [ {
+        "kind" : "ExprStmt",
+        "location" : [ 8, 5, 8, 9 ],
+        "expr" : {
+          "kind" : "BinaryExpr",
+          "location" : [ 8, 5, 8, 9 ],
+          "errorMsg" : "Cannot apply operator `+` on types `int` and `str`",
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          },
+          "left" : {
+            "kind" : "IntegerLiteral",
+            "location" : [ 8, 5, 8, 5 ],
+            "inferredType" : {
+              "kind" : "ClassValueType",
+              "className" : "int"
+            },
+            "value" : 9
+          },
+          "operator" : "+",
+          "right" : {
+            "kind" : "StringLiteral",
+            "location" : [ 8, 7, 8, 9 ],
+            "inferredType" : {
+              "kind" : "ClassValueType",
+              "className" : "str"
+            },
+            "value" : "2"
+          }
+        }
+      } ]
+    } ]
+  } ],
+  "errors" : {
+    "errors" : [ {
+      "kind" : "CompilerError",
+      "location" : [ 1, 1, 9, 1 ],
+      "message" : "Condition expression cannot be of type `int`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 2, 5, 2, 8 ],
+      "message" : "Cannot apply operator `+` on types `int` and `str`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 3, 1, 9, 1 ],
+      "message" : "Condition expression cannot be of type `int`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 4, 5, 4, 8 ],
+      "message" : "Cannot apply operator `+` on types `int` and `str`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 5, 5, 7, 0 ],
+      "message" : "Condition expression cannot be of type `int`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 8, 5, 8, 9 ],
+      "message" : "Cannot apply operator `+` on types `int` and `str`"
+    } ],
+    "kind" : "Errors",
+    "location" : [ 0, 0, 0, 0 ]
+  }
+}
