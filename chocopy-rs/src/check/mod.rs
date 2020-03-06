@@ -311,15 +311,8 @@ pub fn check(mut ast: Ast) -> Ast {
                 classes.get("object").unwrap()
             };
 
-            // Inherit items and modify method self argument type
+            // Inherit items
             let mut items = super_class.items.clone();
-            for (_, item_type) in &mut items {
-                if let Type::FuncType(FuncType { parameters, .. }) = item_type {
-                    parameters[0] = ValueType::ClassValueType(ClassValueType {
-                        class_name: class_name.clone(),
-                    });
-                }
-            }
 
             // Check and insert new items
             let mut id_set = HashSet::new();
@@ -365,8 +358,11 @@ pub fn check(mut ast: Ast) -> Ast {
                         // Override check
                         match items.insert(name_str.clone(), item_type.clone()) {
                             None => (),
-                            Some(t @ Type::FuncType(_)) => {
-                                if t != item_type {
+                            Some(Type::FuncType(mut old)) => {
+                                old.parameters[0] = ValueType::ClassValueType(ClassValueType {
+                                    class_name: class_name.clone(),
+                                });
+                                if Type::FuncType(old) != item_type {
                                     let msg = error_method_override(&name_str);
                                     name.base_mut().error_msg = Some(msg);
                                     errors.push(error_from(name));
@@ -458,6 +454,16 @@ pub fn check(mut ast: Ast) -> Ast {
                     check_func(f, &mut errors, &classes, &globals, &HashSet::new())
                 }
             }
+            let name = &c.name.id().name;
+            global_env.insert(
+                name.clone(),
+                EnvSlot::Func(FuncType {
+                    parameters: vec![],
+                    return_type: ValueType::ClassValueType(ClassValueType {
+                        class_name: name.clone(),
+                    }),
+                }),
+            );
         }
     }
 
@@ -467,7 +473,7 @@ pub fn check(mut ast: Ast) -> Ast {
     if errors.is_empty() {
         let mut env = LocalEnv(vec![global_env]);
         ast.program_mut()
-            .analyze(&mut errors, &mut env, &ClassEnv(classes), &None);
+            .analyze(&mut errors, &mut env, &ClassEnv(classes), None);
     }
 
     ast.program_mut().errors = ErrorInfo::Errors(Errors {
@@ -510,7 +516,7 @@ mod tests {
                     println!("\x1b[32mOK\x1b[0m");
                 } else {
                     println!("\x1b[31mError\x1b[0m");
-                    //passed = false;
+                    passed = false;
                 }
             }
         }

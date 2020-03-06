@@ -11,12 +11,12 @@ use std::io::{BufRead, BufReader};
 
 fn main() {
     let file = std::env::args().nth(1).unwrap();
-    let ast = check::check(parse::process(&file).unwrap());
+    let mut ast = parse::process(&file).unwrap();
+    if ast.program().errors.errors().errors.is_empty() {
+        ast = check::check(ast);
+    }
 
-    let Ast::Program(Program {
-        errors: ErrorInfo::Errors(Errors { errors, .. }),
-        ..
-    }) = &ast;
+    let errors = &ast.program().errors.errors().errors;
     if !errors.is_empty() {
         let mut errors: Vec<_> = errors
             .iter()
@@ -44,7 +44,7 @@ fn main() {
         let mut current_row = 1;
         let mut line = lines.next();
         for error in errors {
-            let Location { start, end } = error.base.location;
+            let Location { start, .. } = error.base.location;
             let row = start.row;
             if row > current_row {
                 for _ in 0..row - current_row - 1 {

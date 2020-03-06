@@ -1,0 +1,626 @@
+{
+  "kind" : "Program",
+  "location" : [ 1, 1, 15, 13 ],
+  "declarations" : [ {
+    "kind" : "ClassDef",
+    "location" : [ 1, 1, 6, 15 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 1, 7, 1, 7 ],
+      "name" : "a"
+    },
+    "superClass" : {
+      "kind" : "Identifier",
+      "location" : [ 1, 9, 1, 14 ],
+      "name" : "object"
+    },
+    "declarations" : [ {
+      "kind" : "FuncDef",
+      "location" : [ 2, 5, 3, 13 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 2, 9, 2, 9 ],
+        "name" : "k"
+      },
+      "params" : [ {
+        "kind" : "TypedVar",
+        "location" : [ 2, 11, 2, 17 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 2, 11, 2, 14 ],
+          "name" : "self"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 2, 17, 2, 17 ],
+          "className" : "a"
+        }
+      } ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 2, 19, 2, 19 ],
+        "className" : "<None>"
+      },
+      "declarations" : [ ],
+      "statements" : [ ]
+    }, {
+      "kind" : "FuncDef",
+      "location" : [ 4, 5, 5, 13 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 4, 9, 4, 9 ],
+        "name" : "m"
+      },
+      "params" : [ {
+        "kind" : "TypedVar",
+        "location" : [ 4, 11, 4, 17 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 4, 11, 4, 14 ],
+          "name" : "self"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 4, 17, 4, 17 ],
+          "className" : "a"
+        }
+      }, {
+        "kind" : "TypedVar",
+        "location" : [ 4, 20, 4, 24 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 4, 20, 4, 20 ],
+          "name" : "x"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 4, 22, 4, 24 ],
+          "className" : "int"
+        }
+      }, {
+        "kind" : "TypedVar",
+        "location" : [ 4, 27, 4, 31 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 4, 27, 4, 27 ],
+          "name" : "y"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 4, 29, 4, 31 ],
+          "className" : "int"
+        }
+      } ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 4, 33, 4, 33 ],
+        "className" : "<None>"
+      },
+      "declarations" : [ ],
+      "statements" : [ ]
+    }, {
+      "kind" : "VarDef",
+      "location" : [ 6, 5, 6, 14 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 6, 5, 6, 10 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 6, 5, 6, 5 ],
+          "name" : "j"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 6, 8, 6, 10 ],
+          "className" : "int"
+        }
+      },
+      "value" : {
+        "kind" : "IntegerLiteral",
+        "location" : [ 6, 14, 6, 14 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "int"
+        },
+        "value" : 3
+      }
+    } ]
+  }, {
+    "kind" : "VarDef",
+    "location" : [ 8, 1, 8, 10 ],
+    "var" : {
+      "kind" : "TypedVar",
+      "location" : [ 8, 1, 8, 3 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 8, 1, 8, 1 ],
+        "name" : "x"
+      },
+      "type" : {
+        "kind" : "ClassType",
+        "location" : [ 8, 3, 8, 3 ],
+        "className" : "a"
+      }
+    },
+    "value" : {
+      "kind" : "NoneLiteral",
+      "location" : [ 8, 7, 8, 10 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "<None>"
+      }
+    }
+  } ],
+  "statements" : [ {
+    "kind" : "ExprStmt",
+    "location" : [ 9, 1, 9, 10 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 9, 1, 9, 10 ],
+      "errorMsg" : "Expected 0 arguments; got 1",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "<None>"
+      },
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 9, 1, 9, 3 ],
+        "inferredType" : {
+          "kind" : "FuncType",
+          "parameters" : [ {
+            "kind" : "ClassValueType",
+            "className" : "a"
+          } ],
+          "returnType" : {
+            "kind" : "ClassValueType",
+            "className" : "<None>"
+          }
+        },
+        "object" : {
+          "kind" : "Identifier",
+          "location" : [ 9, 1, 9, 1 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "a"
+          },
+          "name" : "x"
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 9, 3, 9, 3 ],
+          "name" : "k"
+        }
+      },
+      "args" : [ {
+        "kind" : "BinaryExpr",
+        "location" : [ 9, 5, 9, 9 ],
+        "errorMsg" : "Cannot apply operator `+` on types `int` and `str`",
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "int"
+        },
+        "left" : {
+          "kind" : "IntegerLiteral",
+          "location" : [ 9, 5, 9, 5 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          },
+          "value" : 1
+        },
+        "operator" : "+",
+        "right" : {
+          "kind" : "StringLiteral",
+          "location" : [ 9, 7, 9, 9 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "str"
+          },
+          "value" : "a"
+        }
+      } ]
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 10, 1, 10, 5 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 10, 1, 10, 5 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "<None>"
+      },
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 10, 1, 10, 3 ],
+        "inferredType" : {
+          "kind" : "FuncType",
+          "parameters" : [ {
+            "kind" : "ClassValueType",
+            "className" : "a"
+          } ],
+          "returnType" : {
+            "kind" : "ClassValueType",
+            "className" : "<None>"
+          }
+        },
+        "object" : {
+          "kind" : "Identifier",
+          "location" : [ 10, 1, 10, 1 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "a"
+          },
+          "name" : "x"
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 10, 3, 10, 3 ],
+          "name" : "k"
+        }
+      },
+      "args" : [ ]
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 11, 1, 11, 17 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 11, 1, 11, 17 ],
+      "errorMsg" : "Expected type `int`; got type `str` in parameter 1",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "<None>"
+      },
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 11, 1, 11, 3 ],
+        "inferredType" : {
+          "kind" : "FuncType",
+          "parameters" : [ {
+            "kind" : "ClassValueType",
+            "className" : "a"
+          }, {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          }, {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          } ],
+          "returnType" : {
+            "kind" : "ClassValueType",
+            "className" : "<None>"
+          }
+        },
+        "object" : {
+          "kind" : "Identifier",
+          "location" : [ 11, 1, 11, 1 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "a"
+          },
+          "name" : "x"
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 11, 3, 11, 3 ],
+          "name" : "m"
+        }
+      },
+      "args" : [ {
+        "kind" : "StringLiteral",
+        "location" : [ 11, 5, 11, 9 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "str"
+        },
+        "value" : "aaa"
+      }, {
+        "kind" : "StringLiteral",
+        "location" : [ 11, 12, 11, 16 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "str"
+        },
+        "value" : "bbb"
+      } ]
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 12, 1, 12, 10 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 12, 1, 12, 10 ],
+      "errorMsg" : "There is no method named `j` in class `a`",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "object"
+      },
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 12, 1, 12, 3 ],
+        "object" : {
+          "kind" : "Identifier",
+          "location" : [ 12, 1, 12, 1 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "a"
+          },
+          "name" : "x"
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 12, 3, 12, 3 ],
+          "name" : "j"
+        }
+      },
+      "args" : [ {
+        "kind" : "BinaryExpr",
+        "location" : [ 12, 5, 12, 9 ],
+        "errorMsg" : "Cannot apply operator `+` on types `int` and `str`",
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "int"
+        },
+        "left" : {
+          "kind" : "IntegerLiteral",
+          "location" : [ 12, 5, 12, 5 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          },
+          "value" : 1
+        },
+        "operator" : "+",
+        "right" : {
+          "kind" : "StringLiteral",
+          "location" : [ 12, 7, 12, 9 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "str"
+          },
+          "value" : "a"
+        }
+      } ]
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 13, 1, 13, 10 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 13, 1, 13, 10 ],
+      "errorMsg" : "There is no method named `l` in class `a`",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "object"
+      },
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 13, 1, 13, 3 ],
+        "object" : {
+          "kind" : "Identifier",
+          "location" : [ 13, 1, 13, 1 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "a"
+          },
+          "name" : "x"
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 13, 3, 13, 3 ],
+          "name" : "l"
+        }
+      },
+      "args" : [ {
+        "kind" : "BinaryExpr",
+        "location" : [ 13, 5, 13, 9 ],
+        "errorMsg" : "Cannot apply operator `+` on types `int` and `str`",
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "int"
+        },
+        "left" : {
+          "kind" : "IntegerLiteral",
+          "location" : [ 13, 5, 13, 5 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          },
+          "value" : 1
+        },
+        "operator" : "+",
+        "right" : {
+          "kind" : "StringLiteral",
+          "location" : [ 13, 7, 13, 9 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "str"
+          },
+          "value" : "a"
+        }
+      } ]
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 14, 1, 14, 10 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 14, 1, 14, 10 ],
+      "errorMsg" : "There is no method named `l` in class `object`",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "object"
+      },
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 14, 1, 14, 3 ],
+        "object" : {
+          "kind" : "Identifier",
+          "location" : [ 14, 1, 14, 1 ],
+          "errorMsg" : "Not a variable: p",
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "object"
+          },
+          "name" : "p"
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 14, 3, 14, 3 ],
+          "name" : "l"
+        }
+      },
+      "args" : [ {
+        "kind" : "BinaryExpr",
+        "location" : [ 14, 5, 14, 9 ],
+        "errorMsg" : "Cannot apply operator `+` on types `int` and `str`",
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "int"
+        },
+        "left" : {
+          "kind" : "IntegerLiteral",
+          "location" : [ 14, 5, 14, 5 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          },
+          "value" : 1
+        },
+        "operator" : "+",
+        "right" : {
+          "kind" : "StringLiteral",
+          "location" : [ 14, 7, 14, 9 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "str"
+          },
+          "value" : "a"
+        }
+      } ]
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 15, 1, 15, 12 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 15, 1, 15, 12 ],
+      "errorMsg" : "Cannot access member of non-class type `[int]`",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "object"
+      },
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 15, 1, 15, 5 ],
+        "object" : {
+          "kind" : "ListExpr",
+          "location" : [ 15, 1, 15, 3 ],
+          "inferredType" : {
+            "kind" : "ListValueType",
+            "elementType" : {
+              "kind" : "ClassValueType",
+              "className" : "int"
+            }
+          },
+          "elements" : [ {
+            "kind" : "IntegerLiteral",
+            "location" : [ 15, 2, 15, 2 ],
+            "inferredType" : {
+              "kind" : "ClassValueType",
+              "className" : "int"
+            },
+            "value" : 1
+          } ]
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 15, 5, 15, 5 ],
+          "name" : "l"
+        }
+      },
+      "args" : [ {
+        "kind" : "BinaryExpr",
+        "location" : [ 15, 7, 15, 11 ],
+        "errorMsg" : "Cannot apply operator `+` on types `int` and `str`",
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "int"
+        },
+        "left" : {
+          "kind" : "IntegerLiteral",
+          "location" : [ 15, 7, 15, 7 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          },
+          "value" : 1
+        },
+        "operator" : "+",
+        "right" : {
+          "kind" : "StringLiteral",
+          "location" : [ 15, 9, 15, 11 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "str"
+          },
+          "value" : "a"
+        }
+      } ]
+    }
+  } ],
+  "errors" : {
+    "errors" : [ {
+      "kind" : "CompilerError",
+      "location" : [ 9, 5, 9, 9 ],
+      "message" : "Cannot apply operator `+` on types `int` and `str`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 9, 1, 9, 10 ],
+      "message" : "Expected 0 arguments; got 1"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 11, 1, 11, 17 ],
+      "message" : "Expected type `int`; got type `str` in parameter 1"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 12, 5, 12, 9 ],
+      "message" : "Cannot apply operator `+` on types `int` and `str`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 12, 1, 12, 10 ],
+      "message" : "There is no method named `j` in class `a`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 13, 5, 13, 9 ],
+      "message" : "Cannot apply operator `+` on types `int` and `str`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 13, 1, 13, 10 ],
+      "message" : "There is no method named `l` in class `a`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 14, 5, 14, 9 ],
+      "message" : "Cannot apply operator `+` on types `int` and `str`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 14, 1, 14, 1 ],
+      "message" : "Not a variable: p"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 14, 1, 14, 10 ],
+      "message" : "There is no method named `l` in class `object`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 15, 7, 15, 11 ],
+      "message" : "Cannot apply operator `+` on types `int` and `str`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 15, 1, 15, 12 ],
+      "message" : "Cannot access member of non-class type `[int]`"
+    } ],
+    "kind" : "Errors",
+    "location" : [ 0, 0, 0, 0 ]
+  }
+}

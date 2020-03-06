@@ -363,13 +363,22 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     expr = match expr.content {
                         ExprContent::Identifier(function) => Expr::CallExpr(CallExpr {
                             base,
-                            function: Id::Identifier(function),
+                            function: TypedId::Identifier(TypedIdentifier {
+                                inferred_type: None,
+                                base: function.base,
+                                name: function.name,
+                            }),
                             args,
                         }),
                         ExprContent::MemberExpr(method) => {
                             Expr::MethodCallExpr(Box::new(MethodCallExpr {
                                 base,
-                                method: Method::MemberExpr(*method),
+                                method: Method::MemberExpr(TypedMemberExpr {
+                                    inferred_type: None,
+                                    base: method.base,
+                                    object: method.object,
+                                    member: method.member,
+                                }),
                                 args,
                             }))
                         }
@@ -676,7 +685,8 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
         let token = self.take().await;
         let identifier = if let Token::Identifier(name) = token.token {
-            Id::Identifier(Identifier {
+            TypedId::Identifier(TypedIdentifier {
+                inferred_type: None,
                 base: NodeBase::from_location(token.location),
                 name,
             })
