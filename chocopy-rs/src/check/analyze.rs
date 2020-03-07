@@ -1,4 +1,4 @@
-use super::*;
+use super::error::*;
 use crate::node::*;
 use std::collections::HashMap;
 use std::convert::*;
@@ -167,10 +167,6 @@ impl LocalEnv {
     }
 }
 
-fn error_variable(name: &str) -> String {
-    format!("Not a variable: {}", name)
-}
-
 // Only for variable
 impl Identifier {
     pub fn analyze_impl(
@@ -192,17 +188,6 @@ impl Identifier {
     }
 }
 
-fn error_assign(left: &ValueType, right: &ValueType) -> String {
-    format!("Expected type `{}`; got type `{}`", &left, &right)
-}
-
-fn error_nonlocal(name: &str) -> String {
-    format!(
-        "Cannot assign to variable that is not explicitly declared in this scope: {}",
-        name
-    )
-}
-
 impl AssignStmt {
     pub fn analyze_impl(
         &mut self,
@@ -218,13 +203,13 @@ impl AssignStmt {
             let left: ValueType = self.targets[i].analyze(errors, o, m, r).unwrap();
             if let ExprContent::Identifier(Identifier { name, .. }) = &self.targets[i].content {
                 if let Some((_, Assignable(false))) = o.get(name) {
-                    let msg = error_nonlocal(name);
+                    let msg = error_nonlocal_assign(name);
                     self.targets[i].base_mut().error_msg = Some(msg);
                     errors.push(error_from(&self.targets[i]));
                 }
             } else if let ExprContent::IndexExpr(index_expr) = &self.targets[i].content {
                 if index_expr.list.inferred_type.as_ref().unwrap() == &TYPE_STR.clone().into() {
-                    let msg = format!("`str` is not a list type");
+                    let msg = error_str_index_assign();
                     self.targets[i].base_mut().error_msg = Some(msg);
                     errors.push(error_from(&self.targets[i]));
                 }
@@ -238,7 +223,7 @@ impl AssignStmt {
         }
 
         if self.targets.len() > 1 && right == *TYPE_NONE_LIST && self.base().error_msg.is_none() {
-            let msg = "Right-hand side of multiple assignment may not be [<None>]".to_owned();
+            let msg = error_multi_assign();
             self.base_mut().error_msg = Some(msg);
             errors.push(error_from(self));
         }
@@ -326,10 +311,6 @@ impl NoneLiteral {
     }
 }
 
-fn error_unary(operator: &str, operand: &ValueType) -> String {
-    format!("Cannot apply operator `{}` on type `{}`", operator, operand)
-}
-
 impl UnaryExpr {
     pub fn analyze_impl(
         &mut self,
@@ -358,13 +339,6 @@ impl UnaryExpr {
             }
         }
     }
-}
-
-fn error_binary(operator: &str, left: &ValueType, right: &ValueType) -> String {
-    format!(
-        "Cannot apply operator `{}` on types `{}` and `{}`",
-        operator, left, right
-    )
 }
 
 impl BinaryExpr {
@@ -481,7 +455,7 @@ impl IfExpr {
     ) -> Option<ValueType> {
         let condition = self.condition.analyze(errors, o, m, r).unwrap();
         if condition != *TYPE_BOOL {
-            let msg = format!("Condition expression cannot be of type `{}`", &condition);
+            let msg = error_condition(&condition);
             self.base_mut().error_msg = Some(msg);
             errors.push(error_from(self))
         }
@@ -526,7 +500,7 @@ impl IndexExpr {
         } else if left == *TYPE_STR {
             TYPE_STR.clone()
         } else {
-            let msg = format!("Cannot index into type `{}`", &left);
+            let msg = error_index_left(&left);
             self.base_mut().error_msg = Some(msg);
             errors.push(error_from(self));
             TYPE_OBJECT.clone()
@@ -534,17 +508,13 @@ impl IndexExpr {
 
         let index = self.index.analyze(errors, o, m, r).unwrap();
         if index != *TYPE_INT && self.base().error_msg.is_none() {
-            let msg = format!("Index is of non-integer type `{}`", &index);
+            let msg = error_index_right(&index);
             self.base_mut().error_msg = Some(msg);
             errors.push(error_from(self));
         }
 
         Some(element_type)
     }
-}
-
-fn error_member(t: &ValueType) -> String {
-    format!("Cannot access member of non-class type `{}`", t)
 }
 
 impl MemberExpr {
@@ -577,10 +547,7 @@ impl MemberExpr {
             .flatten();
 
         if member.is_none() {
-            let msg = format!(
-                "There is no attribute named `{}` in class `{}`",
-                name, &class_type
-            );
+            let msg = error_attribute(name, &class_type);
             self.base_mut().error_msg = Some(msg);
             errors.push(error_from(self));
             return Some(TYPE_OBJECT.clone());
@@ -588,17 +555,6 @@ impl MemberExpr {
 
         member
     }
-}
-
-pub fn error_call_count(expected: usize, got: usize) -> String {
-    format!("Expected {} arguments; got {}", expected, got)
-}
-
-pub fn error_call_type(location: usize, expected: &ValueType, got: &ValueType) -> String {
-    format!(
-        "Expected type `{}`; got type `{}` in parameter {}",
-        expected, got, location,
-    )
 }
 
 impl CallExpr {
@@ -619,7 +575,7 @@ impl CallExpr {
         let function = match o.get(&id.name) {
             Some((Type::FuncType(f), _)) => f,
             _ => {
-                let msg = format!("Not a function or class: {}", &id.name);
+                let msg = error_function(&id.name);
                 self.base_mut().error_msg = Some(msg);
                 errors.push(error_from(self));
                 return Some(TYPE_OBJECT.clone());
@@ -680,10 +636,7 @@ impl MethodCallExpr {
         let method = match m.0.get(&class_name).unwrap().items.get(method_name) {
             Some(Type::FuncType(f)) => f,
             _ => {
-                let msg = format!(
-                    "There is no method named `{}` in class `{}`",
-                    method_name, class_name
-                );
+                let msg = error_method(method_name, &class_name);
                 self.base_mut().error_msg = Some(msg);
                 errors.push(error_from(self));
                 return Some(TYPE_OBJECT.clone());
@@ -731,13 +684,13 @@ impl ReturnStmt {
                 let msg = if self.value.is_some() {
                     error_assign(return_expected, &return_type)
                 } else {
-                    format!("Expected type `{}`; got `None`", &return_expected)
+                    error_none_return(&return_expected)
                 };
                 self.base_mut().error_msg = Some(msg);
                 errors.push(error_from(self));
             }
         } else {
-            let msg = "Return statement cannot appear at the top level".to_owned();
+            let msg = error_top_return();
             self.base_mut().error_msg = Some(msg);
             errors.push(error_from(self));
         }
@@ -756,10 +709,6 @@ fn analyze(
     for statement in statements {
         statement.analyze(errors, o, m, r);
     }
-}
-
-fn error_condition(condition: &ValueType) -> String {
-    format!("Condition expression cannot be of type `{}`", condition)
 }
 
 impl IfStmt {
@@ -821,7 +770,7 @@ impl ForStmt {
         } else if let ValueType::ListValueType(ListValueType { element_type }) = &iterable {
             Some(&**element_type)
         } else {
-            let msg = format!("Cannot iterate over value of type `{}`", &iterable);
+            let msg = error_iterable(&iterable);
             self.base_mut().error_msg = Some(msg);
             errors.push(error_from(self));
             None
@@ -838,7 +787,7 @@ impl ForStmt {
                 if m.is_compatible(element_type, &variable) {
                     id.inferred_type = Some(variable.into()); // yes, we attach the type here
                     if !assignable {
-                        let msg = error_nonlocal(&id.name);
+                        let msg = error_nonlocal_assign(&id.name);
                         id.base_mut().error_msg = Some(msg); // and this error is attached to the identifier
                         errors.push(error_from(id));
                     }

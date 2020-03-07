@@ -1,74 +1,10 @@
 mod analyze;
+mod error;
 
 use crate::node::*;
+use error::*;
 use std::collections::{HashMap, HashSet};
 use std::convert::*;
-
-fn error_dup(name: &str) -> String {
-    format!(
-        "Duplicate declaration of identifier in same scope: {}",
-        name
-    )
-}
-
-fn error_super_undef(name: &str) -> String {
-    format!("Super-class not defined: {}", name)
-}
-
-fn error_super_not_class(name: &str) -> String {
-    format!("Super-class must be a class: {}", name)
-}
-
-fn error_super_special(name: &str) -> String {
-    format!("Cannot extend special class: {}", name)
-}
-
-fn error_method_self(name: &str) -> String {
-    format!(
-        "First parameter of the following method must be of the enclosing class: {}",
-        name
-    )
-}
-
-fn error_method_override(name: &str) -> String {
-    format!("Method overridden with different type signature: {}", name)
-}
-
-fn error_attribute_redefine(name: &str) -> String {
-    format!("Cannot re-define attribute: {}", name)
-}
-
-fn error_invalid_type(name: &str) -> String {
-    format!("Invalid type annotation; there is no class named: {}", name)
-}
-
-fn error_shadow(name: &str) -> String {
-    format!("Cannot shadow class name: {}", name)
-}
-
-fn error_nonlocal(name: &str) -> String {
-    format!("Not a nonlocal variable: {}", name)
-}
-
-fn error_global(name: &str) -> String {
-    format!("Not a global variable: {}", name)
-}
-
-fn error_return(name: &str) -> String {
-    format!(
-        "All paths in this function/method must have a return statement: {}",
-        name
-    )
-}
-
-fn error_from(node: &impl Node) -> Error {
-    let base = node.base();
-    Error::CompilerError(CompilerError {
-        base: NodeBase::from_location(base.location),
-        message: base.error_msg.clone().unwrap(),
-        syntax: false,
-    })
-}
 
 fn check_var_def(v: &mut VarDef, errors: &mut Vec<Error>, classes: &HashMap<String, ClassInfo>) {
     let tv = v.var.tv_mut();
