@@ -154,6 +154,7 @@ fn crash() -> ! {
     std::process::exit(-1)
 }
 
+/*
 #[no_mangle]
 pub extern "C" fn _Unwind_Resume() -> ! {
     crash()
@@ -218,3 +219,4 @@ pub extern "C" fn _Unwind_GetIP() -> ! {
 pub extern "C" fn _Unwind_FindEnclosingFunction() -> ! {
     crash()
 }
+*/

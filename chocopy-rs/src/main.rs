@@ -10,6 +10,9 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 fn main() {
+    //gen::gen("exe").unwrap();
+    //return;
+
     let file = std::env::args().nth(1).unwrap();
     let mut ast = parse::process(&file).unwrap();
     if ast.program().errors.errors().errors.is_empty() {

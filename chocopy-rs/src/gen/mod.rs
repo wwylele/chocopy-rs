@@ -51,6 +51,7 @@ pub fn gen(path: &str) -> Result<(), Box<dyn std::error::Error>> {
             "-lc",
             "-lpthread",
             "-ldl",
+            "-lunwind",
             "--dynamic-linker=/lib64/ld-linux-x86-64.so.2",
         ])
         .output()?;
