@@ -173,28 +173,6 @@ pub fn check(mut ast: Ast) -> Ast {
     id_set.insert("len".to_owned());
 
     let mut classes: HashMap<String, ClassInfo> = HashMap::new();
-    let mut global_env: HashMap<String, EnvSlot> = HashMap::new();
-    global_env.insert(
-        "print".to_owned(),
-        EnvSlot::Func(FuncType {
-            parameters: vec![TYPE_OBJECT.clone()],
-            return_type: TYPE_NONE.clone(),
-        }),
-    );
-    global_env.insert(
-        "input".to_owned(),
-        EnvSlot::Func(FuncType {
-            parameters: vec![],
-            return_type: TYPE_STR.clone(),
-        }),
-    );
-    global_env.insert(
-        "len".to_owned(),
-        EnvSlot::Func(FuncType {
-            parameters: vec![TYPE_OBJECT.clone()],
-            return_type: TYPE_INT.clone(),
-        }),
-    );
 
     let add_basic_type = |classes: &mut HashMap<String, ClassInfo>, name: &str| {
         classes.insert(
@@ -355,10 +333,6 @@ pub fn check(mut ast: Ast) -> Ast {
             let tv = v.var.tv();
             let name = &tv.identifier.id().name;
             globals.insert(name.clone());
-            global_env.insert(
-                name.clone(),
-                EnvSlot::Local(ValueType::from_annotation(&tv.type_)),
-            );
         } else if let Declaration::ClassDef(c) = decl {
             for decl in &mut c.declarations {
                 if let Declaration::VarDef(v) = decl {
@@ -368,8 +342,32 @@ pub fn check(mut ast: Ast) -> Ast {
         }
     }
 
+    let mut global_env: HashMap<String, EnvSlot> = HashMap::new();
+    global_env.insert(
+        "print".to_owned(),
+        EnvSlot::Func(FuncType {
+            parameters: vec![TYPE_OBJECT.clone()],
+            return_type: TYPE_NONE.clone(),
+        }),
+    );
+    global_env.insert(
+        "input".to_owned(),
+        EnvSlot::Func(FuncType {
+            parameters: vec![],
+            return_type: TYPE_STR.clone(),
+        }),
+    );
+    global_env.insert(
+        "len".to_owned(),
+        EnvSlot::Func(FuncType {
+            parameters: vec![TYPE_OBJECT.clone()],
+            return_type: TYPE_INT.clone(),
+        }),
+    );
+
     // Pass C
     // semantic rules: 1(function), 2, 3, 9, 11(function)
+    // collects global environment
     for decl in &mut ast.program_mut().declarations {
         if let Declaration::FuncDef(f) = decl {
             check_func(f, &mut errors, &classes, &globals, &HashSet::new());
@@ -399,6 +397,13 @@ pub fn check(mut ast: Ast) -> Ast {
                         class_name: name.clone(),
                     }),
                 }),
+            );
+        } else if let Declaration::VarDef(v) = decl {
+            let tv = v.var.tv();
+            let name = &tv.identifier.id().name;
+            global_env.insert(
+                name.clone(),
+                EnvSlot::Local(ValueType::from_annotation(&tv.type_)),
             );
         }
     }
