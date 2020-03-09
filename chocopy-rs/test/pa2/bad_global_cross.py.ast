@@ -1,0 +1,159 @@
+{
+  "kind" : "Program",
+  "location" : [ 1, 1, 12, 1 ],
+  "declarations" : [ {
+    "kind" : "VarDef",
+    "location" : [ 1, 1, 1, 10 ],
+    "var" : {
+      "kind" : "TypedVar",
+      "location" : [ 1, 1, 1, 6 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 1, 1, 1, 1 ],
+        "name" : "a"
+      },
+      "type" : {
+        "kind" : "ClassType",
+        "location" : [ 1, 4, 1, 6 ],
+        "className" : "int"
+      }
+    },
+    "value" : {
+      "kind" : "IntegerLiteral",
+      "location" : [ 1, 10, 1, 10 ],
+      "value" : 0
+    }
+  }, {
+    "kind" : "FuncDef",
+    "location" : [ 2, 1, 11, 9 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 2, 5, 2, 5 ],
+      "name" : "f"
+    },
+    "params" : [ ],
+    "returnType" : {
+      "kind" : "ClassType",
+      "location" : [ 2, 8, 2, 8 ],
+      "className" : "<None>"
+    },
+    "declarations" : [ {
+      "kind" : "VarDef",
+      "location" : [ 3, 5, 3, 15 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 3, 5, 3, 10 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 3, 5, 3, 5 ],
+          "name" : "a"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 3, 8, 3, 10 ],
+          "className" : "str"
+        }
+      },
+      "value" : {
+        "kind" : "StringLiteral",
+        "location" : [ 3, 14, 3, 15 ],
+        "value" : ""
+      }
+    }, {
+      "kind" : "FuncDef",
+      "location" : [ 4, 5, 10, 13 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 4, 9, 4, 9 ],
+        "name" : "g"
+      },
+      "params" : [ ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 4, 12, 4, 12 ],
+        "className" : "<None>"
+      },
+      "declarations" : [ {
+        "kind" : "GlobalDecl",
+        "location" : [ 5, 9, 5, 16 ],
+        "variable" : {
+          "kind" : "Identifier",
+          "location" : [ 5, 16, 5, 16 ],
+          "name" : "a"
+        }
+      }, {
+        "kind" : "FuncDef",
+        "location" : [ 6, 9, 9, 18 ],
+        "name" : {
+          "kind" : "Identifier",
+          "location" : [ 6, 13, 6, 13 ],
+          "name" : "h"
+        },
+        "params" : [ ],
+        "returnType" : {
+          "kind" : "ClassType",
+          "location" : [ 6, 16, 6, 16 ],
+          "className" : "<None>"
+        },
+        "declarations" : [ {
+          "kind" : "VarDef",
+          "location" : [ 7, 13, 7, 22 ],
+          "var" : {
+            "kind" : "TypedVar",
+            "location" : [ 7, 13, 7, 18 ],
+            "identifier" : {
+              "kind" : "Identifier",
+              "location" : [ 7, 13, 7, 13 ],
+              "name" : "b"
+            },
+            "type" : {
+              "kind" : "ClassType",
+              "location" : [ 7, 16, 7, 18 ],
+              "className" : "int"
+            }
+          },
+          "value" : {
+            "kind" : "IntegerLiteral",
+            "location" : [ 7, 22, 7, 22 ],
+            "value" : 0
+          }
+        } ],
+        "statements" : [ {
+          "kind" : "AssignStmt",
+          "location" : [ 8, 13, 8, 17 ],
+          "targets" : [ {
+            "kind" : "Identifier",
+            "location" : [ 8, 13, 8, 13 ],
+            "name" : "b"
+          } ],
+          "value" : {
+            "kind" : "Identifier",
+            "location" : [ 8, 17, 8, 17 ],
+            "name" : "a"
+          }
+        }, {
+          "kind" : "AssignStmt",
+          "location" : [ 9, 13, 9, 17 ],
+          "targets" : [ {
+            "kind" : "Identifier",
+            "location" : [ 9, 13, 9, 13 ],
+            "name" : "a"
+          } ],
+          "value" : {
+            "kind" : "Identifier",
+            "location" : [ 9, 17, 9, 17 ],
+            "name" : "b"
+          }
+        } ]
+      } ],
+      "statements" : [ ]
+    } ],
+    "statements" : [ ]
+  } ],
+  "statements" : [ ],
+  "errors" : {
+    "errors" : [ ],
+    "kind" : "Errors",
+    "location" : [ 0, 0, 0, 0 ]
+  }
+}

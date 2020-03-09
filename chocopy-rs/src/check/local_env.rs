@@ -34,7 +34,15 @@ impl LocalEnv {
                 for frame in self.0[0..self.0.len() - 1].iter().rev() {
                     match frame.get(name) {
                         Some(EnvSlot::NonLocal) | None => (),
-                        Some(EnvSlot::Global) => panic!(),
+                        Some(EnvSlot::Global) => {
+                            assert!(s.is_none());
+                            let t = if let Some(EnvSlot::Local(t)) = self.0[0].get(name) {
+                                t.clone()
+                            } else {
+                                panic!()
+                            };
+                            return Some((t.into(), Assignable(false)));
+                        }
                         Some(EnvSlot::Local(t)) => {
                             return Some((t.clone().into(), Assignable(s.is_some())))
                         }
