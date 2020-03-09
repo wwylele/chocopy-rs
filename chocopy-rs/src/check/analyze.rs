@@ -1,171 +1,8 @@
 use super::error::*;
+use super::local_env::*;
 use crate::node::*;
 use std::collections::HashMap;
 use std::convert::*;
-
-impl ClassEnv {
-    fn is_compatible(&self, sub_class: &ValueType, super_class: &ValueType) -> bool {
-        if sub_class == super_class {
-            return true;
-        }
-        if *super_class == *TYPE_OBJECT {
-            return true;
-        }
-        if *sub_class == *TYPE_NONE {
-            if let ValueType::ClassValueType(ClassValueType { class_name }) = super_class {
-                return class_name != "int" && class_name != "str" && class_name != "bool";
-            } else {
-                return true;
-            }
-        }
-        if *sub_class == *TYPE_EMPTY {
-            if let ValueType::ListValueType(_) = super_class {
-                return true;
-            } else {
-                return false;
-            }
-        }
-        if *sub_class == *TYPE_NONE_LIST {
-            if let ValueType::ListValueType(ListValueType { element_type }) = super_class {
-                return self.is_compatible(&*TYPE_NONE, element_type);
-            } else {
-                return false;
-            }
-        }
-
-        if *super_class == *TYPE_NONE || *super_class == *TYPE_EMPTY {
-            return false;
-        }
-
-        let mut sub_name =
-            if let ValueType::ClassValueType(ClassValueType { class_name }) = sub_class {
-                class_name
-            } else {
-                return false;
-            };
-
-        let super_name =
-            if let ValueType::ClassValueType(ClassValueType { class_name }) = super_class {
-                class_name
-            } else {
-                return false;
-            };
-
-        loop {
-            if sub_name == super_name {
-                return true;
-            }
-            if sub_name == "object" {
-                return false;
-            }
-            sub_name = &self.0.get(sub_name).unwrap().super_class;
-        }
-    }
-
-    fn join(&self, a: &ValueType, b: &ValueType) -> ValueType {
-        if self.is_compatible(a, b) {
-            return b.clone();
-        }
-        if self.is_compatible(b, a) {
-            return a.clone();
-        }
-        if let (
-            ValueType::ClassValueType(ClassValueType {
-                class_name: a_class,
-            }),
-            ValueType::ClassValueType(ClassValueType {
-                class_name: b_class,
-            }),
-        ) = (a, b)
-        {
-            if a_class == "<None>"
-                || a_class == "<Empty>"
-                || b_class == "<None>"
-                || b_class == "<Empty>"
-            {
-                return TYPE_OBJECT.clone();
-            }
-
-            let gen_chain = |mut t| {
-                let mut v = vec![t];
-                while t != "object" {
-                    t = &self.0.get(t).unwrap().super_class;
-                    v.push(t);
-                }
-                v
-            };
-
-            let mut a_chain = gen_chain(a_class);
-            let mut b_chain = gen_chain(b_class);
-
-            loop {
-                let common = a_chain.pop().unwrap();
-                b_chain.pop();
-                if a_chain.last() != b_chain.last() {
-                    return ValueType::ClassValueType(ClassValueType {
-                        class_name: common.to_owned(),
-                    });
-                }
-            }
-        } else {
-            TYPE_OBJECT.clone()
-        }
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-struct Assignable(bool);
-struct FrameHandle<'a>(&'a mut LocalEnv);
-
-impl<'a> FrameHandle<'a> {
-    fn inner(&mut self) -> &mut LocalEnv {
-        self.0
-    }
-}
-
-impl<'a> Drop for FrameHandle<'a> {
-    fn drop(&mut self) {
-        (self.0).0.pop();
-    }
-}
-
-impl LocalEnv {
-    fn get(&self, name: &str) -> Option<(Type, Assignable)> {
-        match self.0.last().unwrap().get(name) {
-            Some(EnvSlot::Local(t)) => Some((t.clone().into(), Assignable(true))),
-            Some(EnvSlot::Func(t)) => Some((Type::FuncType(t.clone()), Assignable(false))),
-            Some(EnvSlot::Global) => {
-                let t = if let Some(EnvSlot::Local(t)) = self.0[0].get(name) {
-                    t.clone()
-                } else {
-                    panic!()
-                };
-                Some((t.into(), Assignable(true)))
-            }
-            s @ Some(EnvSlot::NonLocal) | s @ None => {
-                for frame in self.0[0..self.0.len() - 1].iter().rev() {
-                    match frame.get(name) {
-                        Some(EnvSlot::NonLocal) | None => (),
-                        Some(EnvSlot::Global) => panic!(),
-                        Some(EnvSlot::Local(t)) => {
-                            return Some((t.clone().into(), Assignable(s.is_some())))
-                        }
-                        Some(EnvSlot::Func(t)) => {
-                            assert!(s.is_none());
-                            return Some((Type::FuncType(t.clone()), Assignable(false)));
-                        }
-                    }
-                }
-                None
-            }
-        }
-    }
-
-    fn push(&mut self, frame: HashMap<String, EnvSlot>) -> FrameHandle {
-        self.0.push(frame);
-        FrameHandle(self)
-    }
-}
 
 // Only for variable
 impl Identifier {
@@ -528,7 +365,7 @@ impl MemberExpr {
         let class_type = self.object.analyze(errors, o, m, r).unwrap();
         let class_info =
             if let ValueType::ClassValueType(ClassValueType { class_name }) = &class_type {
-                m.0.get(class_name).unwrap()
+                m.get(class_name)
             } else {
                 let msg = error_member(&class_type);
                 self.base_mut().error_msg = Some(msg);
@@ -583,7 +420,7 @@ impl CallExpr {
         };
 
         // Reference program: don't attach type to constructor
-        if m.0.get(&id.name).is_none() {
+        if !m.contains(&id.name) {
             id.inferred_type = Some(Type::FuncType(function.clone()));
         }
 
@@ -633,7 +470,7 @@ impl MethodCallExpr {
 
         let method_name = &member.member.id().name;
 
-        let method = match m.0.get(&class_name).unwrap().items.get(method_name) {
+        let method = match m.get(&class_name).items.get(method_name) {
             Some(Type::FuncType(f)) => f,
             _ => {
                 let msg = error_method(method_name, &class_name);

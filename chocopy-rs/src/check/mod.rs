@@ -1,5 +1,7 @@
 mod analyze;
+mod class_env;
 mod error;
+mod local_env;
 
 use crate::node::*;
 use error::*;
