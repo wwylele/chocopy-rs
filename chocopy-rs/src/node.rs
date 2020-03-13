@@ -196,6 +196,10 @@ pub struct CallExpr {
     pub base: NodeBase,
     pub function: TypedId,
     pub args: Vec<Expr>,
+
+    // For gen only
+    #[serde(skip)]
+    pub closure_slot: Option<usize>,
 }
 
 impl_node!(CallExpr);
@@ -390,6 +394,12 @@ pub enum ExprContent {
     NoneLiteral(NoneLiteral),
     StringLiteral(StringLiteral),
     UnaryExpr(Box<UnaryExpr>),
+
+    // For gen only
+    #[serde(skip)]
+    AllocSlot(AllocSlot),
+    #[serde(skip)]
+    MemberSlot(Box<MemberSlot>),
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -425,6 +435,10 @@ pub struct FuncDef {
     pub return_type: TypeAnnotation,
     pub declarations: Vec<Declaration>,
     pub statements: Vec<Stmt>,
+
+    // For gen only
+    #[serde(skip)]
+    pub alloc_info: Option<FuncAllocInfo>,
 }
 
 impl_node!(FuncDef);
@@ -651,12 +665,19 @@ impl_default_analyze!(TypedMemberExpr);
 #[serde(tag = "kind", deny_unknown_fields)]
 pub enum Method {
     MemberExpr(TypedMemberExpr),
+
+    // For gen only
+    #[serde(skip)]
+    MethodSlot(MethodSlot),
 }
 
 impl Method {
     pub fn member_mut(&mut self) -> &mut TypedMemberExpr {
-        let Method::MemberExpr(member) = self;
-        member
+        if let Method::MemberExpr(member) = self {
+            member
+        } else {
+            panic!()
+        }
     }
 }
 
@@ -784,12 +805,26 @@ impl TypeAnnotation {
 #[serde(tag = "kind", deny_unknown_fields)]
 pub enum TypedId {
     Identifier(TypedIdentifier),
+
+    // For gen only
+    #[serde(skip)]
+    AllocSlot(AllocSlot),
 }
 
 impl TypedId {
+    pub fn id(&self) -> &TypedIdentifier {
+        if let TypedId::Identifier(id) = self {
+            id
+        } else {
+            panic!()
+        }
+    }
     pub fn id_mut(&mut self) -> &mut TypedIdentifier {
-        let TypedId::Identifier(id) = self;
-        id
+        if let TypedId::Identifier(id) = self {
+            id
+        } else {
+            panic!()
+        }
     }
 }
 
@@ -909,6 +944,61 @@ pub struct WhileStmt {
 }
 
 impl_node!(WhileStmt);
+
+trait GenNode {}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+enum AllocSlot {
+    Global(usize),
+    Param(usize),
+    Local(usize),
+    Capture(usize),
+}
+
+impl GenNode for AllocSlot {}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+struct MemberSlot {
+    object: Expr,
+    slot: usize,
+}
+
+impl GenNode for MemberSlot {}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+struct MethodSlot {
+    object: Expr,
+    slot: usize,
+}
+
+impl GenNode for MethodSlot {}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct FuncAllocInfo {
+    pub local_len: usize,
+    pub closure_len: usize,
+}
+
+impl<T> Node for T
+where
+    T: GenNode,
+{
+    fn base(&self) -> &NodeBase {
+        panic!()
+    }
+    fn base_mut(&mut self) -> &mut NodeBase {
+        panic!()
+    }
+    fn analyze(
+        &mut self,
+        errors: &mut Vec<Error>,
+        o: &mut LocalEnv,
+        m: &ClassEnv,
+        r: Option<&ValueType>,
+    ) -> Option<ValueType> {
+        panic!()
+    }
+}
 
 lazy_static! {
     pub static ref TYPE_OBJECT: ValueType = ValueType::ClassValueType(ClassValueType {

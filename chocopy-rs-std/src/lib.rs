@@ -6,11 +6,25 @@ pub struct Prototype {
     size: i64,
 }
 
+#[no_mangle]
 pub static BOOL_PROTOTYPE: Prototype = Prototype { size: 1 };
+
+#[no_mangle]
 pub static INT_PROTOTYPE: Prototype = Prototype { size: 4 };
+
+#[no_mangle]
 pub static STR_PROTOTYPE: Prototype = Prototype { size: -1 };
+
+#[no_mangle]
+pub static OBJECT_PROTOTYPE: Prototype = Prototype { size: 0 };
+
+#[no_mangle]
 pub static BOOL_LIST_PROTOTYPE: Prototype = Prototype { size: -1 };
+
+#[no_mangle]
 pub static INT_LIST_PROTOTYPE: Prototype = Prototype { size: -4 };
+
+#[no_mangle]
 pub static OBJECT_LIST_PROTOTYPE: Prototype = Prototype { size: -8 };
 
 #[repr(C)]
@@ -35,6 +49,7 @@ fn align_up(size: usize) -> usize {
     }
 }
 
+#[no_mangle]
 pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mut u8 {
     let size = align_up(if (*prototype).size > 0 {
         assert!(len == 0);
@@ -54,6 +69,7 @@ pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mu
     pointer
 }
 
+#[no_mangle]
 pub unsafe extern "C" fn free_obj(pointer: *mut u8) {
     assert!((*(pointer as *mut Object)).ref_count == 0);
     let prototype = (*(pointer as *mut Object)).prototype;
@@ -66,6 +82,7 @@ pub unsafe extern "C" fn free_obj(pointer: *mut u8) {
     dealloc(pointer, Layout::from_size_align(size, 8).unwrap());
 }
 
+#[no_mangle]
 pub unsafe extern "C" fn len(pointer: *mut u8) -> u32 {
     let object = pointer as *mut ArrayObject;
     let prototype = (*object).object.prototype;
@@ -84,13 +101,14 @@ pub unsafe extern "C" fn len(pointer: *mut u8) -> u32 {
     len
 }
 
+#[no_mangle]
 pub unsafe extern "C" fn print(pointer: *mut u8) {
     let object = pointer as *mut Object;
     let prototype = (*object).prototype;
     if prototype == &INT_PROTOTYPE as *const Prototype {
-        print!("{}", *(object.offset(1) as *const u32));
+        println!("{}", *(object.offset(1) as *const u32));
     } else if prototype == &BOOL_PROTOTYPE as *const Prototype {
-        print!(
+        println!(
             "{}",
             if *(object.offset(1) as *const bool) {
                 "True"
@@ -105,7 +123,7 @@ pub unsafe extern "C" fn print(pointer: *mut u8) {
             (*object).len as usize,
         ))
         .unwrap();
-        print!("{}", slice);
+        println!("{}", slice);
     } else {
         runtime_error("print() only works for int, bool or str");
     }
@@ -116,6 +134,7 @@ pub unsafe extern "C" fn print(pointer: *mut u8) {
     }
 }
 
+#[no_mangle]
 pub unsafe extern "C" fn input() -> *mut u8 {
     let mut input = String::new();
     std::io::stdin().read_line(&mut input).unwrap();
@@ -135,9 +154,7 @@ extern "C" {
 #[no_mangle]
 #[cfg(not(test))]
 pub unsafe extern "C" fn main() {
-    println!("ChocoPy program starting.");
     chocopy_main();
-    println!("ChocoPy program ended.");
 }
 
 #[no_mangle]
