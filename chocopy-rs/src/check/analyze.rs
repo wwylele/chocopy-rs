@@ -421,7 +421,7 @@ impl CallExpr {
 
         // Reference program: don't attach type to constructor
         if !m.contains(&id.name) {
-            id.inferred_type = Some(Type::FuncType(function.clone()));
+            id.inferred_type = Some(FuncTypeWrapper::FuncType(function.clone()));
         }
 
         if function.parameters.len() != args.len() {
@@ -480,7 +480,7 @@ impl MethodCallExpr {
             }
         };
 
-        member.inferred_type = Some(Type::FuncType(method.clone()));
+        member.inferred_type = Some(FuncTypeWrapper::FuncType(method.clone()));
 
         if method.parameters.len() - 1 != args.len() {
             let msg = error_call_count(method.parameters.len() - 1, args.len());
@@ -622,7 +622,7 @@ impl ForStmt {
 
             if let Some((variable, Assignable(assignable))) = variable {
                 if m.is_compatible(element_type, &variable) {
-                    id.inferred_type = Some(variable.into()); // yes, we attach the type here
+                    id.inferred_type = Some(variable); // yes, we attach the type here
                     if !assignable {
                         let msg = error_nonlocal_assign(&id.name);
                         id.base_mut().error_msg = Some(msg); // and this error is attached to the identifier

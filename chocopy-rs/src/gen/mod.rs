@@ -382,12 +382,14 @@ impl Emitter {
                 for (i, arg) in c.args.iter().enumerate() {
                     self.emit_expression(arg);
 
-                    let param_type = if let Some(Type::FuncType(f)) = &c.function.id().inferred_type
-                    {
-                        &f.parameters[0]
-                    } else {
-                        panic!();
-                    };
+                    let param_type = &c
+                        .function
+                        .id()
+                        .inferred_type
+                        .as_ref()
+                        .unwrap()
+                        .func_type()
+                        .parameters[i];
                     if param_type == &*TYPE_OBJECT {
                         if arg.inferred_type.as_ref().unwrap() == &*TYPE_INT {
                             self.emit_box_int();

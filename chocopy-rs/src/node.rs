@@ -194,7 +194,7 @@ impl_node!(BooleanLiteral);
 pub struct CallExpr {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub function: TypedId,
+    pub function: FuncId,
     pub args: Vec<Expr>,
 
     // For gen only
@@ -322,7 +322,7 @@ impl ErrorInfo {
 // #[serde(deny_unknown_fields)] // https://github.com/serde-rs/serde/issues/1358
 pub struct Expr {
     #[serde(rename = "inferredType", skip_serializing_if = "Option::is_none")]
-    pub inferred_type: Option<Type>,
+    pub inferred_type: Option<ValueType>,
     #[serde(flatten)]
     pub content: ExprContent,
 }
@@ -344,7 +344,7 @@ impl Node for Expr {
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
         let t = self.content.analyze(errors, o, m, r);
-        self.inferred_type = t.clone().map(Into::into);
+        self.inferred_type = t.clone();
         t
     }
 }
@@ -450,6 +450,50 @@ pub struct FuncType {
     #[serde(rename = "returnType")]
     pub return_type: ValueType,
 }
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[serde(tag = "kind", deny_unknown_fields)]
+pub enum FuncTypeWrapper {
+    FuncType(FuncType),
+}
+
+impl FuncTypeWrapper {
+    pub fn func_type(&self) -> &FuncType {
+        let FuncTypeWrapper::FuncType(func_type) = self;
+        func_type
+    }
+}
+
+#[enum_dispatch(Node)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[serde(tag = "kind", deny_unknown_fields)]
+pub enum FuncId {
+    Identifier(FuncIdentifier),
+}
+
+impl FuncId {
+    pub fn id(&self) -> &FuncIdentifier {
+        let FuncId::Identifier(id) = self;
+        id
+    }
+    pub fn id_mut(&mut self) -> &mut FuncIdentifier {
+        let FuncId::Identifier(id) = self;
+        id
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct FuncIdentifier {
+    #[serde(rename = "inferredType", skip_serializing_if = "Option::is_none")]
+    pub inferred_type: Option<FuncTypeWrapper>,
+    #[serde(flatten)]
+    pub base: NodeBase,
+    pub name: String,
+}
+
+impl_node!(FuncIdentifier);
+impl_default_analyze!(FuncIdentifier);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
@@ -579,7 +623,7 @@ impl Display for ListValueType {
 // #[serde(deny_unknown_fields)] // https://github.com/serde-rs/serde/issues/1358
 pub struct Literal {
     #[serde(rename = "inferredType", skip_serializing_if = "Option::is_none")]
-    pub inferred_type: Option<Type>,
+    pub inferred_type: Option<ValueType>,
     #[serde(flatten)]
     pub content: LiteralContent,
 }
@@ -601,7 +645,7 @@ impl Node for Literal {
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
         let t = self.content.analyze(errors, o, m, r);
-        self.inferred_type = t.clone().map(Into::into);
+        self.inferred_type = t.clone();
         t
     }
 }
@@ -650,7 +694,7 @@ impl_node!(MemberExpr);
 #[serde(deny_unknown_fields)]
 pub struct TypedMemberExpr {
     #[serde(rename = "inferredType", skip_serializing_if = "Option::is_none")]
-    pub inferred_type: Option<Type>,
+    pub inferred_type: Option<FuncTypeWrapper>,
     #[serde(flatten)]
     pub base: NodeBase,
     pub object: Expr,
@@ -775,11 +819,9 @@ impl Tv {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(tag = "kind", deny_unknown_fields)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Type {
-    ClassValueType(ClassValueType),
-    ListValueType(ListValueType),
+    ValueType(ValueType),
     FuncType(FuncType),
 }
 
@@ -812,13 +854,6 @@ pub enum TypedId {
 }
 
 impl TypedId {
-    pub fn id(&self) -> &TypedIdentifier {
-        if let TypedId::Identifier(id) = self {
-            id
-        } else {
-            panic!()
-        }
-    }
     pub fn id_mut(&mut self) -> &mut TypedIdentifier {
         if let TypedId::Identifier(id) = self {
             id
@@ -832,7 +867,7 @@ impl TypedId {
 #[serde(deny_unknown_fields)]
 pub struct TypedIdentifier {
     #[serde(rename = "inferredType", skip_serializing_if = "Option::is_none")]
-    pub inferred_type: Option<Type>,
+    pub inferred_type: Option<ValueType>,
     #[serde(flatten)]
     pub base: NodeBase,
     pub name: String,
@@ -905,10 +940,7 @@ impl ValueType {
 
 impl From<ValueType> for Type {
     fn from(t: ValueType) -> Type {
-        match t {
-            ValueType::ClassValueType(c) => Type::ClassValueType(c),
-            ValueType::ListValueType(c) => Type::ListValueType(c),
-        }
+        Type::ValueType(t)
     }
 }
 
@@ -916,25 +948,8 @@ impl TryFrom<Type> for ValueType {
     type Error = ();
     fn try_from(t: Type) -> Result<ValueType, ()> {
         match t {
-            Type::ClassValueType(c) => Ok(ValueType::ClassValueType(c)),
-            Type::ListValueType(c) => Ok(ValueType::ListValueType(c)),
+            Type::ValueType(c) => Ok(c),
             _ => Err(()),
-        }
-    }
-}
-
-impl PartialEq<ValueType> for Type {
-    fn eq(&self, other: &ValueType) -> bool {
-        match self {
-            Type::ClassValueType(c) => match other {
-                ValueType::ClassValueType(c2) => c == c2,
-                ValueType::ListValueType(_) => false,
-            },
-            Type::ListValueType(c) => match other {
-                ValueType::ClassValueType(_) => false,
-                ValueType::ListValueType(c2) => c == c2,
-            },
-            _ => false,
         }
     }
 }
@@ -1007,10 +1022,10 @@ where
     }
     fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
-        m: &ClassEnv,
-        r: Option<&ValueType>,
+        _errors: &mut Vec<Error>,
+        _o: &mut LocalEnv,
+        _m: &ClassEnv,
+        _r: Option<&ValueType>,
     ) -> Option<ValueType> {
         panic!()
     }

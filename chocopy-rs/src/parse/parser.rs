@@ -363,7 +363,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     expr = match expr.content {
                         ExprContent::Identifier(function) => Expr::CallExpr(CallExpr {
                             base,
-                            function: TypedId::Identifier(TypedIdentifier {
+                            function: FuncId::Identifier(FuncIdentifier {
                                 inferred_type: None,
                                 base: function.base,
                                 name: function.name,
