@@ -1,6 +1,4 @@
-s: str = ""
-s = input()
-print(s)
+print(input())
 
 #!
 #hello
@@ -15,6 +13,7 @@ print(s)
 #<->#
 
 #!
+#42
 #<->#
 #42
 #<->#

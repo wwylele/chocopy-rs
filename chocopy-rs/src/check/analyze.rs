@@ -45,7 +45,7 @@ impl AssignStmt {
                     errors.push(error_from(&self.targets[i]));
                 }
             } else if let ExprContent::IndexExpr(index_expr) = &self.targets[i].content {
-                if index_expr.list.inferred_type.as_ref().unwrap() == &TYPE_STR.clone().into() {
+                if index_expr.list.inferred_type.as_ref().unwrap() == &*TYPE_STR {
                     let msg = error_str_index_assign();
                     self.targets[i].base_mut().error_msg = Some(msg);
                     errors.push(error_from(&self.targets[i]));

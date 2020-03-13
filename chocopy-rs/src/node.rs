@@ -923,6 +923,22 @@ impl TryFrom<Type> for ValueType {
     }
 }
 
+impl PartialEq<ValueType> for Type {
+    fn eq(&self, other: &ValueType) -> bool {
+        match self {
+            Type::ClassValueType(c) => match other {
+                ValueType::ClassValueType(c2) => c == c2,
+                ValueType::ListValueType(_) => false,
+            },
+            Type::ListValueType(c) => match other {
+                ValueType::ClassValueType(_) => false,
+                ValueType::ListValueType(c2) => c == c2,
+            },
+            _ => false,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct VarDef {
@@ -945,7 +961,7 @@ pub struct WhileStmt {
 
 impl_node!(WhileStmt);
 
-trait GenNode {}
+pub trait GenNode {}
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 enum AllocSlot {

@@ -98,7 +98,7 @@ mod test {
     use std::io::{BufRead, BufReader, Read, Write};
     #[test]
     fn test_whole() {
-        let mut temp_path = std::env::temp_dir();
+        let temp_path = std::env::temp_dir();
         let mut passed = true;
         let test_dirs = ["test/pa3"];
         for dir in &test_dirs {

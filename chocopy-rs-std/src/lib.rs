@@ -1,5 +1,8 @@
 use std::alloc::*;
 use std::mem::*;
+use std::sync::atomic::*;
+
+static ALLOC_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[repr(C)]
 pub struct Prototype {
@@ -7,24 +10,31 @@ pub struct Prototype {
 }
 
 #[no_mangle]
+#[export_name = "$BOOL_PROTOTYPE"]
 pub static BOOL_PROTOTYPE: Prototype = Prototype { size: 1 };
 
 #[no_mangle]
+#[export_name = "$INT_PROTOTYPE"]
 pub static INT_PROTOTYPE: Prototype = Prototype { size: 4 };
 
 #[no_mangle]
+#[export_name = "$STR_PROTOTYPE"]
 pub static STR_PROTOTYPE: Prototype = Prototype { size: -1 };
 
 #[no_mangle]
+#[export_name = "$OBJECT_PROTOTYPE"]
 pub static OBJECT_PROTOTYPE: Prototype = Prototype { size: 0 };
 
 #[no_mangle]
+#[export_name = "$BOOL_LIST_PROTOTYPE"]
 pub static BOOL_LIST_PROTOTYPE: Prototype = Prototype { size: -1 };
 
 #[no_mangle]
+#[export_name = "$INT_LIST_PROTOTYPE"]
 pub static INT_LIST_PROTOTYPE: Prototype = Prototype { size: -4 };
 
 #[no_mangle]
+#[export_name = "$OBJECT_LIST_PROTOTYPE"]
 pub static OBJECT_LIST_PROTOTYPE: Prototype = Prototype { size: -8 };
 
 #[repr(C)]
@@ -50,6 +60,7 @@ fn align_up(size: usize) -> usize {
 }
 
 #[no_mangle]
+#[export_name = "$alloc_obj"]
 pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mut u8 {
     let size = align_up(if (*prototype).size > 0 {
         assert!(len == 0);
@@ -63,13 +74,15 @@ pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mu
     }
     (*(pointer as *mut Object)).prototype = prototype;
     (*(pointer as *mut Object)).ref_count = 1;
-    if (*prototype).size > 0 {
+    if (*prototype).size < 0 {
         (*(pointer as *mut ArrayObject)).len = len;
     }
+    ALLOC_COUNTER.fetch_add(1, Ordering::SeqCst);
     pointer
 }
 
 #[no_mangle]
+#[export_name = "$free_obj"]
 pub unsafe extern "C" fn free_obj(pointer: *mut u8) {
     assert!((*(pointer as *mut Object)).ref_count == 0);
     let prototype = (*(pointer as *mut Object)).prototype;
@@ -80,6 +93,7 @@ pub unsafe extern "C" fn free_obj(pointer: *mut u8) {
         size_of::<ArrayObject>() + (-(*prototype).size as u64 * len) as usize
     });
     dealloc(pointer, Layout::from_size_align(size, 8).unwrap());
+    ALLOC_COUNTER.fetch_sub(1, Ordering::SeqCst);
 }
 
 #[no_mangle]
@@ -102,11 +116,11 @@ pub unsafe extern "C" fn len(pointer: *mut u8) -> u32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn print(pointer: *mut u8) {
+pub unsafe extern "C" fn print(pointer: *mut u8) -> *mut u8 {
     let object = pointer as *mut Object;
     let prototype = (*object).prototype;
     if prototype == &INT_PROTOTYPE as *const Prototype {
-        println!("{}", *(object.offset(1) as *const u32));
+        println!("{}", *(object.offset(1) as *const i32));
     } else if prototype == &BOOL_PROTOTYPE as *const Prototype {
         println!(
             "{}",
@@ -132,13 +146,15 @@ pub unsafe extern "C" fn print(pointer: *mut u8) {
     if (*object).ref_count == 0 {
         free_obj(pointer);
     }
+    std::ptr::null_mut()
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn input() -> *mut u8 {
     let mut input = String::new();
     std::io::stdin().read_line(&mut input).unwrap();
-    let pointer = alloc_obj(&STR_PROTOTYPE as *const Prototype, input.len() as u64);
+    let len = (input.len() - 1) as u64; // remove the trailing line break
+    let pointer = alloc_obj(&STR_PROTOTYPE as *const Prototype, len);
     std::ptr::copy_nonoverlapping(
         input.as_ptr(),
         pointer.offset(size_of::<ArrayObject>() as isize),
@@ -147,19 +163,25 @@ pub unsafe extern "C" fn input() -> *mut u8 {
     pointer
 }
 
+#[no_mangle]
+#[export_name = "$report_broken_stack"]
+pub unsafe extern "C" fn report_broken_stack() {
+    println!("--- broken stack detected! ---");
+    crash()
+}
+
 extern "C" {
     #[cfg(not(test))]
+    #[link_name = "$chocopy_main"]
     fn chocopy_main();
 }
 #[no_mangle]
 #[cfg(not(test))]
 pub unsafe extern "C" fn main() {
     chocopy_main();
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn debug_print(input: i64) {
-    println!("debug_print: {}", input);
+    if ALLOC_COUNTER.load(Ordering::SeqCst) != 0 {
+        println!("--- memory leak detected! ---");
+    }
 }
 
 fn runtime_error(message: &str) -> ! {
