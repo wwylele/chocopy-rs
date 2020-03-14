@@ -1218,7 +1218,6 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     return_type,
                     declarations,
                     statements,
-                    alloc_info: None,
                 }),
                 errors,
             )

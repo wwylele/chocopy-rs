@@ -435,10 +435,6 @@ pub struct FuncDef {
     pub return_type: TypeAnnotation,
     pub declarations: Vec<Declaration>,
     pub statements: Vec<Stmt>,
-
-    // For gen only
-    #[serde(skip)]
-    pub alloc_info: Option<FuncAllocInfo>,
 }
 
 impl_node!(FuncDef);
@@ -981,9 +977,10 @@ pub trait GenNode {}
 #[derive(Clone, PartialEq, Eq, Debug)]
 enum AllocSlot {
     Global(usize),
-    Param(usize),
-    Local(usize),
-    Capture(usize),
+    Stack {
+        nested_level: usize,
+        rbp_offset: isize,
+    },
 }
 
 impl GenNode for AllocSlot {}
@@ -1003,12 +1000,6 @@ struct MethodSlot {
 }
 
 impl GenNode for MethodSlot {}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct FuncAllocInfo {
-    pub local_len: usize,
-    pub closure_len: usize,
-}
 
 impl<T> Node for T
 where

@@ -114,6 +114,16 @@ impl Emitter {
         self.rsp_aligned = !self.rsp_aligned;
     }
 
+    pub fn emit_push_rdx(&mut self) {
+        self.emit(&[0x52]);
+        self.rsp_aligned = !self.rsp_aligned;
+    }
+
+    pub fn emit_push_rsi(&mut self) {
+        self.emit(&[0x56]);
+        self.rsp_aligned = !self.rsp_aligned;
+    }
+
     pub fn emit_push_r10(&mut self) {
         self.emit(&[0x41, 0x52]);
         self.rsp_aligned = !self.rsp_aligned;
@@ -126,6 +136,16 @@ impl Emitter {
 
     pub fn emit_pop_rax(&mut self) {
         self.emit(&[0x58]);
+        self.rsp_aligned = !self.rsp_aligned;
+    }
+
+    pub fn emit_pop_rsi(&mut self) {
+        self.emit(&[0x5e]);
+        self.rsp_aligned = !self.rsp_aligned;
+    }
+
+    pub fn emit_pop_r10(&mut self) {
+        self.emit(&[0x41, 0x5A]);
         self.rsp_aligned = !self.rsp_aligned;
     }
 
@@ -198,6 +218,348 @@ impl Emitter {
         self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
     }
 
+    pub fn emit_string_literal(&mut self, s: &StringLiteral) {
+        self.prepare_call(2);
+        // mov rdi,[rip+{STR_PROTOTYPE}]
+        self.emit(&[0x48, 0x8B, 0x3D]);
+        self.links.push(ProcedureLink {
+            pos: self.pos(),
+            to: STR_PROTOTYPE.to_owned(),
+        });
+        self.emit(&[0; 4]);
+        // mov rsi,{len}
+        self.emit(&[0x48, 0xc7, 0xc6]);
+        self.emit(&(s.value.len() as u32).to_le_bytes());
+        self.call(BUILTIN_ALLOC_OBJ);
+        if s.value.len() != 0 {
+            // lea rdi,[rax+24]
+            self.emit(&[0x48, 0x8D, 0x78, 0x18]);
+            // lea rsi,[rip+{STR}]
+            self.emit(&[0x48, 0x8d, 0x35]);
+            self.strings.push((self.pos(), s.value.clone()));
+            self.emit(&[0; 4]);
+            // mov rcx,{len}
+            self.emit(&[0x48, 0xc7, 0xc1]);
+            self.emit(&(s.value.len() as u32).to_le_bytes());
+            // mov dl,[rsi]
+            self.emit(&[0x8A, 0x16]);
+            // mov [rdi],dl
+            self.emit(&[0x88, 0x17]);
+            // inc rsi
+            self.emit(&[0x48, 0xFF, 0xC6]);
+            // inc rdi
+            self.emit(&[0x48, 0xFF, 0xC7]);
+            // loop
+            self.emit(&[0xE2, 0xF4]);
+        }
+    }
+
+    pub fn emit_string_add(&mut self, b: &BinaryExpr) {
+        self.emit_expression(&b.left);
+        // mov rsi,QWORD PTR [rax+0x10]
+        self.emit(&[0x48, 0x8B, 0x70, 0x10]);
+        self.emit_push_rax();
+        self.emit_push_rsi();
+        self.emit_expression(&b.right);
+        self.emit_pop_rsi();
+        // add rsi,QWORD PTR [rax+0x10]
+        self.emit(&[0x48, 0x03, 0x70, 0x10]);
+        self.emit_push_rax();
+
+        self.prepare_call(2);
+        // mov rdi,[rip+{STR_PROTOTYPE}]
+        self.emit(&[0x48, 0x8B, 0x3D]);
+        self.links.push(ProcedureLink {
+            pos: self.pos(),
+            to: STR_PROTOTYPE.to_owned(),
+        });
+        self.emit(&[0; 4]);
+        self.call(BUILTIN_ALLOC_OBJ);
+
+        self.emit_pop_r11(); // right
+        self.emit_pop_r10(); // left
+
+        /*
+        lea rdi,[rax+24]
+        mov rcx,[r10+16]
+        test rcx,rcx
+        je skip1
+        lea rsi,[r10+24]
+        loop1:
+        mov dl,[rsi]
+        mov [rdi],dl
+        inc rsi
+        inc rdi
+        loop loop1
+        skip1:
+        mov rcx,[r11+16]
+        test rcx,rcx
+        je skip2
+        lea rsi,[r11+24]
+        loop2:
+        mov dl,[rsi]
+        mov [rdi],dl
+        inc rsi
+        inc rdi
+        loop loop2
+        skip2:
+        */
+        self.emit(&[
+            0x48, 0x8D, 0x78, 0x18, 0x49, 0x8B, 0x4A, 0x10, 0x48, 0x85, 0xC9, 0x74, 0x10, 0x49,
+            0x8D, 0x72, 0x18, 0x8A, 0x16, 0x88, 0x17, 0x48, 0xFF, 0xC6, 0x48, 0xFF, 0xC7, 0xE2,
+            0xF4, 0x49, 0x8B, 0x4B, 0x10, 0x48, 0x85, 0xC9, 0x74, 0x10, 0x49, 0x8D, 0x73, 0x18,
+            0x8A, 0x16, 0x88, 0x17, 0x48, 0xFF, 0xC6, 0x48, 0xFF, 0xC7, 0xE2, 0xF4,
+        ]);
+        self.emit_push_rax();
+        self.emit_push_r11();
+        // mov rax,r10
+        self.emit(&[0x4C, 0x89, 0xD0]);
+        self.emit_drop();
+        self.emit_pop_rax();
+        self.emit_drop();
+        self.emit_pop_rax();
+    }
+
+    pub fn emit_list_add(&mut self, b: &BinaryExpr) {}
+
+    pub fn emit_str_compare(&mut self, b: &BinaryExpr) {
+        self.emit_expression(&b.left);
+        self.emit_push_rax();
+        self.emit_expression(&b.right);
+        self.emit_pop_r11();
+
+        /*
+        mov rcx,[rax+16]
+        mov rdx,[r11+16]
+        cmp rcx,rdx
+        jne not_equal
+        test rcx,rcx
+        je equal
+        lea rdi,[rax+24]
+        lea rsi,[r11+24]
+        lo:
+        mov dl,[rdi]
+        cmp dl,[rsi]
+        jne not_equal
+        inc rdi
+        inc rsi
+        loop lo
+        equal:
+        mov rdx,1
+        jmp finish
+        not_equal:
+        xor rdx,rdx
+        finish:
+        */
+        self.emit(&[
+            0x48, 0x8B, 0x48, 0x10, 0x49, 0x8B, 0x53, 0x10, 0x48, 0x39, 0xD1, 0x75, 0x24, 0x48,
+            0x85, 0xC9, 0x74, 0x16, 0x48, 0x8D, 0x78, 0x18, 0x49, 0x8D, 0x73, 0x18, 0x8A, 0x17,
+            0x3A, 0x16, 0x75, 0x11, 0x48, 0xFF, 0xC7, 0x48, 0xFF, 0xC6, 0xE2, 0xF2, 0x48, 0xC7,
+            0xC2, 0x01, 0x00, 0x00, 0x00, 0xEB, 0x03, 0x48, 0x31, 0xD2,
+        ]);
+
+        if b.operator == BinaryOp::Ne {
+            // test rdx,rdx
+            self.emit(&[0x48, 0x85, 0xD2]);
+            // sete dl
+            self.emit(&[0x0F, 0x94, 0xC2]);
+        }
+
+        self.emit_push_rdx();
+        self.emit_push_r11();
+        self.emit_drop();
+        self.emit_pop_rax();
+        self.emit_drop();
+        self.emit_pop_rax();
+    }
+
+    pub fn emit_binary_expr(&mut self, b: &BinaryExpr) {
+        if b.operator == BinaryOp::Add && b.left.inferred_type.as_ref().unwrap() == &*TYPE_STR {
+            self.emit_string_add(b);
+        } else if b.operator == BinaryOp::Add
+            && b.left.inferred_type.as_ref().unwrap() != &*TYPE_INT
+        {
+            self.emit_list_add(b);
+        } else if (b.operator == BinaryOp::Eq || b.operator == BinaryOp::Ne)
+            && b.left.inferred_type.as_ref().unwrap() == &*TYPE_STR
+        {
+            self.emit_str_compare(b);
+        } else if b.operator == BinaryOp::Or || b.operator == BinaryOp::And {
+            self.emit_expression(&b.left);
+            // test rax,rax
+            self.emit(&[0x48, 0x85, 0xC0]);
+            if b.operator == BinaryOp::Or {
+                // jne
+                self.emit(&[0x0f, 0x85]);
+            } else {
+                // je
+                self.emit(&[0x0f, 0x84]);
+            }
+            let pos = self.pos();
+            self.emit(&[0; 4]);
+            self.emit_expression(&b.right);
+            let delta = (self.pos() - pos - 4) as u32;
+            self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
+        } else {
+            self.emit_expression(&b.left);
+            self.emit_push_rax();
+            self.emit_expression(&b.right);
+            self.emit_pop_r11();
+
+            match b.operator {
+                BinaryOp::Add => {
+                    // Note: swapped
+                    // add rax,r11
+                    self.emit(&[0x4C, 0x01, 0xD8]);
+                }
+                BinaryOp::Sub => {
+                    // sub r11,rax
+                    // mov rax,r11
+                    self.emit(&[0x49, 0x29, 0xC3, 0x4C, 0x89, 0xD8]);
+                }
+                BinaryOp::Mul => {
+                    // imul rax,r11
+                    self.emit(&[0x49, 0x0F, 0xAF, 0xC3]);
+                }
+                BinaryOp::Div => {
+                    // xchg rax,r11
+                    self.emit(&[0x49, 0x93]);
+                    // cqo
+                    self.emit(&[0x48, 0x99]);
+                    // idiv,r11
+                    self.emit(&[0x49, 0xf7, 0xfb]);
+                }
+                BinaryOp::Mod => {
+                    // xchg rax,r11
+                    self.emit(&[0x49, 0x93]);
+                    // cqo
+                    self.emit(&[0x48, 0x99]);
+                    // idiv,r11
+                    self.emit(&[0x49, 0xf7, 0xfb]);
+                    // mov rax,rdx
+                    self.emit(&[0x48, 0x89, 0xD0]);
+                }
+                BinaryOp::Is => {
+                    // cmp r11,rax
+                    self.emit(&[0x49, 0x39, 0xC3]);
+                    // sete r10b
+                    self.emit(&[0x41, 0x0F, 0x94, 0xC2]);
+                    // movzx r10,r10b
+                    self.emit(&[0x4D, 0x0F, 0xB6, 0xD2]);
+                    self.emit_push_r10();
+                    self.emit_push_r11();
+                    self.emit_drop();
+                    self.emit_pop_rax();
+                    self.emit_drop();
+                    self.emit_pop_rax();
+                }
+                BinaryOp::Ne
+                | BinaryOp::Eq
+                | BinaryOp::Lt
+                | BinaryOp::Ge
+                | BinaryOp::Le
+                | BinaryOp::Gt => {
+                    let code = match b.operator {
+                        BinaryOp::Eq => 0x4,
+                        BinaryOp::Ne => 0x5,
+                        BinaryOp::Lt => 0xc,
+                        BinaryOp::Ge => 0xd,
+                        BinaryOp::Le => 0xe,
+                        BinaryOp::Gt => 0xf,
+                        _ => panic!(),
+                    };
+                    // cmp r11,rax
+                    self.emit(&[0x49, 0x39, 0xC3]);
+                    // set* al
+                    self.emit(&[0x0f, 0x90 + code, 0xc0]);
+                    // movzx rax,al
+                    self.emit(&[0x48, 0x0f, 0xb6, 0xc0]);
+                }
+                _ => panic!(),
+            }
+        }
+    }
+    pub fn emit_coerce(&mut self, from: &ValueType, to: &ValueType) {
+        if to == &*TYPE_OBJECT {
+            if from == &*TYPE_INT {
+                self.emit_box_int();
+            } else if from == &*TYPE_BOOL {
+                self.emit_box_bool();
+            }
+        }
+    }
+
+    pub fn emit_call_expr(&mut self, c: &CallExpr) {
+        self.prepare_call(c.args.len());
+
+        for (i, arg) in c.args.iter().enumerate() {
+            self.emit_expression(arg);
+
+            let param_type = &c
+                .function
+                .id()
+                .inferred_type
+                .as_ref()
+                .unwrap()
+                .func_type()
+                .parameters[i];
+
+            self.emit_coerce(arg.inferred_type.as_ref().unwrap(), param_type);
+
+            match i {
+                // mov rdi,rax
+                0 => self.emit(&[0x48, 0x89, 0xc7]),
+                // mov rsi,rax
+                1 => self.emit(&[0x48, 0x89, 0xc6]),
+                // mov rdx,rax
+                2 => self.emit(&[0x48, 0x89, 0xc2]),
+                // mov rcx,rax
+                3 => self.emit(&[0x48, 0x89, 0xc1]),
+                // mov r8,rax
+                4 => self.emit(&[0x49, 0x89, 0xc0]),
+                // mov r9,rax
+                5 => self.emit(&[0x49, 0x89, 0xc1]),
+                _ => {
+                    let offset = (i - 6) * 8;
+                    assert!(offset < 128);
+                    // mov QWORD PTR [rsp+{offset}],rax
+                    self.emit(&[0x48, 0x89, 0x44, 0x24, offset as u8]);
+                }
+            }
+        }
+
+        self.call(&c.function.id().name);
+    }
+
+    pub fn emit_str_index(&mut self, i: &IndexExpr) {
+        self.emit_expression(&i.list);
+        self.emit_push_rax();
+        self.emit_expression(&i.index);
+        self.emit_push_rax();
+        self.prepare_call(2);
+        // mov rdi,[rip+{STR_PROTOTYPE}]
+        self.emit(&[0x48, 0x8B, 0x3D]);
+        self.links.push(ProcedureLink {
+            pos: self.pos(),
+            to: STR_PROTOTYPE.to_owned(),
+        });
+        self.emit(&[0; 4]);
+        // mov rsi,1
+        self.emit(&[0x48, 0xc7, 0xc6, 0x01, 0x00, 0x00, 0x00]);
+        self.call(BUILTIN_ALLOC_OBJ);
+        self.emit_pop_rsi();
+        self.emit_pop_r11();
+        // mov r10b,[r11+rsi+24]
+        self.emit(&[0x45, 0x8A, 0x54, 0x33, 0x18]);
+        // mov [rax+24],r10b
+        self.emit(&[0x44, 0x88, 0x50, 0x18]);
+        self.emit_push_rax();
+        // mov rax,r11
+        self.emit(&[0x4C, 0x89, 0xD8]);
+        self.emit_drop();
+        self.emit_pop_rax();
+    }
+
     pub fn emit_expression(&mut self, expression: &Expr) {
         match &expression.content {
             ExprContent::NoneLiteral(_) => {
@@ -219,39 +581,7 @@ impl Emitter {
                 }
             }
             ExprContent::StringLiteral(s) => {
-                self.prepare_call(2);
-                // mov rdi,[rip+{STR_PROTOTYPE}]
-                self.emit(&[0x48, 0x8B, 0x3D]);
-                self.links.push(ProcedureLink {
-                    pos: self.pos(),
-                    to: STR_PROTOTYPE.to_owned(),
-                });
-                self.emit(&[0; 4]);
-                // mov rsi,{len}
-                self.emit(&[0x48, 0xc7, 0xc6]);
-                self.emit(&(s.value.len() as u32).to_le_bytes());
-                self.call(BUILTIN_ALLOC_OBJ);
-                if s.value.len() != 0 {
-                    // lea rdi,[rax+24]
-                    self.emit(&[0x48, 0x8D, 0x78, 0x18]);
-                    // lea rsi,[rip+{STR}]
-                    self.emit(&[0x48, 0x8d, 0x35]);
-                    self.strings.push((self.pos(), s.value.clone()));
-                    self.emit(&[0; 4]);
-                    // mov rcx,{len}
-                    self.emit(&[0x48, 0xc7, 0xc1]);
-                    self.emit(&(s.value.len() as u32).to_le_bytes());
-                    // mov dl,[rsi]
-                    self.emit(&[0x8A, 0x16]);
-                    // mov [rdi],dl
-                    self.emit(&[0x88, 0x17]);
-                    // inc rsi
-                    self.emit(&[0x48, 0xFF, 0xC6]);
-                    // inc rdi
-                    self.emit(&[0x48, 0xFF, 0xC7]);
-                    // loop
-                    self.emit(&[0xE2, 0xF4]);
-                }
+                self.emit_string_literal(s);
             }
             ExprContent::UnaryExpr(u) => {
                 self.emit_expression(&u.operand);
@@ -269,158 +599,16 @@ impl Emitter {
                 }
             }
             ExprContent::BinaryExpr(b) => {
-                self.emit_expression(&b.left);
-                if b.operator == BinaryOp::Or || b.operator == BinaryOp::And {
-                    // test rax,rax
-                    self.emit(&[0x48, 0x85, 0xC0]);
-                    if b.operator == BinaryOp::Or {
-                        // jne
-                        self.emit(&[0x0f, 0x85]);
-                    } else {
-                        // je
-                        self.emit(&[0x0f, 0x84]);
-                    }
-                    let pos = self.pos();
-                    self.emit(&[0; 4]);
-                    self.emit_expression(&b.right);
-                    let delta = (self.pos() - pos - 4) as u32;
-                    self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
-                } else {
-                    self.emit_push_rax();
-                    self.emit_expression(&b.right);
-                    self.emit_pop_r11();
-
-                    match b.operator {
-                        BinaryOp::Add => {
-                            if b.left.inferred_type.as_ref().unwrap() == &*TYPE_INT {
-                                // Note: swapped
-                                // add rax,r11
-                                self.emit(&[0x4C, 0x01, 0xD8]);
-                            } else if b.left.inferred_type.as_ref().unwrap() == &*TYPE_STR {
-                            } else {
-                            }
-                        }
-                        BinaryOp::Sub => {
-                            // sub r11,rax
-                            // mov rax,r11
-                            self.emit(&[0x49, 0x29, 0xC3, 0x4C, 0x89, 0xD8]);
-                        }
-                        BinaryOp::Mul => {
-                            // imul rax,r11
-                            self.emit(&[0x49, 0x0F, 0xAF, 0xC3]);
-                        }
-                        BinaryOp::Div => {
-                            // xchg rax,r11
-                            self.emit(&[0x49, 0x93]);
-                            // cqo
-                            self.emit(&[0x48, 0x99]);
-                            // idiv,r11
-                            self.emit(&[0x49, 0xf7, 0xfb]);
-                        }
-                        BinaryOp::Mod => {
-                            // xchg rax,r11
-                            self.emit(&[0x49, 0x93]);
-                            // cqo
-                            self.emit(&[0x48, 0x99]);
-                            // idiv,r11
-                            self.emit(&[0x49, 0xf7, 0xfb]);
-                            // mov rax,rdx
-                            self.emit(&[0x48, 0x89, 0xD0]);
-                        }
-                        BinaryOp::Is => {
-                            // cmp r11,rax
-                            self.emit(&[0x49, 0x39, 0xC3]);
-                            // sete r10b
-                            self.emit(&[0x41, 0x0F, 0x94, 0xC2]);
-                            // movzx r10,r10b
-                            self.emit(&[0x4D, 0x0F, 0xB6, 0xD2]);
-                            self.emit_push_r10();
-                            self.emit_push_r11();
-                            self.emit_drop();
-                            self.emit_pop_rax();
-                            self.emit_drop();
-                            self.emit_pop_rax();
-                        }
-                        BinaryOp::Ne | BinaryOp::Eq => {
-                            if b.left.inferred_type.as_ref().unwrap() == &*TYPE_STR {
-                            } else {
-                                let code = match b.operator {
-                                    BinaryOp::Ne => 5,
-                                    BinaryOp::Eq => 4,
-                                    _ => panic!(),
-                                };
-                                // cmp r11,rax
-                                self.emit(&[0x49, 0x39, 0xC3]);
-                                // set* al
-                                self.emit(&[0x0f, 0x90 + code, 0xc0]);
-                                // movzx rax,al
-                                self.emit(&[0x48, 0x0f, 0xb6, 0xc0]);
-                            }
-                        }
-                        BinaryOp::Lt | BinaryOp::Ge | BinaryOp::Le | BinaryOp::Gt => {
-                            let code = match b.operator {
-                                BinaryOp::Lt => 0xc,
-                                BinaryOp::Ge => 0xd,
-                                BinaryOp::Le => 0xe,
-                                BinaryOp::Gt => 0xf,
-                                _ => panic!(),
-                            };
-                            // cmp r11,rax
-                            self.emit(&[0x49, 0x39, 0xC3]);
-                            // set* al
-                            self.emit(&[0x0f, 0x90 + code, 0xc0]);
-                            // movzx rax,al
-                            self.emit(&[0x48, 0x0f, 0xb6, 0xc0]);
-                        }
-                        _ => (),
-                    }
-                }
+                self.emit_binary_expr(b);
             }
             ExprContent::CallExpr(c) => {
-                self.prepare_call(c.args.len());
-
-                for (i, arg) in c.args.iter().enumerate() {
-                    self.emit_expression(arg);
-
-                    let param_type = &c
-                        .function
-                        .id()
-                        .inferred_type
-                        .as_ref()
-                        .unwrap()
-                        .func_type()
-                        .parameters[i];
-                    if param_type == &*TYPE_OBJECT {
-                        if arg.inferred_type.as_ref().unwrap() == &*TYPE_INT {
-                            self.emit_box_int();
-                        } else if arg.inferred_type.as_ref().unwrap() == &*TYPE_BOOL {
-                            self.emit_box_bool();
-                        }
-                    }
-
-                    match i {
-                        // mov rdi,rax
-                        0 => self.emit(&[0x48, 0x89, 0xc7]),
-                        // mov rsi,rax
-                        1 => self.emit(&[0x48, 0x89, 0xc6]),
-                        // mov rdx,rax
-                        2 => self.emit(&[0x48, 0x89, 0xc2]),
-                        // mov rcx,rax
-                        3 => self.emit(&[0x48, 0x89, 0xc1]),
-                        // mov r8,rax
-                        4 => self.emit(&[0x49, 0x89, 0xc0]),
-                        // mov r9,rax
-                        5 => self.emit(&[0x49, 0x89, 0xc1]),
-                        _ => {
-                            let offset = (i - 6) * 8;
-                            assert!(offset < 128);
-                            // mov QWORD PTR [rsp+{offset}],rax
-                            self.emit(&[0x48, 0x89, 0x44, 0x24, offset as u8]);
-                        }
-                    }
+                self.emit_call_expr(c);
+            }
+            ExprContent::IndexExpr(i) => {
+                if i.list.inferred_type.as_ref().unwrap() == &*TYPE_STR {
+                    self.emit_str_index(&*i);
+                } else {
                 }
-
-                self.call(&c.function.id().name);
             }
             _ => (),
         }
