@@ -254,13 +254,13 @@ impl Emitter {
         }
     }
 
-    pub fn emit_string_add(&mut self, b: &BinaryExpr) {
-        self.emit_expression(&b.left);
+    pub fn emit_string_add(&mut self, expr: &BinaryExpr) {
+        self.emit_expression(&expr.left);
         // mov rsi,QWORD PTR [rax+0x10]
         self.emit(&[0x48, 0x8B, 0x70, 0x10]);
         self.emit_push_rax();
         self.emit_push_rsi();
-        self.emit_expression(&b.right);
+        self.emit_expression(&expr.right);
         self.emit_pop_rsi();
         // add rsi,QWORD PTR [rax+0x10]
         self.emit(&[0x48, 0x03, 0x70, 0x10]);
@@ -320,12 +320,14 @@ impl Emitter {
         self.emit_pop_rax();
     }
 
-    pub fn emit_list_add(&mut self, b: &BinaryExpr) {}
+    pub fn emit_list_add(&mut self, expr: &BinaryExpr) {
+        unimplemented!()
+    }
 
-    pub fn emit_str_compare(&mut self, b: &BinaryExpr) {
-        self.emit_expression(&b.left);
+    pub fn emit_str_compare(&mut self, expr: &BinaryExpr) {
+        self.emit_expression(&expr.left);
         self.emit_push_rax();
-        self.emit_expression(&b.right);
+        self.emit_expression(&expr.right);
         self.emit_pop_r11();
 
         /*
@@ -358,7 +360,7 @@ impl Emitter {
             0xC2, 0x01, 0x00, 0x00, 0x00, 0xEB, 0x03, 0x48, 0x31, 0xD2,
         ]);
 
-        if b.operator == BinaryOp::Ne {
+        if expr.operator == BinaryOp::Ne {
             // test rdx,rdx
             self.emit(&[0x48, 0x85, 0xD2]);
             // sete dl
@@ -373,22 +375,23 @@ impl Emitter {
         self.emit_pop_rax();
     }
 
-    pub fn emit_binary_expr(&mut self, b: &BinaryExpr) {
-        if b.operator == BinaryOp::Add && b.left.inferred_type.as_ref().unwrap() == &*TYPE_STR {
-            self.emit_string_add(b);
-        } else if b.operator == BinaryOp::Add
-            && b.left.inferred_type.as_ref().unwrap() != &*TYPE_INT
+    pub fn emit_binary_expr(&mut self, expr: &BinaryExpr) {
+        if expr.operator == BinaryOp::Add && expr.left.inferred_type.as_ref().unwrap() == &*TYPE_STR
         {
-            self.emit_list_add(b);
-        } else if (b.operator == BinaryOp::Eq || b.operator == BinaryOp::Ne)
-            && b.left.inferred_type.as_ref().unwrap() == &*TYPE_STR
+            self.emit_string_add(expr);
+        } else if expr.operator == BinaryOp::Add
+            && expr.left.inferred_type.as_ref().unwrap() != &*TYPE_INT
         {
-            self.emit_str_compare(b);
-        } else if b.operator == BinaryOp::Or || b.operator == BinaryOp::And {
-            self.emit_expression(&b.left);
+            self.emit_list_add(expr);
+        } else if (expr.operator == BinaryOp::Eq || expr.operator == BinaryOp::Ne)
+            && expr.left.inferred_type.as_ref().unwrap() == &*TYPE_STR
+        {
+            self.emit_str_compare(expr);
+        } else if expr.operator == BinaryOp::Or || expr.operator == BinaryOp::And {
+            self.emit_expression(&expr.left);
             // test rax,rax
             self.emit(&[0x48, 0x85, 0xC0]);
-            if b.operator == BinaryOp::Or {
+            if expr.operator == BinaryOp::Or {
                 // jne
                 self.emit(&[0x0f, 0x85]);
             } else {
@@ -397,16 +400,16 @@ impl Emitter {
             }
             let pos = self.pos();
             self.emit(&[0; 4]);
-            self.emit_expression(&b.right);
+            self.emit_expression(&expr.right);
             let delta = (self.pos() - pos - 4) as u32;
             self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
         } else {
-            self.emit_expression(&b.left);
+            self.emit_expression(&expr.left);
             self.emit_push_rax();
-            self.emit_expression(&b.right);
+            self.emit_expression(&expr.right);
             self.emit_pop_r11();
 
-            match b.operator {
+            match expr.operator {
                 BinaryOp::Add => {
                     // Note: swapped
                     // add rax,r11
@@ -459,7 +462,7 @@ impl Emitter {
                 | BinaryOp::Ge
                 | BinaryOp::Le
                 | BinaryOp::Gt => {
-                    let code = match b.operator {
+                    let code = match expr.operator {
                         BinaryOp::Eq => 0x4,
                         BinaryOp::Ne => 0x5,
                         BinaryOp::Lt => 0xc,
@@ -489,13 +492,13 @@ impl Emitter {
         }
     }
 
-    pub fn emit_call_expr(&mut self, c: &CallExpr) {
-        self.prepare_call(c.args.len());
+    pub fn emit_call_expr(&mut self, expr: &CallExpr) {
+        self.prepare_call(expr.args.len());
 
-        for (i, arg) in c.args.iter().enumerate() {
+        for (i, arg) in expr.args.iter().enumerate() {
             self.emit_expression(arg);
 
-            let param_type = &c
+            let param_type = &expr
                 .function
                 .id()
                 .inferred_type
@@ -528,13 +531,13 @@ impl Emitter {
             }
         }
 
-        self.call(&c.function.id().name);
+        self.call(&expr.function.id().name);
     }
 
-    pub fn emit_str_index(&mut self, i: &IndexExpr) {
-        self.emit_expression(&i.list);
+    pub fn emit_str_index(&mut self, expr: &IndexExpr) {
+        self.emit_expression(&expr.list);
         self.emit_push_rax();
-        self.emit_expression(&i.index);
+        self.emit_expression(&expr.index);
         self.emit_push_rax();
         self.prepare_call(2);
         // mov rdi,[rip+{STR_PROTOTYPE}]
@@ -560,6 +563,60 @@ impl Emitter {
         self.emit_pop_rax();
     }
 
+    pub fn emit_if_expr(&mut self, expr: &IfExpr, target_type: &ValueType) {
+        self.emit_expression(&expr.condition);
+        // test rax,rax
+        self.emit(&[0x48, 0x85, 0xC0]);
+        // je
+        self.emit(&[0x0f, 0x84]);
+        let pos_if = self.pos();
+        self.emit(&[0; 4]);
+
+        self.emit_expression(&expr.then_expr);
+        self.emit_coerce(&expr.then_expr.inferred_type.as_ref().unwrap(), target_type);
+
+        // jmp
+        self.emit(&[0xe9]);
+        let pos_else = self.pos();
+        self.emit(&[0; 4]);
+        let if_delta = self.pos() - pos_if - 4;
+        self.code[pos_if..pos_if + 4].copy_from_slice(&(if_delta as u32).to_le_bytes());
+
+        self.emit_expression(&expr.else_expr);
+        self.emit_coerce(&expr.else_expr.inferred_type.as_ref().unwrap(), target_type);
+
+        let else_delta = self.pos() - pos_else - 4;
+        self.code[pos_else..pos_else + 4].copy_from_slice(&(else_delta as u32).to_le_bytes());
+    }
+
+    pub fn emit_if_stmt(&mut self, stmt: &IfStmt) {
+        self.emit_expression(&stmt.condition);
+        // test rax,rax
+        self.emit(&[0x48, 0x85, 0xC0]);
+        // je
+        self.emit(&[0x0f, 0x84]);
+        let pos_if = self.pos();
+        self.emit(&[0; 4]);
+
+        for stmt in &stmt.then_body {
+            self.emit_statement(stmt);
+        }
+
+        // jmp
+        self.emit(&[0xe9]);
+        let pos_else = self.pos();
+        self.emit(&[0; 4]);
+        let if_delta = self.pos() - pos_if - 4;
+        self.code[pos_if..pos_if + 4].copy_from_slice(&(if_delta as u32).to_le_bytes());
+
+        for stmt in &stmt.else_body {
+            self.emit_statement(stmt);
+        }
+
+        let else_delta = self.pos() - pos_else - 4;
+        self.code[pos_else..pos_else + 4].copy_from_slice(&(else_delta as u32).to_le_bytes());
+    }
+
     pub fn emit_expression(&mut self, expression: &Expr) {
         match &expression.content {
             ExprContent::NoneLiteral(_) => {
@@ -583,9 +640,9 @@ impl Emitter {
             ExprContent::StringLiteral(s) => {
                 self.emit_string_literal(s);
             }
-            ExprContent::UnaryExpr(u) => {
-                self.emit_expression(&u.operand);
-                match u.operator {
+            ExprContent::UnaryExpr(expr) => {
+                self.emit_expression(&expr.operand);
+                match expr.operator {
                     UnaryOp::Negative => {
                         // neg rax
                         self.emit(&[0x48, 0xF7, 0xD8]);
@@ -598,19 +655,22 @@ impl Emitter {
                     }
                 }
             }
-            ExprContent::BinaryExpr(b) => {
-                self.emit_binary_expr(b);
+            ExprContent::BinaryExpr(expr) => {
+                self.emit_binary_expr(expr);
             }
-            ExprContent::CallExpr(c) => {
-                self.emit_call_expr(c);
+            ExprContent::CallExpr(expr) => {
+                self.emit_call_expr(expr);
             }
-            ExprContent::IndexExpr(i) => {
-                if i.list.inferred_type.as_ref().unwrap() == &*TYPE_STR {
-                    self.emit_str_index(&*i);
+            ExprContent::IndexExpr(expr) => {
+                if expr.list.inferred_type.as_ref().unwrap() == &*TYPE_STR {
+                    self.emit_str_index(&*expr);
                 } else {
                 }
             }
-            _ => (),
+            ExprContent::IfExpr(expr) => {
+                self.emit_if_expr(expr, expression.inferred_type.as_ref().unwrap())
+            }
+            _ => unimplemented!(),
         }
     }
 
@@ -624,7 +684,10 @@ impl Emitter {
                     self.emit_drop();
                 }
             }
-            _ => (),
+            Stmt::IfStmt(stmt) => {
+                self.emit_if_stmt(stmt);
+            }
+            _ => unimplemented!(),
         }
     }
 }
