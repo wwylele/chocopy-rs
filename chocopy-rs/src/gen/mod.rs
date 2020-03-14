@@ -114,6 +114,11 @@ impl Emitter {
         self.rsp_aligned = !self.rsp_aligned;
     }
 
+    pub fn emit_push_rcx(&mut self) {
+        self.emit(&[0x51]);
+        self.rsp_aligned = !self.rsp_aligned;
+    }
+
     pub fn emit_push_rdx(&mut self) {
         self.emit(&[0x52]);
         self.rsp_aligned = !self.rsp_aligned;
@@ -136,6 +141,11 @@ impl Emitter {
 
     pub fn emit_pop_rax(&mut self) {
         self.emit(&[0x58]);
+        self.rsp_aligned = !self.rsp_aligned;
+    }
+
+    pub fn emit_pop_rcx(&mut self) {
+        self.emit(&[0x59]);
         self.rsp_aligned = !self.rsp_aligned;
     }
 
@@ -320,8 +330,148 @@ impl Emitter {
         self.emit_pop_rax();
     }
 
-    pub fn emit_list_add(&mut self, expr: &BinaryExpr) {
-        unimplemented!()
+    pub fn emit_list_add_half(&mut self, source_element: &ValueType, target_element: &ValueType) {
+        // rax: destintion buffer
+        // rsi: source list object
+
+        // mov rcx,[rsi+16]
+        self.emit(&[0x48, 0x8B, 0x4E, 0x10]);
+        // test rcx,rcx
+        self.emit(&[0x48, 0x85, 0xC9]);
+        // je skip
+        self.emit(&[0x0F, 0x84]);
+        let pos_skip = self.pos();
+        self.emit(&[0; 4]);
+        // add rsi,24
+        self.emit(&[0x48, 0x83, 0xC6, 0x18]);
+        let pos_loop = self.pos();
+
+        self.emit_push_rax();
+
+        if source_element == &*TYPE_INT {
+            // mov eax,[rsi]
+            self.emit(&[0x8B, 0x06]);
+            // movsx rax,eax
+            self.emit(&[0x48, 0x63, 0xC0]);
+            // add rsi,4
+            self.emit(&[0x48, 0x83, 0xC6, 0x04]);
+        } else if source_element == &*TYPE_BOOL {
+            // mov al,[rsi]
+            self.emit(&[0x8A, 0x06]);
+            // movzx rax,al
+            self.emit(&[0x48, 0x0F, 0xB6, 0xC0]);
+            // add rsi,1
+            self.emit(&[0x48, 0x83, 0xC6, 0x01]);
+        } else {
+            // mov rax,[rsi]
+            self.emit(&[0x48, 0x8B, 0x06]);
+            // test rax,rax
+            self.emit(&[0x48, 0x85, 0xC0]);
+            // je
+            self.emit(&[0x74, 0x04]);
+            // incq [rax+8]
+            self.emit(&[0x48, 0xFF, 0x40, 0x08]);
+            // add rsi,8
+            self.emit(&[0x48, 0x83, 0xC6, 0x08]);
+        }
+
+        self.emit_push_rsi();
+        self.emit_push_rcx();
+        self.emit_coerce(source_element, target_element);
+        // mov r11,rax
+        self.emit(&[0x49, 0x89, 0xC3]);
+        self.emit_pop_rcx();
+        self.emit_pop_rsi();
+        self.emit_pop_rax();
+
+        if target_element == &*TYPE_INT {
+            // mov [rax],r11d
+            self.emit(&[0x44, 0x89, 0x18]);
+            // add rax,4
+            self.emit(&[0x48, 0x83, 0xC0, 0x04]);
+        } else if target_element == &*TYPE_BOOL {
+            // mov [rax],r11b
+            self.emit(&[0x44, 0x88, 0x18]);
+            // add rax,1
+            self.emit(&[0x48, 0x83, 0xC0, 0x01]);
+        } else {
+            // mov [rax],r11
+            self.emit(&[0x4C, 0x89, 0x18]);
+            // add rax,8
+            self.emit(&[0x48, 0x83, 0xC0, 0x08]);
+        }
+
+        // dec rcx
+        self.emit(&[0x48, 0xFF, 0xC9]);
+        // jne
+        self.emit(&[0x0F, 0x85]);
+        let loop_delta = -((self.pos() - pos_loop + 4) as i32);
+        self.emit(&loop_delta.to_le_bytes());
+
+        let skip_delta = (self.pos() - pos_skip - 4) as u32;
+        self.code[pos_skip..pos_skip + 4].copy_from_slice(&skip_delta.to_le_bytes());
+    }
+
+    pub fn emit_list_add(&mut self, expr: &BinaryExpr, target_element: &ValueType) {
+        let prototype = if target_element == &*TYPE_INT {
+            INT_LIST_PROTOTYPE
+        } else if target_element == &*TYPE_BOOL {
+            BOOL_LIST_PROTOTYPE
+        } else {
+            OBJECT_LIST_PROTOTYPE
+        };
+
+        self.emit_expression(&expr.left);
+        // mov rsi,QWORD PTR [rax+0x10]
+        self.emit(&[0x48, 0x8B, 0x70, 0x10]);
+        self.emit_push_rax();
+        self.emit_push_rsi();
+        self.emit_expression(&expr.right);
+        self.emit_pop_rsi();
+        // add rsi,QWORD PTR [rax+0x10]
+        self.emit(&[0x48, 0x03, 0x70, 0x10]);
+        self.emit_push_rax();
+
+        self.prepare_call(2);
+        // mov rdi,[rip+{_PROTOTYPE}]
+        self.emit(&[0x48, 0x8B, 0x3D]);
+        self.links.push(ProcedureLink {
+            pos: self.pos(),
+            to: prototype.to_owned(),
+        });
+        self.emit(&[0; 4]);
+        self.call(BUILTIN_ALLOC_OBJ);
+        self.emit_push_rax();
+        // add rax,24
+        self.emit(&[0x48, 0x83, 0xC0, 0x18]);
+
+        // mov rsi,[rsp+16]
+        self.emit(&[0x48, 0x8B, 0x74, 0x24, 0x10]);
+        let source_element = if let Some(ValueType::ListValueType(l)) = &expr.left.inferred_type {
+            &*l.element_type
+        } else {
+            panic!()
+        };
+        self.emit_list_add_half(source_element, target_element);
+
+        // mov rsi,[rsp+8]
+        self.emit(&[0x48, 0x8B, 0x74, 0x24, 0x08]);
+        let source_element = if let Some(ValueType::ListValueType(l)) = &expr.right.inferred_type {
+            &*l.element_type
+        } else {
+            panic!()
+        };
+        self.emit_list_add_half(source_element, target_element);
+
+        // mov rax,[rsp+8]
+        self.emit(&[0x48, 0x8B, 0x44, 0x24, 0x08]);
+        self.emit_drop();
+        // mov rax,[rsp+16]
+        self.emit(&[0x48, 0x8B, 0x44, 0x24, 0x10]);
+        self.emit_drop();
+        self.emit_pop_rax();
+        self.emit_pop_r11();
+        self.emit_pop_r11();
     }
 
     pub fn emit_str_compare(&mut self, expr: &BinaryExpr) {
@@ -375,14 +525,19 @@ impl Emitter {
         self.emit_pop_rax();
     }
 
-    pub fn emit_binary_expr(&mut self, expr: &BinaryExpr) {
+    pub fn emit_binary_expr(&mut self, expr: &BinaryExpr, target_type: &ValueType) {
         if expr.operator == BinaryOp::Add && expr.left.inferred_type.as_ref().unwrap() == &*TYPE_STR
         {
             self.emit_string_add(expr);
         } else if expr.operator == BinaryOp::Add
             && expr.left.inferred_type.as_ref().unwrap() != &*TYPE_INT
         {
-            self.emit_list_add(expr);
+            let target_element = if let ValueType::ListValueType(l) = &target_type {
+                &*l.element_type
+            } else {
+                panic!()
+            };
+            self.emit_list_add(expr, target_element);
         } else if (expr.operator == BinaryOp::Eq || expr.operator == BinaryOp::Ne)
             && expr.left.inferred_type.as_ref().unwrap() == &*TYPE_STR
         {
@@ -563,6 +718,45 @@ impl Emitter {
         self.emit_pop_rax();
     }
 
+    pub fn emit_list_index(&mut self, expr: &IndexExpr) {
+        self.emit_expression(&expr.list);
+        self.emit_push_rax();
+        self.emit_expression(&expr.index);
+        self.emit_pop_rsi();
+        let element_type = if let Some(ValueType::ListValueType(l)) = &expr.list.inferred_type {
+            &*l.element_type
+        } else {
+            panic!()
+        };
+
+        if element_type == &*TYPE_INT {
+            // mov eax,[rsi+rax*4+24]
+            self.emit(&[0x8B, 0x44, 0x86, 0x18]);
+            // movsx rax,eax
+            self.emit(&[0x48, 0x63, 0xC0]);
+        } else if element_type == &*TYPE_BOOL {
+            // mov al,[rsi+rax+24]
+            self.emit(&[0x8A, 0x44, 0x06, 0x18]);
+            // movzx rax,al
+            self.emit(&[0x48, 0x0F, 0xB6, 0xC0]);
+        } else {
+            // mov rax,[rsi+rax*8+24]
+            self.emit(&[0x48, 0x8B, 0x44, 0xC6, 0x18]);
+            // test rax,rax
+            self.emit(&[0x48, 0x85, 0xC0]);
+            // je
+            self.emit(&[0x74, 0x04]);
+            // incq [rax+8]
+            self.emit(&[0x48, 0xFF, 0x40, 0x08]);
+        }
+
+        self.emit_push_rax();
+        // mov rax,rsi
+        self.emit(&[0x48, 0x89, 0xF0]);
+        self.emit_drop();
+        self.emit_pop_rax();
+    }
+
     pub fn emit_if_expr(&mut self, expr: &IfExpr, target_type: &ValueType) {
         self.emit_expression(&expr.condition);
         // test rax,rax
@@ -617,6 +811,74 @@ impl Emitter {
         self.code[pos_else..pos_else + 4].copy_from_slice(&(else_delta as u32).to_le_bytes());
     }
 
+    pub fn emit_list_expr(&mut self, expr: &ListExpr, target_type: &ValueType) {
+        if target_type == &*TYPE_EMPTY {
+            self.prepare_call(2);
+            // mov rdi,[rip+{_PROTOTYPE}]
+            self.emit(&[0x48, 0x8B, 0x3D]);
+            self.links.push(ProcedureLink {
+                pos: self.pos(),
+                to: OBJECT_LIST_PROTOTYPE.to_owned(),
+            });
+            self.emit(&[0; 4]);
+            // mov rsi,{len}
+            self.emit(&[0x48, 0xc7, 0xc6]);
+            self.emit(&(expr.elements.len() as u32).to_le_bytes());
+            self.call(BUILTIN_ALLOC_OBJ);
+            return;
+        }
+
+        let element_type = if let ValueType::ListValueType(l) = &target_type {
+            &*l.element_type
+        } else {
+            panic!()
+        };
+
+        let prototype = if element_type == &*TYPE_INT {
+            INT_LIST_PROTOTYPE
+        } else if element_type == &*TYPE_BOOL {
+            BOOL_LIST_PROTOTYPE
+        } else {
+            OBJECT_LIST_PROTOTYPE
+        };
+
+        self.prepare_call(2);
+        // mov rdi,[rip+{_PROTOTYPE}]
+        self.emit(&[0x48, 0x8B, 0x3D]);
+        self.links.push(ProcedureLink {
+            pos: self.pos(),
+            to: prototype.to_owned(),
+        });
+        self.emit(&[0; 4]);
+        // mov rsi,{len}
+        self.emit(&[0x48, 0xc7, 0xc6]);
+        self.emit(&(expr.elements.len() as u32).to_le_bytes());
+        self.call(BUILTIN_ALLOC_OBJ);
+        self.emit_push_rax();
+
+        for (i, element) in expr.elements.iter().enumerate() {
+            self.emit_expression(element);
+            self.emit_coerce(element.inferred_type.as_ref().unwrap(), element_type);
+            // mov rdi,[rsp]
+            self.emit(&[0x48, 0x8B, 0x3C, 0x24]);
+            if element_type == &*TYPE_INT {
+                // mov [rdi+{}],eax
+                self.emit(&[0x89, 0x87]);
+                self.emit(&((i * 4 + 24) as u32).to_le_bytes());
+            } else if element_type == &*TYPE_BOOL {
+                // mov [rdi+{}],al
+                self.emit(&[0x88, 0x87]);
+                self.emit(&((i + 24) as u32).to_le_bytes());
+            } else {
+                // mov [rdi+{}],rax
+                self.emit(&[0x48, 0x89, 0x87]);
+                self.emit(&((i * 8 + 24) as u32).to_le_bytes());
+            }
+        }
+
+        self.emit_pop_rax();
+    }
+
     pub fn emit_expression(&mut self, expression: &Expr) {
         match &expression.content {
             ExprContent::NoneLiteral(_) => {
@@ -656,7 +918,7 @@ impl Emitter {
                 }
             }
             ExprContent::BinaryExpr(expr) => {
-                self.emit_binary_expr(expr);
+                self.emit_binary_expr(expr, expression.inferred_type.as_ref().unwrap());
             }
             ExprContent::CallExpr(expr) => {
                 self.emit_call_expr(expr);
@@ -665,13 +927,39 @@ impl Emitter {
                 if expr.list.inferred_type.as_ref().unwrap() == &*TYPE_STR {
                     self.emit_str_index(&*expr);
                 } else {
+                    self.emit_list_index(&*expr);
                 }
             }
             ExprContent::IfExpr(expr) => {
                 self.emit_if_expr(expr, expression.inferred_type.as_ref().unwrap())
             }
+            ExprContent::ListExpr(expr) => {
+                self.emit_list_expr(expr, expression.inferred_type.as_ref().unwrap());
+            }
             _ => unimplemented!(),
         }
+    }
+
+    pub fn emit_while_stmt(&mut self, stmt: &WhileStmt) {
+        let pos_start = self.pos();
+        self.emit_expression(&stmt.condition);
+        // test rax,rax
+        self.emit(&[0x48, 0x85, 0xC0]);
+        // je
+        self.emit(&[0x0f, 0x84]);
+        let pos_condition = self.pos();
+        self.emit(&[0; 4]);
+
+        for stmt in &stmt.body {
+            self.emit_statement(stmt);
+        }
+
+        // jmp
+        self.emit(&[0xe9]);
+        let back_delta = -((self.pos() + 4 - pos_start) as i32);
+        self.emit(&back_delta.to_le_bytes());
+        let if_delta = (self.pos() - pos_condition - 4) as u32;
+        self.code[pos_condition..pos_condition + 4].copy_from_slice(&if_delta.to_le_bytes());
     }
 
     pub fn emit_statement(&mut self, statement: &Stmt) {
@@ -686,6 +974,9 @@ impl Emitter {
             }
             Stmt::IfStmt(stmt) => {
                 self.emit_if_stmt(stmt);
+            }
+            Stmt::WhileStmt(stmt) => {
+                self.emit_while_stmt(stmt);
             }
             _ => unimplemented!(),
         }

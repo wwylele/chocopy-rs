@@ -7,35 +7,57 @@ static ALLOC_COUNTER: AtomicU64 = AtomicU64::new(0);
 #[repr(C)]
 pub struct Prototype {
     size: i64,
+    dtor: unsafe extern "C" fn(*mut u8),
 }
 
 #[no_mangle]
 #[export_name = "$BOOL_PROTOTYPE"]
-pub static BOOL_PROTOTYPE: Prototype = Prototype { size: 1 };
+pub static BOOL_PROTOTYPE: Prototype = Prototype {
+    size: 1,
+    dtor: dtor_noop,
+};
 
 #[no_mangle]
 #[export_name = "$INT_PROTOTYPE"]
-pub static INT_PROTOTYPE: Prototype = Prototype { size: 4 };
+pub static INT_PROTOTYPE: Prototype = Prototype {
+    size: 4,
+    dtor: dtor_noop,
+};
 
 #[no_mangle]
 #[export_name = "$STR_PROTOTYPE"]
-pub static STR_PROTOTYPE: Prototype = Prototype { size: -1 };
+pub static STR_PROTOTYPE: Prototype = Prototype {
+    size: -1,
+    dtor: dtor_noop,
+};
 
 #[no_mangle]
 #[export_name = "$OBJECT_PROTOTYPE"]
-pub static OBJECT_PROTOTYPE: Prototype = Prototype { size: 0 };
+pub static OBJECT_PROTOTYPE: Prototype = Prototype {
+    size: 0,
+    dtor: dtor_noop,
+};
 
 #[no_mangle]
 #[export_name = "$BOOL_LIST_PROTOTYPE"]
-pub static BOOL_LIST_PROTOTYPE: Prototype = Prototype { size: -1 };
+pub static BOOL_LIST_PROTOTYPE: Prototype = Prototype {
+    size: -1,
+    dtor: dtor_noop,
+};
 
 #[no_mangle]
 #[export_name = "$INT_LIST_PROTOTYPE"]
-pub static INT_LIST_PROTOTYPE: Prototype = Prototype { size: -4 };
+pub static INT_LIST_PROTOTYPE: Prototype = Prototype {
+    size: -4,
+    dtor: dtor_noop,
+};
 
 #[no_mangle]
 #[export_name = "$OBJECT_LIST_PROTOTYPE"]
-pub static OBJECT_LIST_PROTOTYPE: Prototype = Prototype { size: -8 };
+pub static OBJECT_LIST_PROTOTYPE: Prototype = Prototype {
+    size: -8,
+    dtor: dtor_list,
+};
 
 #[repr(C)]
 pub struct Object {
@@ -56,6 +78,23 @@ fn align_up(size: usize) -> usize {
         size
     } else {
         size + 8 - m
+    }
+}
+
+extern "C" fn dtor_noop(_: *mut u8) {}
+
+unsafe extern "C" fn dtor_list(pointer: *mut u8) {
+    let object = pointer as *mut ArrayObject;
+    let len = (*object).len;
+    let elements = object.offset(1) as *mut *mut Object;
+    for i in 0..len {
+        let element = *elements.offset(i as isize);
+        if !element.is_null() {
+            (*element).ref_count -= 1;
+            if (*element).ref_count == 0 {
+                free_obj(element as *mut u8);
+            }
+        }
     }
 }
 
@@ -86,6 +125,7 @@ pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mu
 pub unsafe extern "C" fn free_obj(pointer: *mut u8) {
     assert!((*(pointer as *mut Object)).ref_count == 0);
     let prototype = (*(pointer as *mut Object)).prototype;
+    ((*prototype).dtor)(pointer);
     let size = align_up(if (*prototype).size > 0 {
         size_of::<Object>() + (*prototype).size as usize
     } else {
@@ -98,6 +138,9 @@ pub unsafe extern "C" fn free_obj(pointer: *mut u8) {
 
 #[no_mangle]
 pub unsafe extern "C" fn len(pointer: *mut u8) -> u32 {
+    if pointer.is_null() {
+        runtime_error("len on None");
+    }
     let object = pointer as *mut ArrayObject;
     let prototype = (*object).object.prototype;
     if prototype != &BOOL_LIST_PROTOTYPE as *const Prototype
@@ -117,6 +160,9 @@ pub unsafe extern "C" fn len(pointer: *mut u8) -> u32 {
 
 #[no_mangle]
 pub unsafe extern "C" fn print(pointer: *mut u8) -> *mut u8 {
+    if pointer.is_null() {
+        runtime_error("print on None");
+    }
     let object = pointer as *mut Object;
     let prototype = (*object).prototype;
     if prototype == &INT_PROTOTYPE as *const Prototype {
