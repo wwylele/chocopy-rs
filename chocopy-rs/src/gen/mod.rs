@@ -1,6 +1,7 @@
 use crate::local_env::*;
 use crate::node::*;
 use faerie::*;
+use std::collections::HashMap;
 use std::convert::*;
 use std::io::Write;
 use std::str::FromStr;
@@ -17,6 +18,7 @@ const BUILTIN_ALLOC_OBJ: &'static str = "$alloc_obj";
 const BUILTIN_FREE_OBJ: &'static str = "$free_obj";
 const BUILTIN_REPORT_BROKEN_STACK: &'static str = "$report_broken_stack";
 const BUILTIN_CHOCOPY_MAIN: &'static str = "$chocopy_main";
+const GLOBAL_SECTION: &'static str = "$global";
 
 struct FuncSlot {
     link_name: String,
@@ -44,10 +46,12 @@ struct Procedure {
 
 struct CodeSet {
     procedures: Vec<Procedure>,
+    global_size: usize,
 }
 
-struct Emitter {
+struct Emitter<'a> {
     name: String,
+    storage_env: &'a mut StorageEnv,
     code: Vec<u8>,
     links: Vec<ProcedureLink>,
     rsp_aligned: bool,
@@ -55,10 +59,11 @@ struct Emitter {
     strings: Vec<(usize, String)>,
 }
 
-impl Emitter {
-    pub fn new(name: &str) -> Emitter {
+impl<'a> Emitter<'a> {
+    pub fn new(name: &str, storage_env: &'a mut StorageEnv) -> Emitter<'a> {
         Emitter {
             name: name.to_owned(),
+            storage_env,
             // push rbp; mov rbp,rsp
             code: vec![0x55, 0x48, 0x89, 0xe5],
             links: vec![],
@@ -242,6 +247,15 @@ impl Emitter {
         self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
     }
 
+    pub fn emit_clone(&mut self) {
+        // test rax,rax
+        self.emit(&[0x48, 0x85, 0xC0]);
+        // je
+        self.emit(&[0x74, 0x04]);
+        // incq [rax+8]
+        self.emit(&[0x48, 0xFF, 0x40, 0x08]);
+    }
+
     pub fn emit_string_literal(&mut self, s: &StringLiteral) {
         self.prepare_call(2);
         // mov rdi,[rip+{STR_PROTOTYPE}]
@@ -379,12 +393,7 @@ impl Emitter {
         } else {
             // mov rax,[rsi]
             self.emit(&[0x48, 0x8B, 0x06]);
-            // test rax,rax
-            self.emit(&[0x48, 0x85, 0xC0]);
-            // je
-            self.emit(&[0x74, 0x04]);
-            // incq [rax+8]
-            self.emit(&[0x48, 0xFF, 0x40, 0x08]);
+            self.emit_clone();
             // add rsi,8
             self.emit(&[0x48, 0x83, 0xC6, 0x08]);
         }
@@ -756,12 +765,7 @@ impl Emitter {
         } else {
             // mov rax,[rsi+rax*8+24]
             self.emit(&[0x48, 0x8B, 0x44, 0xC6, 0x18]);
-            // test rax,rax
-            self.emit(&[0x48, 0x85, 0xC0]);
-            // je
-            self.emit(&[0x74, 0x04]);
-            // incq [rax+8]
-            self.emit(&[0x48, 0xFF, 0x40, 0x08]);
+            self.emit_clone();
         }
 
         self.emit_push_rax();
@@ -893,8 +897,55 @@ impl Emitter {
         self.emit_pop_rax();
     }
 
+    pub fn emit_load_var(&mut self, identifier: &Identifier, target_type: &ValueType) {
+        let (offset, level) =
+            if let Some(EnvSlot::Var(v, _)) = self.storage_env.get(&identifier.name) {
+                (v.offset, v.level)
+            } else {
+                panic!()
+            };
+
+        if level == 0 {
+            if target_type == &*TYPE_INT {
+                // mov eax,[rip+{}]
+                self.emit(&[0x8B, 0x05]);
+                self.links.push(ProcedureLink {
+                    pos: self.pos(),
+                    to: GLOBAL_SECTION.to_owned(),
+                });
+                self.emit(&offset.to_le_bytes());
+                // movsx rax,eax
+                self.emit(&[0x48, 0x63, 0xC0]);
+            } else if target_type == &*TYPE_BOOL {
+                // mov al,[rip+{}]
+                self.emit(&[0x8A, 0x05]);
+                self.links.push(ProcedureLink {
+                    pos: self.pos(),
+                    to: GLOBAL_SECTION.to_owned(),
+                });
+                self.emit(&offset.to_le_bytes());
+                // movzx rax,al
+                self.emit(&[0x48, 0x0F, 0xB6, 0xC0]);
+            } else {
+                // mov rax,[rip+{}]
+                self.emit(&[0x48, 0x8B, 0x05]);
+                self.links.push(ProcedureLink {
+                    pos: self.pos(),
+                    to: GLOBAL_SECTION.to_owned(),
+                });
+                self.emit(&offset.to_le_bytes());
+                self.emit_clone();
+            }
+        } else {
+            unimplemented!()
+        }
+    }
+
     pub fn emit_expression(&mut self, expression: &Expr) {
         match &expression.content {
+            ExprContent::Identifier(identifier) => {
+                self.emit_load_var(identifier, expression.inferred_type.as_ref().unwrap());
+            }
             ExprContent::NoneLiteral(_) => {
                 // xor rax,rax
                 self.emit(&[0x48, 0x31, 0xC0]);
@@ -976,6 +1027,259 @@ impl Emitter {
         self.code[pos_condition..pos_condition + 4].copy_from_slice(&if_delta.to_le_bytes());
     }
 
+    pub fn emit_assign(&mut self, stmt: &AssignStmt) {
+        let source_type = stmt.value.inferred_type.as_ref().unwrap();
+        self.emit_expression(&stmt.value);
+        self.emit_push_rax();
+
+        for target in &stmt.targets {
+            let target_type = target.inferred_type.as_ref().unwrap();
+            match &target.content {
+                ExprContent::Identifier(identifier) => {
+                    let (offset, level) =
+                        if let Some(EnvSlot::Var(v, _)) = self.storage_env.get(&identifier.name) {
+                            (v.offset, v.level)
+                        } else {
+                            panic!()
+                        };
+
+                    if target_type != &*TYPE_INT && target_type != &*TYPE_BOOL {
+                        if level == 0 {
+                            // mov rax,[rip+{}]
+                            self.emit(&[0x48, 0x8B, 0x05]);
+                            self.links.push(ProcedureLink {
+                                pos: self.pos(),
+                                to: GLOBAL_SECTION.to_owned(),
+                            });
+                            self.emit(&offset.to_le_bytes());
+                        } else {
+                            unimplemented!();
+                        }
+                        self.emit_drop();
+                    }
+
+                    // mov rax,[rsp]
+                    self.emit(&[0x48, 0x8B, 0x04, 0x24]);
+                    if source_type != &*TYPE_INT && source_type != &*TYPE_BOOL {
+                        self.emit_clone();
+                    }
+                    self.emit_coerce(source_type, target_type);
+                    if level == 0 {
+                        if target_type == &*TYPE_INT {
+                            // mov [rip+{}],eax
+                            self.emit(&[0x89, 0x05]);
+                        } else if target_type == &*TYPE_BOOL {
+                            // mov [rip+{}],al
+                            self.emit(&[0x88, 0x05]);
+                        } else {
+                            // mov [rip+{}],rax
+                            self.emit(&[0x48, 0x89, 0x05]);
+                        }
+                        self.links.push(ProcedureLink {
+                            pos: self.pos(),
+                            to: GLOBAL_SECTION.to_owned(),
+                        });
+                        self.emit(&offset.to_le_bytes());
+                    } else {
+                        unimplemented!();
+                    }
+                }
+                ExprContent::IndexExpr(expr) => {
+                    self.emit_expression(&expr.list);
+                    self.emit_push_rax();
+                    self.emit_expression(&expr.index);
+                    // mov rsi,[rsp]
+                    self.emit(&[0x48, 0x8B, 0x34, 0x24]);
+
+                    if target_type == &*TYPE_INT {
+                        // lea rsi,[rsi+rax*4+24]
+                        self.emit(&[0x48, 0x8D, 0x74, 0x86, 0x18]);
+                        self.emit_push_rsi();
+                    } else if target_type == &*TYPE_BOOL {
+                        // lea rsi,[rsi+rax+24]
+                        self.emit(&[0x48, 0x8D, 0x74, 0x06, 0x18]);
+                        self.emit_push_rsi();
+                    } else {
+                        // lea rsi,[rsi+rax*8+24]
+                        self.emit(&[0x48, 0x8D, 0x74, 0xC6, 0x18]);
+                        // mov rax,[rsi]
+                        self.emit(&[0x48, 0x8B, 0x06]);
+                        self.emit_push_rsi();
+                        self.emit_drop();
+                    }
+
+                    // mov rax,[rsp+16]
+                    self.emit(&[0x48, 0x8B, 0x44, 0x24, 0x10]);
+                    if source_type != &*TYPE_INT && source_type != &*TYPE_BOOL {
+                        self.emit_clone();
+                    }
+                    self.emit_coerce(source_type, target_type);
+                    self.emit_pop_rsi();
+
+                    if target_type == &*TYPE_INT {
+                        // mov [rsi],eax
+                        self.emit(&[0x89, 0x06]);
+                    } else if target_type == &*TYPE_BOOL {
+                        // mov [rsi],al
+                        self.emit(&[0x88, 0x06]);
+                    } else {
+                        // mov [rsi],rax
+                        self.emit(&[0x48, 0x89, 0x06]);
+                    }
+
+                    self.emit_pop_rax();
+                    self.emit_drop();
+                }
+                ExprContent::MemberExpr(_expr) => unimplemented!(),
+                _ => panic!(),
+            }
+        }
+
+        self.emit_pop_rax();
+        if source_type != &*TYPE_INT && source_type != &*TYPE_BOOL {
+            self.emit_drop();
+        }
+    }
+
+    pub fn emit_for_stmt(&mut self, stmt: &ForStmt) {
+        //// Compute the iterable
+        self.emit_expression(&stmt.iterable);
+        self.emit_push_rax();
+        // xor rax,rax
+        self.emit(&[0x48, 0x31, 0xC0]);
+
+        let pos_start = self.pos();
+        //// Check the index range
+        // mov rsi,[rsp]
+        self.emit(&[0x48, 0x8B, 0x34, 0x24]);
+        // cmp rax,[rsi+16]
+        self.emit(&[0x48, 0x3B, 0x46, 0x10]);
+        // je
+        self.emit(&[0x0f, 0x84]);
+        let pos_condition = self.pos();
+        self.emit(&[0; 4]);
+
+        self.emit_push_rax();
+
+        //// Compute the element
+        let iterable_type = stmt.iterable.inferred_type.as_ref().unwrap();
+        let source_type = if iterable_type == &*TYPE_STR {
+            self.prepare_call(2);
+            // mov rdi,[rip+{STR_PROTOTYPE}]
+            self.emit(&[0x48, 0x8B, 0x3D]);
+            self.links.push(ProcedureLink {
+                pos: self.pos(),
+                to: STR_PROTOTYPE.to_owned(),
+            });
+            self.emit(&[0; 4]);
+            // mov rsi,1
+            self.emit(&[0x48, 0xc7, 0xc6, 0x01, 0x00, 0x00, 0x00]);
+            self.call(BUILTIN_ALLOC_OBJ);
+            // mov rsi,[rsp]
+            self.emit(&[0x48, 0x8B, 0x34, 0x24]);
+            // mov r11,[rsp+8]
+            self.emit(&[0x4C, 0x8B, 0x5C, 0x24, 0x08]);
+            // mov r10b,[r11+rsi+24]
+            self.emit(&[0x45, 0x8A, 0x54, 0x33, 0x18]);
+            // mov [rax+24],r10b
+            self.emit(&[0x44, 0x88, 0x50, 0x18]);
+            &*TYPE_STR
+        } else {
+            let element_type = if let ValueType::ListValueType(l) = iterable_type {
+                &*l.element_type
+            } else {
+                panic!()
+            };
+
+            if element_type == &*TYPE_INT {
+                // mov eax,[rsi+rax*4+24]
+                self.emit(&[0x8B, 0x44, 0x86, 0x18]);
+                // movsx rax,eax
+                self.emit(&[0x48, 0x63, 0xC0]);
+            } else if element_type == &*TYPE_BOOL {
+                // mov al,[rsi+rax+24]
+                self.emit(&[0x8A, 0x44, 0x06, 0x18]);
+                // movzx rax,al
+                self.emit(&[0x48, 0x0F, 0xB6, 0xC0]);
+            } else {
+                // mov rax,[rsi+rax*8+24]
+                self.emit(&[0x48, 0x8B, 0x44, 0xC6, 0x18]);
+                self.emit_clone();
+            }
+
+            element_type
+        };
+
+        let target_type = stmt.identifier.id().inferred_type.as_ref().unwrap();
+
+        let (offset, level) =
+            if let Some(EnvSlot::Var(v, _)) = self.storage_env.get(&stmt.identifier.id().name) {
+                (v.offset, v.level)
+            } else {
+                panic!()
+            };
+
+        //// Drop the previous element
+        if target_type != &*TYPE_INT && target_type != &*TYPE_BOOL {
+            self.emit_push_rax();
+            if level == 0 {
+                // mov rax,[rip+{}]
+                self.emit(&[0x48, 0x8B, 0x05]);
+                self.links.push(ProcedureLink {
+                    pos: self.pos(),
+                    to: GLOBAL_SECTION.to_owned(),
+                });
+                self.emit(&offset.to_le_bytes());
+            } else {
+                unimplemented!();
+            }
+            self.emit_drop();
+            self.emit_pop_rax();
+        }
+
+        //// Assign the element
+        self.emit_coerce(source_type, target_type);
+        if level == 0 {
+            if target_type == &*TYPE_INT {
+                // mov [rip+{}],eax
+                self.emit(&[0x89, 0x05]);
+            } else if target_type == &*TYPE_BOOL {
+                // mov [rip+{}],al
+                self.emit(&[0x88, 0x05]);
+            } else {
+                // mov [rip+{}],rax
+                self.emit(&[0x48, 0x89, 0x05]);
+            }
+            self.links.push(ProcedureLink {
+                pos: self.pos(),
+                to: GLOBAL_SECTION.to_owned(),
+            });
+            self.emit(&offset.to_le_bytes());
+        } else {
+            unimplemented!();
+        }
+
+        //// Execute the loop body
+        for stmt in &stmt.body {
+            self.emit_statement(stmt);
+        }
+
+        //// Increase the index and loop back
+        self.emit_pop_rax();
+        // inc rax
+        self.emit(&[0x48, 0xFF, 0xC0]);
+        // jmp
+        self.emit(&[0xe9]);
+        let back_delta = -((self.pos() + 4 - pos_start) as i32);
+        self.emit(&back_delta.to_le_bytes());
+        let if_delta = (self.pos() - pos_condition - 4) as u32;
+        self.code[pos_condition..pos_condition + 4].copy_from_slice(&if_delta.to_le_bytes());
+
+        //// Drop the iterable
+        self.emit_pop_rax();
+        self.emit_drop();
+    }
+
     pub fn emit_statement(&mut self, statement: &Stmt) {
         match statement {
             Stmt::ExprStmt(e) => {
@@ -986,26 +1290,147 @@ impl Emitter {
                     self.emit_drop();
                 }
             }
+            Stmt::AssignStmt(stmt) => {
+                self.emit_assign(stmt);
+            }
             Stmt::IfStmt(stmt) => {
                 self.emit_if_stmt(stmt);
             }
             Stmt::WhileStmt(stmt) => {
                 self.emit_while_stmt(stmt);
             }
+            Stmt::ForStmt(stmt) => {
+                self.emit_for_stmt(stmt);
+            }
             _ => unimplemented!(),
+        }
+    }
+
+    pub fn emit_global_var_init(&mut self, decl: &VarDef) {
+        let offset = if let Some(EnvSlot::Var(v, _)) =
+            self.storage_env.get(&decl.var.tv().identifier.id().name)
+        {
+            assert!(v.level == 0);
+            v.offset
+        } else {
+            panic!()
+        };
+
+        match &decl.value.content {
+            LiteralContent::NoneLiteral(_) => {
+                // xor rax,rax
+                self.emit(&[0x48, 0x31, 0xC0]);
+            }
+            LiteralContent::IntegerLiteral(i) => {
+                // mov rax,{i}
+                self.emit(&[0x48, 0xc7, 0xc0]);
+                self.emit(&i.value.to_le_bytes());
+            }
+            LiteralContent::BooleanLiteral(b) => {
+                if b.value {
+                    // mov rax,1
+                    self.emit(&[0x48, 0xC7, 0xC0, 0x01, 0x00, 0x00, 0x00]);
+                } else {
+                    // xor rax,rax
+                    self.emit(&[0x48, 0x31, 0xC0]);
+                }
+            }
+            LiteralContent::StringLiteral(s) => {
+                self.emit_string_literal(s);
+            }
+        }
+
+        let target_type = ValueType::from_annotation(&decl.var.tv().type_);
+        self.emit_coerce(decl.value.inferred_type.as_ref().unwrap(), &target_type);
+
+        if target_type == *TYPE_INT {
+            // mov [rip+{}],eax
+            self.emit(&[0x89, 0x05]);
+        } else if target_type == *TYPE_BOOL {
+            // mov [rip+{}],al
+            self.emit(&[0x88, 0x05]);
+        } else {
+            // mov [rip+{}],rax
+            self.emit(&[0x48, 0x89, 0x05]);
+        }
+        self.links.push(ProcedureLink {
+            pos: self.pos(),
+            to: GLOBAL_SECTION.to_owned(),
+        });
+        self.emit(&offset.to_le_bytes());
+    }
+
+    pub fn emit_global_var_drop(&mut self, decl: &VarDef) {
+        let offset = if let Some(EnvSlot::Var(v, _)) =
+            self.storage_env.get(&decl.var.tv().identifier.id().name)
+        {
+            assert!(v.level == 0);
+            v.offset
+        } else {
+            panic!()
+        };
+
+        let target_type = ValueType::from_annotation(&decl.var.tv().type_);
+        if target_type != *TYPE_INT && target_type != *TYPE_BOOL {
+            // mov rax,[rip+{}]
+            self.emit(&[0x48, 0x8B, 0x05]);
+            self.links.push(ProcedureLink {
+                pos: self.pos(),
+                to: GLOBAL_SECTION.to_owned(),
+            });
+            self.emit(&offset.to_le_bytes());
+            self.emit_drop();
         }
     }
 }
 
 fn gen_code_set(ast: Ast) -> CodeSet {
-    let mut main_code = Emitter::new(BUILTIN_CHOCOPY_MAIN);
+    let mut globals = HashMap::new();
+    let mut global_offset = 0;
+    for declaration in &ast.program().declarations {
+        if let Declaration::VarDef(v) = declaration {
+            let target_type = ValueType::from_annotation(&v.var.tv().type_);
+            let size = if target_type == *TYPE_INT {
+                4
+            } else if target_type == *TYPE_BOOL {
+                1
+            } else {
+                8
+            };
+            global_offset += (size - global_offset % size) % size;
+            globals.insert(
+                v.var.tv().identifier.id().name.clone(),
+                LocalSlot::Var(VarSlot {
+                    offset: global_offset,
+                    level: 0,
+                }),
+            );
+            global_offset += size;
+        }
+    }
+
+    let mut storage_env = StorageEnv::new(globals);
+
+    let mut main_code = Emitter::new(BUILTIN_CHOCOPY_MAIN, &mut storage_env);
 
     // mov rax,0x12345678
     main_code.emit(&[0x48, 0xC7, 0xC0, 0x78, 0x56, 0x34, 0x12]);
     main_code.emit_push_rax();
 
+    for declaration in &ast.program().declarations {
+        if let Declaration::VarDef(v) = declaration {
+            main_code.emit_global_var_init(v);
+        }
+    }
+
     for statement in &ast.program().statements {
         main_code.emit_statement(statement);
+    }
+
+    for declaration in &ast.program().declarations {
+        if let Declaration::VarDef(v) = declaration {
+            main_code.emit_global_var_drop(v);
+        }
     }
 
     main_code.emit_pop_rax();
@@ -1029,6 +1454,7 @@ fn gen_code_set(ast: Ast) -> CodeSet {
 
     CodeSet {
         procedures: vec![main_procedure],
+        global_size: global_offset as usize,
     }
 }
 
@@ -1061,6 +1487,8 @@ pub fn gen(ast: Ast, path: &str) -> Result<(), Box<dyn std::error::Error>> {
             ("input", Decl::function_import().into()),
             // main
             (BUILTIN_CHOCOPY_MAIN, Decl::function().global().into()),
+            // global
+            (GLOBAL_SECTION, Decl::data().writable().into()),
         ]
         .iter()
         .cloned(),
@@ -1077,6 +1505,8 @@ pub fn gen(ast: Ast, path: &str) -> Result<(), Box<dyn std::error::Error>> {
             })?;
         }
     }
+
+    obj.define(GLOBAL_SECTION, vec![0; code_set.global_size])?;
 
     let obj_file = std::fs::File::create(&obj_path)?;
     obj.write(obj_file)?;

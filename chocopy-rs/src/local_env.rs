@@ -29,7 +29,7 @@ pub enum LocalSlot<F, V> {
     Global,
 }
 
-impl<F: Clone, V: Clone> LocalEnv<F, V> {
+impl<F, V> LocalEnv<F, V> {
     pub fn new(base: HashMap<String, LocalSlot<F, V>>) -> LocalEnv<F, V> {
         LocalEnv(vec![base])
     }

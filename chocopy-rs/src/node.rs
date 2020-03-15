@@ -828,6 +828,10 @@ pub enum TypedId {
 }
 
 impl TypedId {
+    pub fn id(&self) -> &TypedIdentifier {
+        let TypedId::Identifier(id) = self;
+        id
+    }
     pub fn id_mut(&mut self) -> &mut TypedIdentifier {
         let TypedId::Identifier(id) = self;
         id
