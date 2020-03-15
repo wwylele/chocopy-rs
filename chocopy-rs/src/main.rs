@@ -1,5 +1,6 @@
 mod check;
 mod gen;
+mod local_env;
 mod location;
 mod node;
 mod parse;
@@ -179,7 +180,7 @@ mod test {
                         println!("\x1b[32mOK\x1b[0m");
                     } else {
                         println!("\x1b[31mError\x1b[0m");
-                        //passed = false;
+                        passed = false;
                     }
 
                     case += 1
@@ -188,5 +189,6 @@ mod test {
                 std::fs::remove_file(exe_path).unwrap();
             }
         }
+        assert_eq!(passed, true);
     }
 }

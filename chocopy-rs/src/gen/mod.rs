@@ -1,3 +1,4 @@
+use crate::local_env::*;
 use crate::node::*;
 use faerie::*;
 use std::convert::*;
@@ -16,6 +17,19 @@ const BUILTIN_ALLOC_OBJ: &'static str = "$alloc_obj";
 const BUILTIN_FREE_OBJ: &'static str = "$free_obj";
 const BUILTIN_REPORT_BROKEN_STACK: &'static str = "$report_broken_stack";
 const BUILTIN_CHOCOPY_MAIN: &'static str = "$chocopy_main";
+
+struct FuncSlot {
+    link_name: String,
+    level: u32, // 0 = global function
+}
+
+struct VarSlot {
+    offset: i32, // relative to global seciton or rbp
+    level: u32,  // 0 = global variable
+}
+
+type StorageSlot = LocalSlot<FuncSlot, VarSlot>;
+type StorageEnv = LocalEnv<FuncSlot, VarSlot>;
 
 struct ProcedureLink {
     pos: usize,

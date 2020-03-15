@@ -1,3 +1,4 @@
+use crate::local_env::*;
 use crate::location::*;
 use enum_dispatch::*;
 use lazy_static::*;
@@ -5,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::convert::*;
 use std::fmt::{self, Display, Formatter};
+
+pub type TypeLocalEnv = LocalEnv<FuncType, ValueType>;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
@@ -42,14 +45,6 @@ pub struct ClassInfo {
     pub items: HashMap<String, Type>,
 }
 
-pub enum EnvSlot {
-    Local(ValueType),
-    Func(FuncType),
-    NonLocal,
-    Global,
-}
-
-pub struct LocalEnv(pub Vec<HashMap<String, EnvSlot>>);
 pub struct ClassEnv(pub HashMap<String, ClassInfo>);
 
 #[enum_dispatch(Node)]
@@ -59,7 +54,7 @@ pub trait Node {
     fn analyze(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType>;
@@ -71,7 +66,7 @@ macro_rules! impl_default_analyze {
             fn analyze_impl(
                 &mut self,
                 _: &mut Vec<Error>,
-                _: &LocalEnv,
+                _: &TypeLocalEnv,
                 _: &ClassEnv,
                 _: Option<&ValueType>,
             ) -> Option<ValueType> {
@@ -95,7 +90,7 @@ macro_rules! impl_node {
             fn analyze(
                 &mut self,
                 errors: &mut Vec<Error>,
-                o: &mut LocalEnv,
+                o: &mut TypeLocalEnv,
                 m: &ClassEnv,
                 r: Option<&ValueType>,
             ) -> Option<ValueType> {
@@ -339,7 +334,7 @@ impl Node for Expr {
     fn analyze(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -394,12 +389,6 @@ pub enum ExprContent {
     NoneLiteral(NoneLiteral),
     StringLiteral(StringLiteral),
     UnaryExpr(Box<UnaryExpr>),
-
-    // For gen only
-    #[serde(skip)]
-    AllocSlot(AllocSlot),
-    #[serde(skip)]
-    MemberSlot(Box<MemberSlot>),
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -636,7 +625,7 @@ impl Node for Literal {
     fn analyze(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -705,19 +694,12 @@ impl_default_analyze!(TypedMemberExpr);
 #[serde(tag = "kind", deny_unknown_fields)]
 pub enum Method {
     MemberExpr(TypedMemberExpr),
-
-    // For gen only
-    #[serde(skip)]
-    MethodSlot(MethodSlot),
 }
 
 impl Method {
     pub fn member_mut(&mut self) -> &mut TypedMemberExpr {
-        if let Method::MemberExpr(member) = self {
-            member
-        } else {
-            panic!()
-        }
+        let Method::MemberExpr(member) = self;
+        member
     }
 }
 
@@ -843,19 +825,12 @@ impl TypeAnnotation {
 #[serde(tag = "kind", deny_unknown_fields)]
 pub enum TypedId {
     Identifier(TypedIdentifier),
-
-    // For gen only
-    #[serde(skip)]
-    AllocSlot(AllocSlot),
 }
 
 impl TypedId {
     pub fn id_mut(&mut self) -> &mut TypedIdentifier {
-        if let TypedId::Identifier(id) = self {
-            id
-        } else {
-            panic!()
-        }
+        let TypedId::Identifier(id) = self;
+        id
     }
 }
 
@@ -971,56 +946,6 @@ pub struct WhileStmt {
 }
 
 impl_node!(WhileStmt);
-
-pub trait GenNode {}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-enum AllocSlot {
-    Global(usize),
-    Stack {
-        nested_level: usize,
-        rbp_offset: isize,
-    },
-}
-
-impl GenNode for AllocSlot {}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-struct MemberSlot {
-    object: Expr,
-    slot: usize,
-}
-
-impl GenNode for MemberSlot {}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-struct MethodSlot {
-    object: Expr,
-    slot: usize,
-}
-
-impl GenNode for MethodSlot {}
-
-impl<T> Node for T
-where
-    T: GenNode,
-{
-    fn base(&self) -> &NodeBase {
-        panic!()
-    }
-    fn base_mut(&mut self) -> &mut NodeBase {
-        panic!()
-    }
-    fn analyze(
-        &mut self,
-        _errors: &mut Vec<Error>,
-        _o: &mut LocalEnv,
-        _m: &ClassEnv,
-        _r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        panic!()
-    }
-}
 
 lazy_static! {
     pub static ref TYPE_OBJECT: ValueType = ValueType::ClassValueType(ClassValueType {

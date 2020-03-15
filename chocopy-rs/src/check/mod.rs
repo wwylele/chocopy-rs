@@ -1,8 +1,8 @@
 mod analyze;
 mod class_env;
 mod error;
-mod local_env;
 
+use crate::local_env::*;
 use crate::node::*;
 use error::*;
 use std::collections::{HashMap, HashSet};
@@ -344,24 +344,24 @@ pub fn check(mut ast: Ast) -> Ast {
         }
     }
 
-    let mut global_env: HashMap<String, EnvSlot> = HashMap::new();
+    let mut global_env: HashMap<String, LocalSlot<FuncType, ValueType>> = HashMap::new();
     global_env.insert(
         "print".to_owned(),
-        EnvSlot::Func(FuncType {
+        LocalSlot::Func(FuncType {
             parameters: vec![TYPE_OBJECT.clone()],
             return_type: TYPE_NONE.clone(),
         }),
     );
     global_env.insert(
         "input".to_owned(),
-        EnvSlot::Func(FuncType {
+        LocalSlot::Func(FuncType {
             parameters: vec![],
             return_type: TYPE_STR.clone(),
         }),
     );
     global_env.insert(
         "len".to_owned(),
-        EnvSlot::Func(FuncType {
+        LocalSlot::Func(FuncType {
             parameters: vec![TYPE_OBJECT.clone()],
             return_type: TYPE_INT.clone(),
         }),
@@ -375,7 +375,7 @@ pub fn check(mut ast: Ast) -> Ast {
             check_func(f, &mut errors, &classes, &globals, &HashSet::new());
             global_env.insert(
                 f.name.id().name.clone(),
-                EnvSlot::Func(FuncType {
+                LocalSlot::Func(FuncType {
                     parameters: f
                         .params
                         .iter()
@@ -393,7 +393,7 @@ pub fn check(mut ast: Ast) -> Ast {
             let name = &c.name.id().name;
             global_env.insert(
                 name.clone(),
-                EnvSlot::Func(FuncType {
+                LocalSlot::Func(FuncType {
                     parameters: vec![],
                     return_type: ValueType::ClassValueType(ClassValueType {
                         class_name: name.clone(),
@@ -405,7 +405,7 @@ pub fn check(mut ast: Ast) -> Ast {
             let name = &tv.identifier.id().name;
             global_env.insert(
                 name.clone(),
-                EnvSlot::Local(ValueType::from_annotation(&tv.type_)),
+                LocalSlot::Var(ValueType::from_annotation(&tv.type_)),
             );
         }
     }
@@ -414,7 +414,7 @@ pub fn check(mut ast: Ast) -> Ast {
     // semantic rules: 8, 10
     // and type checking
     if errors.is_empty() {
-        let mut env = LocalEnv(vec![global_env]);
+        let mut env = LocalEnv::new(global_env);
         ast.program_mut()
             .analyze(&mut errors, &mut env, &ClassEnv(classes), None);
     }

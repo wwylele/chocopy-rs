@@ -1,5 +1,5 @@
 use super::error::*;
-use super::local_env::*;
+use crate::local_env::*;
 use crate::node::*;
 use std::collections::HashMap;
 use std::convert::*;
@@ -9,18 +9,18 @@ impl Identifier {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         _m: &ClassEnv,
         _r: Option<&ValueType>,
     ) -> Option<ValueType> {
         match o.get(&self.name) {
-            None | Some((Type::FuncType(_), _)) => {
+            None | Some(EnvSlot::Func(_)) => {
                 let msg = error_variable(&self.name);
                 self.base_mut().error_msg = Some(msg);
                 errors.push(error_from(self));
                 Some(TYPE_OBJECT.clone())
             }
-            Some((t, _)) => Some(t.try_into().unwrap()),
+            Some(EnvSlot::Var(t, _)) => Some(t.clone()),
         }
     }
 }
@@ -29,7 +29,7 @@ impl AssignStmt {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -39,7 +39,7 @@ impl AssignStmt {
         for i in 0..self.targets.len() {
             let left: ValueType = self.targets[i].analyze(errors, o, m, r).unwrap();
             if let ExprContent::Identifier(Identifier { name, .. }) = &self.targets[i].content {
-                if let Some((_, Assignable(false))) = o.get(name) {
+                if let Some(EnvSlot::Var(_, Assignable(false))) = o.get(name) {
                     let msg = error_nonlocal_assign(name);
                     self.targets[i].base_mut().error_msg = Some(msg);
                     errors.push(error_from(&self.targets[i]));
@@ -73,7 +73,7 @@ impl VarDef {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -92,7 +92,7 @@ impl ExprStmt {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -104,7 +104,7 @@ impl BooleanLiteral {
     pub fn analyze_impl(
         &mut self,
         _errors: &mut Vec<Error>,
-        _o: &mut LocalEnv,
+        _o: &mut TypeLocalEnv,
         _m: &ClassEnv,
         _r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -116,7 +116,7 @@ impl IntegerLiteral {
     pub fn analyze_impl(
         &mut self,
         _errors: &mut Vec<Error>,
-        _o: &mut LocalEnv,
+        _o: &mut TypeLocalEnv,
         _m: &ClassEnv,
         _r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -128,7 +128,7 @@ impl StringLiteral {
     pub fn analyze_impl(
         &mut self,
         _errors: &mut Vec<Error>,
-        _o: &mut LocalEnv,
+        _o: &mut TypeLocalEnv,
         _m: &ClassEnv,
         _r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -140,7 +140,7 @@ impl NoneLiteral {
     pub fn analyze_impl(
         &mut self,
         _errors: &mut Vec<Error>,
-        _o: &mut LocalEnv,
+        _o: &mut TypeLocalEnv,
         _m: &ClassEnv,
         _r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -152,7 +152,7 @@ impl UnaryExpr {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -182,7 +182,7 @@ impl BinaryExpr {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -286,7 +286,7 @@ impl IfExpr {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -306,7 +306,7 @@ impl ListExpr {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -327,7 +327,7 @@ impl IndexExpr {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -358,7 +358,7 @@ impl MemberExpr {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -398,7 +398,7 @@ impl CallExpr {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -410,7 +410,7 @@ impl CallExpr {
 
         let id = self.function.id_mut();
         let function = match o.get(&id.name) {
-            Some((Type::FuncType(f), _)) => f,
+            Some(EnvSlot::Func(f)) => f,
             _ => {
                 let msg = error_function(&id.name);
                 self.base_mut().error_msg = Some(msg);
@@ -447,7 +447,7 @@ impl MethodCallExpr {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -505,7 +505,7 @@ impl ReturnStmt {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -539,7 +539,7 @@ impl ReturnStmt {
 fn analyze(
     statements: &mut [Stmt],
     errors: &mut Vec<Error>,
-    o: &mut LocalEnv,
+    o: &mut TypeLocalEnv,
     m: &ClassEnv,
     r: Option<&ValueType>,
 ) {
@@ -552,7 +552,7 @@ impl IfStmt {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -574,7 +574,7 @@ impl WhileStmt {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -595,7 +595,7 @@ impl ForStmt {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -616,8 +616,8 @@ impl ForStmt {
         if let Some(element_type) = element_type {
             let id = self.identifier.id_mut();
             let variable = match o.get(&id.name) {
-                None | Some((Type::FuncType(_), _)) => None,
-                Some((t, assignable)) => Some((t.try_into().unwrap(), assignable)),
+                None | Some(EnvSlot::Func(_)) => None,
+                Some(EnvSlot::Var(t, assignable)) => Some((t.clone(), assignable)),
             };
 
             if let Some((variable, Assignable(assignable))) = variable {
@@ -650,17 +650,17 @@ impl FuncDef {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
-        let frame: HashMap<String, EnvSlot> = self
+        let frame: HashMap<String, LocalSlot<FuncType, ValueType>> = self
             .declarations
             .iter()
             .map(|decl| match decl {
                 Declaration::FuncDef(f) => (
                     f.name.id().name.clone(),
-                    EnvSlot::Func(FuncType {
+                    LocalSlot::Func(FuncType {
                         parameters: f
                             .params
                             .iter()
@@ -673,18 +673,18 @@ impl FuncDef {
                     let tv = v.var.tv();
                     (
                         tv.identifier.id().name.clone(),
-                        EnvSlot::Local(ValueType::from_annotation(&tv.type_)),
+                        LocalSlot::Var(ValueType::from_annotation(&tv.type_)),
                     )
                 }
-                Declaration::GlobalDecl(v) => (v.variable.id().name.clone(), EnvSlot::Global),
-                Declaration::NonLocalDecl(v) => (v.variable.id().name.clone(), EnvSlot::NonLocal),
+                Declaration::GlobalDecl(v) => (v.variable.id().name.clone(), LocalSlot::Global),
+                Declaration::NonLocalDecl(v) => (v.variable.id().name.clone(), LocalSlot::NonLocal),
                 _ => panic!(),
             })
             .chain(self.params.iter().map(|param| {
                 let tv = param.tv();
                 (
                     tv.identifier.id().name.clone(),
-                    EnvSlot::Local(ValueType::from_annotation(&tv.type_)),
+                    LocalSlot::Var(ValueType::from_annotation(&tv.type_)),
                 )
             }))
             .collect();
@@ -709,7 +709,7 @@ impl ClassDef {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
@@ -725,7 +725,7 @@ impl Program {
     pub fn analyze_impl(
         &mut self,
         errors: &mut Vec<Error>,
-        o: &mut LocalEnv,
+        o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
     ) -> Option<ValueType> {
