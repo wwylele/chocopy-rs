@@ -30,7 +30,6 @@ struct VarSlot {
     level: u32,  // 0 = global variable
 }
 
-type StorageSlot = LocalSlot<FuncSlot, VarSlot>;
 type StorageEnv = LocalEnv<FuncSlot, VarSlot>;
 
 struct ProcedureLink {
@@ -52,6 +51,8 @@ struct CodeSet {
 struct Emitter<'a> {
     name: String,
     storage_env: &'a mut StorageEnv,
+    clean_up_list: &'a [i32], // offsets relative to rbp
+    level: u32,
     code: Vec<u8>,
     links: Vec<ProcedureLink>,
     rsp_aligned: bool,
@@ -60,10 +61,17 @@ struct Emitter<'a> {
 }
 
 impl<'a> Emitter<'a> {
-    pub fn new(name: &str, storage_env: &'a mut StorageEnv) -> Emitter<'a> {
+    pub fn new(
+        name: &str,
+        storage_env: &'a mut StorageEnv,
+        clean_up_list: &'a [i32],
+        level: u32,
+    ) -> Emitter<'a> {
         Emitter {
             name: name.to_owned(),
             storage_env,
+            clean_up_list,
+            level,
             // push rbp; mov rbp,rsp
             code: vec![0x55, 0x48, 0x89, 0xe5],
             links: vec![],
@@ -82,6 +90,16 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn end_proc(&mut self) {
+        if !self.clean_up_list.is_empty() {
+            self.emit_push_rax();
+            for &offset in self.clean_up_list {
+                // mov rax,[rbp+{}]
+                self.emit(&[0x48, 0x8B, 0x85]);
+                self.emit(&offset.to_le_bytes());
+                self.emit_drop();
+            }
+            self.emit_pop_rax();
+        }
         // mov rsp,rbp; pop rbp; ret
         self.emit(&[0x48, 0x89, 0xec, 0x5d, 0xc3])
     }
@@ -148,6 +166,21 @@ impl<'a> Emitter<'a> {
         self.rsp_aligned = !self.rsp_aligned;
     }
 
+    pub fn emit_push_rdi(&mut self) {
+        self.emit(&[0x57]);
+        self.rsp_aligned = !self.rsp_aligned;
+    }
+
+    pub fn emit_push_r8(&mut self) {
+        self.emit(&[0x41, 0x50]);
+        self.rsp_aligned = !self.rsp_aligned;
+    }
+
+    pub fn emit_push_r9(&mut self) {
+        self.emit(&[0x41, 0x51]);
+        self.rsp_aligned = !self.rsp_aligned;
+    }
+
     pub fn emit_push_r10(&mut self) {
         self.emit(&[0x41, 0x52]);
         self.rsp_aligned = !self.rsp_aligned;
@@ -168,8 +201,28 @@ impl<'a> Emitter<'a> {
         self.rsp_aligned = !self.rsp_aligned;
     }
 
+    pub fn emit_pop_rdx(&mut self) {
+        self.emit(&[0x5a]);
+        self.rsp_aligned = !self.rsp_aligned;
+    }
+
     pub fn emit_pop_rsi(&mut self) {
         self.emit(&[0x5e]);
+        self.rsp_aligned = !self.rsp_aligned;
+    }
+
+    pub fn emit_pop_rdi(&mut self) {
+        self.emit(&[0x5f]);
+        self.rsp_aligned = !self.rsp_aligned;
+    }
+
+    pub fn emit_pop_r8(&mut self) {
+        self.emit(&[0x41, 0x58]);
+        self.rsp_aligned = !self.rsp_aligned;
+    }
+
+    pub fn emit_pop_r9(&mut self) {
+        self.emit(&[0x41, 0x59]);
         self.rsp_aligned = !self.rsp_aligned;
     }
 
@@ -254,6 +307,27 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x74, 0x04]);
         // incq [rax+8]
         self.emit(&[0x48, 0xFF, 0x40, 0x08]);
+    }
+
+    pub fn emit_none_literal(&mut self) {
+        // xor rax,rax
+        self.emit(&[0x48, 0x31, 0xC0]);
+    }
+
+    pub fn emit_int_literal(&mut self, i: &IntegerLiteral) {
+        // mov rax,{i}
+        self.emit(&[0x48, 0xc7, 0xc0]);
+        self.emit(&i.value.to_le_bytes());
+    }
+
+    pub fn emit_bool_literal(&mut self, b: &BooleanLiteral) {
+        if b.value {
+            // mov rax,1
+            self.emit(&[0x48, 0xC7, 0xC0, 0x01, 0x00, 0x00, 0x00]);
+        } else {
+            // xor rax,rax
+            self.emit(&[0x48, 0x31, 0xC0]);
+        }
     }
 
     pub fn emit_string_literal(&mut self, s: &StringLiteral) {
@@ -687,29 +761,62 @@ impl<'a> Emitter<'a> {
 
             self.emit_coerce(arg.inferred_type.as_ref().unwrap(), param_type);
 
-            match i {
-                // mov rdi,rax
-                0 => self.emit(&[0x48, 0x89, 0xc7]),
-                // mov rsi,rax
-                1 => self.emit(&[0x48, 0x89, 0xc6]),
-                // mov rdx,rax
-                2 => self.emit(&[0x48, 0x89, 0xc2]),
-                // mov rcx,rax
-                3 => self.emit(&[0x48, 0x89, 0xc1]),
-                // mov r8,rax
-                4 => self.emit(&[0x49, 0x89, 0xc0]),
-                // mov r9,rax
-                5 => self.emit(&[0x49, 0x89, 0xc1]),
-                _ => {
-                    let offset = (i - 6) * 8;
-                    assert!(offset < 128);
-                    // mov QWORD PTR [rsp+{offset}],rax
-                    self.emit(&[0x48, 0x89, 0x44, 0x24, offset as u8]);
-                }
+            if i < 6 {
+                self.emit_push_rax();
+            } else {
+                // note that at these point, 6 params has been pushed on to the
+                // stack in reversed order. We want to fill in more params after these 6 params
+                // in the ABI required order.
+                let offset = i * 8;
+                assert!(offset < 128);
+                // mov QWORD PTR [rsp+{offset}],rax
+                self.emit(&[0x48, 0x89, 0x44, 0x24, offset as u8]);
             }
         }
 
-        self.call(&expr.function.id().name);
+        if expr.args.len() >= 6 {
+            self.emit_pop_r9();
+        }
+
+        if expr.args.len() >= 5 {
+            self.emit_pop_r8();
+        }
+
+        if expr.args.len() >= 4 {
+            self.emit_pop_rcx();
+        }
+
+        if expr.args.len() >= 3 {
+            self.emit_pop_rdx();
+        }
+
+        if expr.args.len() >= 2 {
+            self.emit_pop_rsi();
+        }
+
+        if expr.args.len() >= 1 {
+            self.emit_pop_rdi();
+        }
+
+        let slot = if let Some(EnvSlot::Func(f)) = self.storage_env.get(&expr.function.id().name) {
+            f
+        } else {
+            panic!()
+        };
+
+        let link_name = slot.link_name.clone();
+        let call_level = slot.level;
+
+        if call_level != 0 {
+            // mov r10,rbp
+            self.emit(&[0x49, 0x89, 0xEA]);
+            for _ in 0..self.level + 1 - call_level {
+                // mov r10,[r10-8]
+                self.emit(&[0x4D, 0x8B, 0x52, 0xF8]);
+            }
+        }
+
+        self.call(&link_name);
     }
 
     pub fn emit_str_index(&mut self, expr: &IndexExpr) {
@@ -937,7 +1044,24 @@ impl<'a> Emitter<'a> {
                 self.emit_clone();
             }
         } else {
-            unimplemented!()
+            if level == self.level + 1 {
+                // mov rax,[rbp+{}]
+                self.emit(&[0x48, 0x8B, 0x85]);
+                self.emit(&offset.to_le_bytes());
+            } else {
+                // mov rax,[rbp-8]
+                self.emit(&[0x48, 0x8B, 0x45, 0xF8]);
+                for _ in 0..self.level - level {
+                    // mov rax,[rax-8]
+                    self.emit(&[0x48, 0x8B, 0x40, 0xF8]);
+                }
+                // mov rax,[rax+{}]
+                self.emit(&[0x48, 0x8B, 0x80]);
+                self.emit(&offset.to_le_bytes());
+            }
+            if target_type != &*TYPE_INT && target_type != &*TYPE_BOOL {
+                self.emit_clone();
+            }
         }
     }
 
@@ -947,22 +1071,13 @@ impl<'a> Emitter<'a> {
                 self.emit_load_var(identifier, expression.inferred_type.as_ref().unwrap());
             }
             ExprContent::NoneLiteral(_) => {
-                // xor rax,rax
-                self.emit(&[0x48, 0x31, 0xC0]);
+                self.emit_none_literal();
             }
             ExprContent::IntegerLiteral(i) => {
-                // mov rax,{i}
-                self.emit(&[0x48, 0xc7, 0xc0]);
-                self.emit(&i.value.to_le_bytes());
+                self.emit_int_literal(i);
             }
             ExprContent::BooleanLiteral(b) => {
-                if b.value {
-                    // mov rax,1
-                    self.emit(&[0x48, 0xC7, 0xC0, 0x01, 0x00, 0x00, 0x00]);
-                } else {
-                    // xor rax,rax
-                    self.emit(&[0x48, 0x31, 0xC0]);
-                }
+                self.emit_bool_literal(b);
             }
             ExprContent::StringLiteral(s) => {
                 self.emit_string_literal(s);
@@ -1027,6 +1142,78 @@ impl<'a> Emitter<'a> {
         self.code[pos_condition..pos_condition + 4].copy_from_slice(&if_delta.to_le_bytes());
     }
 
+    pub fn emit_assign_identifier(
+        &mut self,
+        name: &str,
+        source_type: &ValueType,
+        target_type: &ValueType,
+    ) {
+        // rax: value to assign
+
+        let (offset, level) = if let Some(EnvSlot::Var(v, _)) = self.storage_env.get(name) {
+            (v.offset, v.level)
+        } else {
+            panic!()
+        };
+
+        self.emit_coerce(source_type, target_type);
+        if level == 0 {
+            if target_type == &*TYPE_INT {
+                // mov [rip+{}],eax
+                self.emit(&[0x89, 0x05]);
+            } else if target_type == &*TYPE_BOOL {
+                // mov [rip+{}],al
+                self.emit(&[0x88, 0x05]);
+            } else {
+                self.emit_push_rax();
+                // mov rax,[rip+{}]
+                self.emit(&[0x48, 0x8B, 0x05]);
+                self.links.push(ProcedureLink {
+                    pos: self.pos(),
+                    to: GLOBAL_SECTION.to_owned(),
+                });
+                self.emit(&offset.to_le_bytes());
+                self.emit_drop();
+                self.emit_pop_rax();
+                // mov [rip+{}],rax
+                self.emit(&[0x48, 0x89, 0x05]);
+            }
+            self.links.push(ProcedureLink {
+                pos: self.pos(),
+                to: GLOBAL_SECTION.to_owned(),
+            });
+            self.emit(&offset.to_le_bytes());
+        } else {
+            if level == self.level + 1 {
+                // lea rdi,[rbp+{}]
+                self.emit(&[0x48, 0x8D, 0xBD]);
+                self.emit(&offset.to_le_bytes());
+            } else {
+                // mov rdi,[rbp-8]
+                self.emit(&[0x48, 0x8B, 0x7D, 0xF8]);
+                for _ in 0..self.level - level {
+                    // mov rdi,[rdi-8]
+                    self.emit(&[0x48, 0x8B, 0x7F, 0xF8]);
+                }
+                // lea rdi,[rdi+{}]
+                self.emit(&[0x48, 0x8D, 0xBF]);
+                self.emit(&offset.to_le_bytes());
+            }
+
+            if target_type != &*TYPE_INT && target_type != &*TYPE_BOOL {
+                self.emit_push_rdi();
+                self.emit_push_rax();
+                // mov rax,[rdi]
+                self.emit(&[0x48, 0x8B, 0x07]);
+                self.emit_drop();
+                self.emit_pop_rax();
+                self.emit_pop_rdi();
+            }
+            // mov [rdi],rax
+            self.emit(&[0x48, 0x89, 0x07]);
+        }
+    }
+
     pub fn emit_assign(&mut self, stmt: &AssignStmt) {
         let source_type = stmt.value.inferred_type.as_ref().unwrap();
         self.emit_expression(&stmt.value);
@@ -1036,53 +1223,13 @@ impl<'a> Emitter<'a> {
             let target_type = target.inferred_type.as_ref().unwrap();
             match &target.content {
                 ExprContent::Identifier(identifier) => {
-                    let (offset, level) =
-                        if let Some(EnvSlot::Var(v, _)) = self.storage_env.get(&identifier.name) {
-                            (v.offset, v.level)
-                        } else {
-                            panic!()
-                        };
-
-                    if target_type != &*TYPE_INT && target_type != &*TYPE_BOOL {
-                        if level == 0 {
-                            // mov rax,[rip+{}]
-                            self.emit(&[0x48, 0x8B, 0x05]);
-                            self.links.push(ProcedureLink {
-                                pos: self.pos(),
-                                to: GLOBAL_SECTION.to_owned(),
-                            });
-                            self.emit(&offset.to_le_bytes());
-                        } else {
-                            unimplemented!();
-                        }
-                        self.emit_drop();
-                    }
-
                     // mov rax,[rsp]
                     self.emit(&[0x48, 0x8B, 0x04, 0x24]);
                     if source_type != &*TYPE_INT && source_type != &*TYPE_BOOL {
                         self.emit_clone();
                     }
-                    self.emit_coerce(source_type, target_type);
-                    if level == 0 {
-                        if target_type == &*TYPE_INT {
-                            // mov [rip+{}],eax
-                            self.emit(&[0x89, 0x05]);
-                        } else if target_type == &*TYPE_BOOL {
-                            // mov [rip+{}],al
-                            self.emit(&[0x88, 0x05]);
-                        } else {
-                            // mov [rip+{}],rax
-                            self.emit(&[0x48, 0x89, 0x05]);
-                        }
-                        self.links.push(ProcedureLink {
-                            pos: self.pos(),
-                            to: GLOBAL_SECTION.to_owned(),
-                        });
-                        self.emit(&offset.to_le_bytes());
-                    } else {
-                        unimplemented!();
-                    }
+
+                    self.emit_assign_identifier(&identifier.name, source_type, target_type);
                 }
                 ExprContent::IndexExpr(expr) => {
                     self.emit_expression(&expr.list);
@@ -1210,54 +1357,9 @@ impl<'a> Emitter<'a> {
             element_type
         };
 
-        let target_type = stmt.identifier.id().inferred_type.as_ref().unwrap();
-
-        let (offset, level) =
-            if let Some(EnvSlot::Var(v, _)) = self.storage_env.get(&stmt.identifier.id().name) {
-                (v.offset, v.level)
-            } else {
-                panic!()
-            };
-
-        //// Drop the previous element
-        if target_type != &*TYPE_INT && target_type != &*TYPE_BOOL {
-            self.emit_push_rax();
-            if level == 0 {
-                // mov rax,[rip+{}]
-                self.emit(&[0x48, 0x8B, 0x05]);
-                self.links.push(ProcedureLink {
-                    pos: self.pos(),
-                    to: GLOBAL_SECTION.to_owned(),
-                });
-                self.emit(&offset.to_le_bytes());
-            } else {
-                unimplemented!();
-            }
-            self.emit_drop();
-            self.emit_pop_rax();
-        }
-
         //// Assign the element
-        self.emit_coerce(source_type, target_type);
-        if level == 0 {
-            if target_type == &*TYPE_INT {
-                // mov [rip+{}],eax
-                self.emit(&[0x89, 0x05]);
-            } else if target_type == &*TYPE_BOOL {
-                // mov [rip+{}],al
-                self.emit(&[0x88, 0x05]);
-            } else {
-                // mov [rip+{}],rax
-                self.emit(&[0x48, 0x89, 0x05]);
-            }
-            self.links.push(ProcedureLink {
-                pos: self.pos(),
-                to: GLOBAL_SECTION.to_owned(),
-            });
-            self.emit(&offset.to_le_bytes());
-        } else {
-            unimplemented!();
-        }
+        let target_type = stmt.identifier.id().inferred_type.as_ref().unwrap();
+        self.emit_assign_identifier(&stmt.identifier.id().name, source_type, target_type);
 
         //// Execute the loop body
         for stmt in &stmt.body {
@@ -1302,8 +1404,36 @@ impl<'a> Emitter<'a> {
             Stmt::ForStmt(stmt) => {
                 self.emit_for_stmt(stmt);
             }
-            _ => unimplemented!(),
+            Stmt::ReturnStmt(stmt) => {
+                if let Some(value) = &stmt.value {
+                    self.emit_expression(value)
+                } else {
+                    self.emit_none_literal();
+                }
+                self.end_proc();
+            }
         }
+    }
+
+    pub fn emit_local_var_init(&mut self, decl: &VarDef) {
+        match &decl.value.content {
+            LiteralContent::NoneLiteral(_) => {
+                self.emit_none_literal();
+            }
+            LiteralContent::IntegerLiteral(i) => {
+                self.emit_int_literal(i);
+            }
+            LiteralContent::BooleanLiteral(b) => {
+                self.emit_bool_literal(b);
+            }
+            LiteralContent::StringLiteral(s) => {
+                self.emit_string_literal(s);
+            }
+        }
+
+        let target_type = ValueType::from_annotation(&decl.var.tv().type_);
+        self.emit_coerce(decl.value.inferred_type.as_ref().unwrap(), &target_type);
+        self.emit_push_rax();
     }
 
     pub fn emit_global_var_init(&mut self, decl: &VarDef) {
@@ -1318,22 +1448,13 @@ impl<'a> Emitter<'a> {
 
         match &decl.value.content {
             LiteralContent::NoneLiteral(_) => {
-                // xor rax,rax
-                self.emit(&[0x48, 0x31, 0xC0]);
+                self.emit_none_literal();
             }
             LiteralContent::IntegerLiteral(i) => {
-                // mov rax,{i}
-                self.emit(&[0x48, 0xc7, 0xc0]);
-                self.emit(&i.value.to_le_bytes());
+                self.emit_int_literal(i);
             }
             LiteralContent::BooleanLiteral(b) => {
-                if b.value {
-                    // mov rax,1
-                    self.emit(&[0x48, 0xC7, 0xC0, 0x01, 0x00, 0x00, 0x00]);
-                } else {
-                    // xor rax,rax
-                    self.emit(&[0x48, 0x31, 0xC0]);
-                }
+                self.emit_bool_literal(b);
             }
             LiteralContent::StringLiteral(s) => {
                 self.emit_string_literal(s);
@@ -1384,6 +1505,123 @@ impl<'a> Emitter<'a> {
     }
 }
 
+fn gen_function(
+    function: &FuncDef,
+    storage_env: &mut StorageEnv,
+    level: u32,
+    prefix: &str,
+) -> Vec<Procedure> {
+    let link_name = prefix.to_owned() + &function.name.id().name;
+    let prefix = link_name.clone() + ".";
+
+    let mut locals = HashMap::new();
+    let mut clean_up_list = vec![];
+
+    let mut local_offset = if level == 0 { -8 } else { -16 };
+
+    for (i, param) in function.params.iter().enumerate() {
+        let offset;
+        if i < 6 {
+            offset = local_offset;
+            local_offset -= 8;
+        } else {
+            offset = (i - 6) as i32 * 8 + 16;
+        }
+        locals.insert(
+            param.tv().identifier.id().name.clone(),
+            LocalSlot::Var(VarSlot {
+                offset,
+                level: level + 1,
+            }),
+        );
+        let param_type = ValueType::from_annotation(&param.tv().type_);
+        if param_type != *TYPE_INT && param_type != *TYPE_BOOL {
+            clean_up_list.push(offset);
+        }
+    }
+    for declaration in &function.declarations {
+        if let Declaration::VarDef(v) = declaration {
+            let offset = local_offset;
+            local_offset -= 8;
+            locals.insert(
+                v.var.tv().identifier.id().name.clone(),
+                LocalSlot::Var(VarSlot {
+                    offset,
+                    level: level + 1,
+                }),
+            );
+            let local_type = ValueType::from_annotation(&v.var.tv().type_);
+            if local_type != *TYPE_INT && local_type != *TYPE_BOOL {
+                clean_up_list.push(offset);
+            }
+        } else if let Declaration::FuncDef(f) = declaration {
+            let name = &f.name.id().name;
+            locals.insert(
+                name.clone(),
+                LocalSlot::Func(FuncSlot {
+                    link_name: prefix.clone() + name,
+                    level: level + 1,
+                }),
+            );
+        }
+    }
+
+    let mut handle = storage_env.push(locals);
+
+    let mut code = Emitter::new(&link_name, handle.inner(), &clean_up_list, level);
+
+    if level != 0 {
+        code.emit_push_r10();
+    }
+
+    if function.params.len() >= 1 {
+        code.emit_push_rdi();
+    }
+
+    if function.params.len() >= 2 {
+        code.emit_push_rsi();
+    }
+
+    if function.params.len() >= 3 {
+        code.emit_push_rdx();
+    }
+
+    if function.params.len() >= 4 {
+        code.emit_push_rcx();
+    }
+
+    if function.params.len() >= 5 {
+        code.emit_push_r8();
+    }
+
+    if function.params.len() >= 6 {
+        code.emit_push_r9();
+    }
+
+    for declaration in &function.declarations {
+        if let Declaration::VarDef(v) = declaration {
+            code.emit_local_var_init(v);
+        }
+    }
+
+    for statement in &function.statements {
+        code.emit_statement(statement);
+    }
+
+    code.emit_none_literal();
+    code.end_proc();
+
+    let mut procedures = vec![code.finalize()];
+
+    for declaration in &function.declarations {
+        if let Declaration::FuncDef(f) = declaration {
+            procedures.append(&mut gen_function(&f, handle.inner(), level + 1, &prefix));
+        }
+    }
+
+    procedures
+}
+
 fn gen_code_set(ast: Ast) -> CodeSet {
     let mut globals = HashMap::new();
     let mut global_offset = 0;
@@ -1406,12 +1644,35 @@ fn gen_code_set(ast: Ast) -> CodeSet {
                 }),
             );
             global_offset += size;
+        } else if let Declaration::FuncDef(f) = declaration {
+            let name = &f.name.id().name;
+            globals.insert(
+                name.clone(),
+                LocalSlot::Func(FuncSlot {
+                    link_name: name.clone(),
+                    level: 0,
+                }),
+            );
         }
     }
 
+    let insert_builtin = |globals: &mut HashMap<_, _>, name: &str| {
+        globals.insert(
+            name.to_owned(),
+            LocalSlot::Func(FuncSlot {
+                link_name: name.to_owned(),
+                level: 0,
+            }),
+        )
+    };
+
+    insert_builtin(&mut globals, "len");
+    insert_builtin(&mut globals, "print");
+    insert_builtin(&mut globals, "input");
+
     let mut storage_env = StorageEnv::new(globals);
 
-    let mut main_code = Emitter::new(BUILTIN_CHOCOPY_MAIN, &mut storage_env);
+    let mut main_code = Emitter::new(BUILTIN_CHOCOPY_MAIN, &mut storage_env, &[], 0);
 
     // mov rax,0x12345678
     main_code.emit(&[0x48, 0xC7, 0xC0, 0x78, 0x56, 0x34, 0x12]);
@@ -1452,8 +1713,16 @@ fn gen_code_set(ast: Ast) -> CodeSet {
 
     let main_procedure = main_code.finalize();
 
+    let mut procedures = vec![main_procedure];
+
+    for declaration in &ast.program().declarations {
+        if let Declaration::FuncDef(f) = declaration {
+            procedures.append(&mut gen_function(&f, &mut storage_env, 0, ""));
+        }
+    }
+
     CodeSet {
-        procedures: vec![main_procedure],
+        procedures,
         global_size: global_offset as usize,
     }
 }
@@ -1467,34 +1736,34 @@ pub fn gen(ast: Ast, path: &str) -> Result<(), Box<dyn std::error::Error>> {
         .name(obj_name)
         .finish();
 
-    obj.declarations(
-        [
-            // prototypes
-            (BOOL_PROTOTYPE, Decl::data_import().into()),
-            (INT_PROTOTYPE, Decl::data_import().into()),
-            (STR_PROTOTYPE, Decl::data_import().into()),
-            (OBJECT_PROTOTYPE, Decl::data_import().into()),
-            (BOOL_LIST_PROTOTYPE, Decl::data_import().into()),
-            (INT_LIST_PROTOTYPE, Decl::data_import().into()),
-            (OBJECT_LIST_PROTOTYPE, Decl::data_import().into()),
-            // hidden built-in functions
-            (BUILTIN_ALLOC_OBJ, Decl::function_import().into()),
-            (BUILTIN_FREE_OBJ, Decl::function_import().into()),
-            (BUILTIN_REPORT_BROKEN_STACK, Decl::function_import().into()),
-            // built-in functions
-            ("len", Decl::function_import().into()),
-            ("print", Decl::function_import().into()),
-            ("input", Decl::function_import().into()),
-            // main
-            (BUILTIN_CHOCOPY_MAIN, Decl::function().global().into()),
-            // global
-            (GLOBAL_SECTION, Decl::data().writable().into()),
-        ]
-        .iter()
-        .cloned(),
-    )?;
+    let mut declarations = vec![
+        (BOOL_PROTOTYPE, Decl::data_import().into()),
+        (INT_PROTOTYPE, Decl::data_import().into()),
+        (STR_PROTOTYPE, Decl::data_import().into()),
+        (OBJECT_PROTOTYPE, Decl::data_import().into()),
+        (BOOL_LIST_PROTOTYPE, Decl::data_import().into()),
+        (INT_LIST_PROTOTYPE, Decl::data_import().into()),
+        (OBJECT_LIST_PROTOTYPE, Decl::data_import().into()),
+        // hidden built-in functions
+        (BUILTIN_ALLOC_OBJ, Decl::function_import().into()),
+        (BUILTIN_FREE_OBJ, Decl::function_import().into()),
+        (BUILTIN_REPORT_BROKEN_STACK, Decl::function_import().into()),
+        // built-in functions
+        ("len", Decl::function_import().into()),
+        ("print", Decl::function_import().into()),
+        ("input", Decl::function_import().into()),
+        // global
+        (GLOBAL_SECTION, Decl::data().writable().into()),
+    ];
 
     let code_set = gen_code_set(ast);
+
+    for procedure in &code_set.procedures {
+        declarations.push((&procedure.name, Decl::function().global().into()));
+    }
+
+    obj.declarations(declarations.into_iter())?;
+
     for procedure in code_set.procedures {
         obj.define(&procedure.name, procedure.code)?;
         for link in procedure.links {
