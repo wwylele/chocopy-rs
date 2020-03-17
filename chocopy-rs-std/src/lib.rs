@@ -11,49 +11,42 @@ pub struct Prototype {
 }
 
 #[no_mangle]
-#[export_name = "$BOOL_PROTOTYPE"]
+#[export_name = "bool.$proto"]
 pub static BOOL_PROTOTYPE: Prototype = Prototype {
     size: 1,
     dtor: dtor_noop,
 };
 
 #[no_mangle]
-#[export_name = "$INT_PROTOTYPE"]
+#[export_name = "int.$proto"]
 pub static INT_PROTOTYPE: Prototype = Prototype {
     size: 4,
     dtor: dtor_noop,
 };
 
 #[no_mangle]
-#[export_name = "$STR_PROTOTYPE"]
+#[export_name = "str.$proto"]
 pub static STR_PROTOTYPE: Prototype = Prototype {
     size: -1,
     dtor: dtor_noop,
 };
 
 #[no_mangle]
-#[export_name = "$OBJECT_PROTOTYPE"]
-pub static OBJECT_PROTOTYPE: Prototype = Prototype {
-    size: 0,
-    dtor: dtor_noop,
-};
-
-#[no_mangle]
-#[export_name = "$BOOL_LIST_PROTOTYPE"]
+#[export_name = "[bool].$proto"]
 pub static BOOL_LIST_PROTOTYPE: Prototype = Prototype {
     size: -1,
     dtor: dtor_noop,
 };
 
 #[no_mangle]
-#[export_name = "$INT_LIST_PROTOTYPE"]
+#[export_name = "[int].$proto"]
 pub static INT_LIST_PROTOTYPE: Prototype = Prototype {
     size: -4,
     dtor: dtor_noop,
 };
 
 #[no_mangle]
-#[export_name = "$OBJECT_LIST_PROTOTYPE"]
+#[export_name = "[object].$proto"]
 pub static OBJECT_LIST_PROTOTYPE: Prototype = Prototype {
     size: -8,
     dtor: dtor_list,
@@ -96,6 +89,17 @@ unsafe extern "C" fn dtor_list(pointer: *mut u8) {
             }
         }
     }
+}
+
+#[no_mangle]
+#[export_name = "object.__init__"]
+pub unsafe extern "C" fn object_init(pointer: *mut u8) -> *mut u8 {
+    let object = pointer as *mut Object;
+    (*object).ref_count -= 1;
+    if (*object).ref_count == 0 {
+        free_obj(pointer);
+    }
+    std::ptr::null_mut()
 }
 
 #[no_mangle]

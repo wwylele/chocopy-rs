@@ -7,13 +7,12 @@ use std::io::Write;
 use std::str::FromStr;
 use target_lexicon::*;
 
-const BOOL_PROTOTYPE: &'static str = "$BOOL_PROTOTYPE";
-const INT_PROTOTYPE: &'static str = "$INT_PROTOTYPE";
-const STR_PROTOTYPE: &'static str = "$STR_PROTOTYPE";
-const OBJECT_PROTOTYPE: &'static str = "$OBJECT_PROTOTYPE";
-const BOOL_LIST_PROTOTYPE: &'static str = "$BOOL_LIST_PROTOTYPE";
-const INT_LIST_PROTOTYPE: &'static str = "$INT_LIST_PROTOTYPE";
-const OBJECT_LIST_PROTOTYPE: &'static str = "$OBJECT_LIST_PROTOTYPE";
+const BOOL_PROTOTYPE: &'static str = "bool.$proto";
+const INT_PROTOTYPE: &'static str = "int.$proto";
+const STR_PROTOTYPE: &'static str = "str.$proto";
+const BOOL_LIST_PROTOTYPE: &'static str = "[bool].$proto";
+const INT_LIST_PROTOTYPE: &'static str = "[int].$proto";
+const OBJECT_LIST_PROTOTYPE: &'static str = "[object].$proto";
 const BUILTIN_ALLOC_OBJ: &'static str = "$alloc_obj";
 const BUILTIN_FREE_OBJ: &'static str = "$free_obj";
 const BUILTIN_REPORT_BROKEN_STACK: &'static str = "$report_broken_stack";
@@ -32,29 +31,53 @@ struct VarSlot {
 
 type StorageEnv = LocalEnv<FuncSlot, VarSlot>;
 
-struct ProcedureLink {
+#[derive(Clone)]
+struct AttributeSlot {
+    offset: u32,
+    source_type: ValueType,
+    target_type: ValueType,
+    init: LiteralContent,
+}
+
+#[derive(Clone)]
+struct MethodSlot {
+    offset: u32,
+    link_name: String,
+}
+
+#[derive(Clone)]
+struct ClassSlot {
+    attributes: HashMap<String, AttributeSlot>,
+    object_size: u32,
+    methods: HashMap<String, MethodSlot>,
+    prototype_size: u32,
+}
+
+struct ChunkLink {
     pos: usize,
     to: String,
 }
 
-struct Procedure {
+struct Chunk {
     name: String,
+    is_executable: bool,
     code: Vec<u8>,
-    links: Vec<ProcedureLink>,
+    links: Vec<ChunkLink>,
 }
 
 struct CodeSet {
-    procedures: Vec<Procedure>,
+    chunks: Vec<Chunk>,
     global_size: usize,
 }
 
 struct Emitter<'a> {
     name: String,
     storage_env: &'a mut StorageEnv,
+    classes: &'a HashMap<String, ClassSlot>,
     clean_up_list: &'a [i32], // offsets relative to rbp
     level: u32,
     code: Vec<u8>,
-    links: Vec<ProcedureLink>,
+    links: Vec<ChunkLink>,
     rsp_aligned: bool,
     rsp_call_restore: Vec<(usize, bool)>,
     strings: Vec<(usize, String)>,
@@ -64,12 +87,14 @@ impl<'a> Emitter<'a> {
     pub fn new(
         name: &str,
         storage_env: &'a mut StorageEnv,
+        classes: &'a HashMap<String, ClassSlot>,
         clean_up_list: &'a [i32],
         level: u32,
     ) -> Emitter<'a> {
         Emitter {
             name: name.to_owned(),
             storage_env,
+            classes,
             clean_up_list,
             level,
             // push rbp; mov rbp,rsp
@@ -117,13 +142,7 @@ impl<'a> Emitter<'a> {
         self.rsp_aligned = true;
     }
 
-    pub fn call(&mut self, name: &str) {
-        self.emit(&[0xe8]);
-        self.links.push(ProcedureLink {
-            pos: self.pos(),
-            to: name.to_owned(),
-        });
-        self.emit(&[0x00, 0x00, 0x00, 0x00]);
+    pub fn after_call(&mut self) {
         let (spill, rsp_aligned) = self.rsp_call_restore.pop().unwrap();
         assert!(spill < 128);
         // add rsp,{spill}
@@ -131,7 +150,26 @@ impl<'a> Emitter<'a> {
         self.rsp_aligned = rsp_aligned;
     }
 
-    pub fn finalize(mut self) -> Procedure {
+    pub fn call(&mut self, name: &str) {
+        self.emit(&[0xe8]);
+        self.links.push(ChunkLink {
+            pos: self.pos(),
+            to: name.to_owned(),
+        });
+        self.emit(&[0x00, 0x00, 0x00, 0x00]);
+        self.after_call();
+    }
+
+    pub fn call_virtual(&mut self, offset: u32) {
+        // mov rax,[rdi]
+        self.emit(&[0x48, 0x8B, 0x07]);
+        // call [rax+{}]
+        self.emit(&[0xFF, 0x90]);
+        self.emit(&offset.to_le_bytes());
+        self.after_call();
+    }
+
+    pub fn finalize(mut self) -> Chunk {
         for (pos, s) in &self.strings {
             let dest = self.pos();
             self.code.extend_from_slice(s.as_bytes());
@@ -139,8 +177,9 @@ impl<'a> Emitter<'a> {
             self.code[*pos..*pos + 4].copy_from_slice(&delta.to_le_bytes());
         }
 
-        Procedure {
+        Chunk {
             name: self.name,
+            is_executable: true,
             code: self.code,
             links: self.links,
         }
@@ -241,7 +280,7 @@ impl<'a> Emitter<'a> {
         self.prepare_call(2);
         // mov rdi,[rip+{INT_PROTOTYPE}]
         self.emit(&[0x48, 0x8B, 0x3D]);
-        self.links.push(ProcedureLink {
+        self.links.push(ChunkLink {
             pos: self.pos(),
             to: INT_PROTOTYPE.to_owned(),
         });
@@ -259,7 +298,7 @@ impl<'a> Emitter<'a> {
         self.prepare_call(2);
         // mov rdi,[rip+{BOOL_PROTOTYPE}]
         self.emit(&[0x48, 0x8B, 0x3D]);
-        self.links.push(ProcedureLink {
+        self.links.push(ChunkLink {
             pos: self.pos(),
             to: BOOL_PROTOTYPE.to_owned(),
         });
@@ -334,7 +373,7 @@ impl<'a> Emitter<'a> {
         self.prepare_call(2);
         // mov rdi,[rip+{STR_PROTOTYPE}]
         self.emit(&[0x48, 0x8B, 0x3D]);
-        self.links.push(ProcedureLink {
+        self.links.push(ChunkLink {
             pos: self.pos(),
             to: STR_PROTOTYPE.to_owned(),
         });
@@ -381,7 +420,7 @@ impl<'a> Emitter<'a> {
         self.prepare_call(2);
         // mov rdi,[rip+{STR_PROTOTYPE}]
         self.emit(&[0x48, 0x8B, 0x3D]);
-        self.links.push(ProcedureLink {
+        self.links.push(ChunkLink {
             pos: self.pos(),
             to: STR_PROTOTYPE.to_owned(),
         });
@@ -532,7 +571,7 @@ impl<'a> Emitter<'a> {
         self.prepare_call(2);
         // mov rdi,[rip+{_PROTOTYPE}]
         self.emit(&[0x48, 0x8B, 0x3D]);
-        self.links.push(ProcedureLink {
+        self.links.push(ChunkLink {
             pos: self.pos(),
             to: prototype.to_owned(),
         });
@@ -744,20 +783,19 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    pub fn emit_call_expr(&mut self, expr: &CallExpr) {
-        self.prepare_call(expr.args.len());
+    pub fn emit_call_expr(
+        &mut self,
+        args: &[Expr],
+        func_type: &Option<FuncTypeWrapper>,
+        name: &str,
+        virtual_call: bool,
+    ) {
+        self.prepare_call(args.len());
 
-        for (i, arg) in expr.args.iter().enumerate() {
+        for (i, arg) in args.iter().enumerate() {
             self.emit_expression(arg);
 
-            let param_type = &expr
-                .function
-                .id()
-                .inferred_type
-                .as_ref()
-                .unwrap()
-                .func_type()
-                .parameters[i];
+            let param_type = &func_type.as_ref().unwrap().func_type().parameters[i];
 
             self.emit_coerce(arg.inferred_type.as_ref().unwrap(), param_type);
 
@@ -774,49 +812,58 @@ impl<'a> Emitter<'a> {
             }
         }
 
-        if expr.args.len() >= 6 {
+        if args.len() >= 6 {
             self.emit_pop_r9();
         }
 
-        if expr.args.len() >= 5 {
+        if args.len() >= 5 {
             self.emit_pop_r8();
         }
 
-        if expr.args.len() >= 4 {
+        if args.len() >= 4 {
             self.emit_pop_rcx();
         }
 
-        if expr.args.len() >= 3 {
+        if args.len() >= 3 {
             self.emit_pop_rdx();
         }
 
-        if expr.args.len() >= 2 {
+        if args.len() >= 2 {
             self.emit_pop_rsi();
         }
 
-        if expr.args.len() >= 1 {
+        if args.len() >= 1 {
             self.emit_pop_rdi();
         }
 
-        let slot = if let Some(EnvSlot::Func(f)) = self.storage_env.get(&expr.function.id().name) {
-            f
+        if virtual_call {
+            let slot = if let Some(ValueType::ClassValueType(c)) = &args[0].inferred_type {
+                &self.classes[&c.class_name].methods[name]
+            } else {
+                panic!()
+            };
+            self.call_virtual(slot.offset);
         } else {
-            panic!()
-        };
+            let slot = if let Some(EnvSlot::Func(f)) = self.storage_env.get(name) {
+                f
+            } else {
+                panic!()
+            };
 
-        let link_name = slot.link_name.clone();
-        let call_level = slot.level;
+            let link_name = slot.link_name.clone();
+            let call_level = slot.level;
 
-        if call_level != 0 {
-            // mov r10,rbp
-            self.emit(&[0x49, 0x89, 0xEA]);
-            for _ in 0..self.level + 1 - call_level {
-                // mov r10,[r10-8]
-                self.emit(&[0x4D, 0x8B, 0x52, 0xF8]);
+            if call_level != 0 {
+                // mov r10,rbp
+                self.emit(&[0x49, 0x89, 0xEA]);
+                for _ in 0..self.level + 1 - call_level {
+                    // mov r10,[r10-8]
+                    self.emit(&[0x4D, 0x8B, 0x52, 0xF8]);
+                }
             }
-        }
 
-        self.call(&link_name);
+            self.call(&link_name);
+        }
     }
 
     pub fn emit_str_index(&mut self, expr: &IndexExpr) {
@@ -827,7 +874,7 @@ impl<'a> Emitter<'a> {
         self.prepare_call(2);
         // mov rdi,[rip+{STR_PROTOTYPE}]
         self.emit(&[0x48, 0x8B, 0x3D]);
-        self.links.push(ProcedureLink {
+        self.links.push(ChunkLink {
             pos: self.pos(),
             to: STR_PROTOTYPE.to_owned(),
         });
@@ -872,6 +919,43 @@ impl<'a> Emitter<'a> {
         } else {
             // mov rax,[rsi+rax*8+24]
             self.emit(&[0x48, 0x8B, 0x44, 0xC6, 0x18]);
+            self.emit_clone();
+        }
+
+        self.emit_push_rax();
+        // mov rax,rsi
+        self.emit(&[0x48, 0x89, 0xF0]);
+        self.emit_drop();
+        self.emit_pop_rax();
+    }
+
+    pub fn emit_member_expr(&mut self, expr: &MemberExpr) {
+        self.emit_expression(&expr.object);
+        // mov rsi,rax
+        self.emit(&[0x48, 0x89, 0xC6]);
+
+        let slot = if let Some(ValueType::ClassValueType(c)) = &expr.object.inferred_type {
+            &self.classes[&c.class_name].attributes[&expr.member.id().name]
+        } else {
+            panic!()
+        };
+
+        if slot.target_type == *TYPE_INT {
+            // mov eax,[rsi+{}]
+            self.emit(&[0x8B, 0x86]);
+            self.emit(&slot.offset.to_le_bytes());
+            // movsx rax,eax
+            self.emit(&[0x48, 0x63, 0xC0]);
+        } else if slot.target_type == *TYPE_BOOL {
+            // mov al,[rsi+{}]
+            self.emit(&[0x8A, 0x86]);
+            self.emit(&slot.offset.to_le_bytes());
+            // movzx rax,al
+            self.emit(&[0x48, 0x0F, 0xB6, 0xC0]);
+        } else {
+            // mov rax,[rsi+{}]
+            self.emit(&[0x48, 0x8B, 0x86]);
+            self.emit(&slot.offset.to_le_bytes());
             self.emit_clone();
         }
 
@@ -941,7 +1025,7 @@ impl<'a> Emitter<'a> {
             self.prepare_call(2);
             // mov rdi,[rip+{_PROTOTYPE}]
             self.emit(&[0x48, 0x8B, 0x3D]);
-            self.links.push(ProcedureLink {
+            self.links.push(ChunkLink {
                 pos: self.pos(),
                 to: OBJECT_LIST_PROTOTYPE.to_owned(),
             });
@@ -970,7 +1054,7 @@ impl<'a> Emitter<'a> {
         self.prepare_call(2);
         // mov rdi,[rip+{_PROTOTYPE}]
         self.emit(&[0x48, 0x8B, 0x3D]);
-        self.links.push(ProcedureLink {
+        self.links.push(ChunkLink {
             pos: self.pos(),
             to: prototype.to_owned(),
         });
@@ -1016,7 +1100,7 @@ impl<'a> Emitter<'a> {
             if target_type == &*TYPE_INT {
                 // mov eax,[rip+{}]
                 self.emit(&[0x8B, 0x05]);
-                self.links.push(ProcedureLink {
+                self.links.push(ChunkLink {
                     pos: self.pos(),
                     to: GLOBAL_SECTION.to_owned(),
                 });
@@ -1026,7 +1110,7 @@ impl<'a> Emitter<'a> {
             } else if target_type == &*TYPE_BOOL {
                 // mov al,[rip+{}]
                 self.emit(&[0x8A, 0x05]);
-                self.links.push(ProcedureLink {
+                self.links.push(ChunkLink {
                     pos: self.pos(),
                     to: GLOBAL_SECTION.to_owned(),
                 });
@@ -1036,7 +1120,7 @@ impl<'a> Emitter<'a> {
             } else {
                 // mov rax,[rip+{}]
                 self.emit(&[0x48, 0x8B, 0x05]);
-                self.links.push(ProcedureLink {
+                self.links.push(ChunkLink {
                     pos: self.pos(),
                     to: GLOBAL_SECTION.to_owned(),
                 });
@@ -1101,7 +1185,19 @@ impl<'a> Emitter<'a> {
                 self.emit_binary_expr(expr, expression.inferred_type.as_ref().unwrap());
             }
             ExprContent::CallExpr(expr) => {
-                self.emit_call_expr(expr);
+                self.emit_call_expr(
+                    &expr.args,
+                    &expr.function.id().inferred_type,
+                    &expr.function.id().name,
+                    false,
+                );
+            }
+            ExprContent::MethodCallExpr(expr) => {
+                let method = expr.method.member();
+                let args: Vec<Expr> = std::iter::once(method.object.clone())
+                    .chain(expr.args.iter().cloned())
+                    .collect();
+                self.emit_call_expr(&args, &method.inferred_type, &method.member.id().name, true);
             }
             ExprContent::IndexExpr(expr) => {
                 if expr.list.inferred_type.as_ref().unwrap() == &*TYPE_STR {
@@ -1116,7 +1212,9 @@ impl<'a> Emitter<'a> {
             ExprContent::ListExpr(expr) => {
                 self.emit_list_expr(expr, expression.inferred_type.as_ref().unwrap());
             }
-            _ => unimplemented!(),
+            ExprContent::MemberExpr(expr) => {
+                self.emit_member_expr(expr);
+            }
         }
     }
 
@@ -1168,7 +1266,7 @@ impl<'a> Emitter<'a> {
                 self.emit_push_rax();
                 // mov rax,[rip+{}]
                 self.emit(&[0x48, 0x8B, 0x05]);
-                self.links.push(ProcedureLink {
+                self.links.push(ChunkLink {
                     pos: self.pos(),
                     to: GLOBAL_SECTION.to_owned(),
                 });
@@ -1178,7 +1276,7 @@ impl<'a> Emitter<'a> {
                 // mov [rip+{}],rax
                 self.emit(&[0x48, 0x89, 0x05]);
             }
-            self.links.push(ProcedureLink {
+            self.links.push(ChunkLink {
                 pos: self.pos(),
                 to: GLOBAL_SECTION.to_owned(),
             });
@@ -1277,7 +1375,48 @@ impl<'a> Emitter<'a> {
                     self.emit_pop_rax();
                     self.emit_drop();
                 }
-                ExprContent::MemberExpr(_expr) => unimplemented!(),
+                ExprContent::MemberExpr(expr) => {
+                    self.emit_expression(&expr.object);
+                    self.emit_push_rax();
+
+                    let slot =
+                        if let Some(ValueType::ClassValueType(c)) = &expr.object.inferred_type {
+                            &self.classes[&c.class_name].attributes[&expr.member.id().name]
+                        } else {
+                            panic!()
+                        };
+
+                    if slot.target_type != *TYPE_INT && slot.target_type != *TYPE_BOOL {
+                        // mov rax,[rax+{}]
+                        self.emit(&[0x48, 0x8B, 0x80]);
+                        self.emit(&slot.offset.to_le_bytes());
+                        self.emit_drop();
+                    }
+
+                    // mov rax,[rsp+0x8]
+                    self.emit(&[0x48, 0x8B, 0x44, 0x24, 0x08]);
+                    if source_type != &*TYPE_INT && source_type != &*TYPE_BOOL {
+                        self.emit_clone();
+                    }
+                    self.emit_coerce(source_type, &slot.target_type);
+
+                    // mov rsi,[rsp]
+                    self.emit(&[0x48, 0x8B, 0x34, 0x24]);
+                    if slot.target_type == *TYPE_INT {
+                        // mov [rsi+{}],eax
+                        self.emit(&[0x89, 0x86]);
+                    } else if slot.target_type == *TYPE_BOOL {
+                        // mov [rsi+{}],al
+                        self.emit(&[0x88, 0x86]);
+                    } else {
+                        // mov [rsi+{}],rax
+                        self.emit(&[0x48, 0x89, 0x86]);
+                    }
+                    self.emit(&slot.offset.to_le_bytes());
+
+                    self.emit_pop_rax();
+                    self.emit_drop();
+                }
                 _ => panic!(),
             }
         }
@@ -1314,7 +1453,7 @@ impl<'a> Emitter<'a> {
             self.prepare_call(2);
             // mov rdi,[rip+{STR_PROTOTYPE}]
             self.emit(&[0x48, 0x8B, 0x3D]);
-            self.links.push(ProcedureLink {
+            self.links.push(ChunkLink {
                 pos: self.pos(),
                 to: STR_PROTOTYPE.to_owned(),
             });
@@ -1474,7 +1613,7 @@ impl<'a> Emitter<'a> {
             // mov [rip+{}],rax
             self.emit(&[0x48, 0x89, 0x05]);
         }
-        self.links.push(ProcedureLink {
+        self.links.push(ChunkLink {
             pos: self.pos(),
             to: GLOBAL_SECTION.to_owned(),
         });
@@ -1495,7 +1634,7 @@ impl<'a> Emitter<'a> {
         if target_type != *TYPE_INT && target_type != *TYPE_BOOL {
             // mov rax,[rip+{}]
             self.emit(&[0x48, 0x8B, 0x05]);
-            self.links.push(ProcedureLink {
+            self.links.push(ChunkLink {
                 pos: self.pos(),
                 to: GLOBAL_SECTION.to_owned(),
             });
@@ -1508,9 +1647,10 @@ impl<'a> Emitter<'a> {
 fn gen_function(
     function: &FuncDef,
     storage_env: &mut StorageEnv,
+    classes: &HashMap<String, ClassSlot>,
     level: u32,
     prefix: &str,
-) -> Vec<Procedure> {
+) -> Vec<Chunk> {
     let link_name = prefix.to_owned() + &function.name.id().name;
     let prefix = link_name.clone() + ".";
 
@@ -1568,7 +1708,7 @@ fn gen_function(
 
     let mut handle = storage_env.push(locals);
 
-    let mut code = Emitter::new(&link_name, handle.inner(), &clean_up_list, level);
+    let mut code = Emitter::new(&link_name, handle.inner(), classes, &clean_up_list, level);
 
     if level != 0 {
         code.emit_push_r10();
@@ -1611,19 +1751,146 @@ fn gen_function(
     code.emit_none_literal();
     code.end_proc();
 
-    let mut procedures = vec![code.finalize()];
+    let mut chunks = vec![code.finalize()];
 
     for declaration in &function.declarations {
         if let Declaration::FuncDef(f) = declaration {
-            procedures.append(&mut gen_function(&f, handle.inner(), level + 1, &prefix));
+            chunks.append(&mut gen_function(
+                &f,
+                handle.inner(),
+                classes,
+                level + 1,
+                &prefix,
+            ));
         }
     }
 
-    procedures
+    chunks
+}
+
+fn gen_ctor(
+    class_name: &str,
+    class_slot: &ClassSlot,
+    storage_env: &mut StorageEnv,
+    classes: &HashMap<String, ClassSlot>,
+) -> Chunk {
+    let mut code = Emitter::new(class_name, storage_env, classes, &[], 0);
+
+    code.prepare_call(2);
+    // lea rdi,[rip+{}]
+    code.emit(&[0x48, 0x8D, 0x3D]);
+    code.links.push(ChunkLink {
+        pos: code.pos(),
+        to: class_name.to_owned() + ".$proto",
+    });
+    code.emit(&[0; 4]);
+    // xor rsi,rsi
+    code.emit(&[0x48, 0x31, 0xF6]);
+    code.call(BUILTIN_ALLOC_OBJ);
+    code.emit_push_rax();
+
+    for (_, attribute) in &class_slot.attributes {
+        match &attribute.init {
+            LiteralContent::NoneLiteral(_) => {
+                code.emit_none_literal();
+            }
+            LiteralContent::IntegerLiteral(i) => {
+                code.emit_int_literal(i);
+            }
+            LiteralContent::BooleanLiteral(b) => {
+                code.emit_bool_literal(b);
+            }
+            LiteralContent::StringLiteral(s) => {
+                code.emit_string_literal(s);
+            }
+        }
+
+        code.emit_coerce(&attribute.source_type, &attribute.target_type);
+        // mov rdi,[rsp]
+        code.emit(&[0x48, 0x8B, 0x3C, 0x24]);
+
+        if attribute.target_type == *TYPE_INT {
+            // mov [rdi+{}],eax
+            code.emit(&[0x89, 0x87]);
+        } else if attribute.target_type == *TYPE_BOOL {
+            // mov [rdi+{}],eal
+            code.emit(&[0x88, 0x87]);
+        } else {
+            // mov [rdi+{}],rax
+            code.emit(&[0x48, 0x89, 0x87]);
+        }
+        code.emit(&attribute.offset.to_le_bytes());
+    }
+
+    // mov rax,[rsp]
+    code.emit(&[0x48, 0x8B, 0x04, 0x24]);
+    code.emit_clone();
+    code.prepare_call(1);
+    // mov rdi,rax
+    code.emit(&[0x48, 0x89, 0xC7]);
+    code.call_virtual(16);
+
+    code.emit_pop_rax();
+    code.end_proc();
+    code.finalize()
+}
+
+fn gen_dtor(
+    class_name: &str,
+    class_slot: &ClassSlot,
+    storage_env: &mut StorageEnv,
+    classes: &HashMap<String, ClassSlot>,
+) -> Chunk {
+    let mut code = Emitter::new(
+        &(class_name.to_owned() + ".$dtor"),
+        storage_env,
+        classes,
+        &[],
+        0,
+    );
+    code.emit_push_rdi();
+    for (_, attribute) in &class_slot.attributes {
+        if attribute.target_type != *TYPE_INT && attribute.target_type != *TYPE_BOOL {
+            // mov rax,[rsp]
+            code.emit(&[0x48, 0x8B, 0x04, 0x24]);
+            // mov rax,[rax+{}]
+            code.emit(&[0x48, 0x8B, 0x80]);
+            code.emit(&attribute.offset.to_le_bytes());
+            code.emit_drop();
+        }
+    }
+    code.emit_pop_rax();
+    code.end_proc();
+    code.finalize()
 }
 
 fn gen_code_set(ast: Ast) -> CodeSet {
     let mut globals = HashMap::new();
+    let mut classes = HashMap::new();
+    let mut base_methods = HashMap::new();
+    base_methods.insert(
+        "$dtor".to_owned(),
+        MethodSlot {
+            offset: 8,
+            link_name: "object.$dtor".to_owned(),
+        },
+    );
+    base_methods.insert(
+        "__init__".to_owned(),
+        MethodSlot {
+            offset: 16,
+            link_name: "object.__init__".to_owned(),
+        },
+    );
+    classes.insert(
+        "object".to_owned(),
+        ClassSlot {
+            attributes: HashMap::new(),
+            object_size: 16,
+            methods: base_methods,
+            prototype_size: 24,
+        },
+    );
     let mut global_offset = 0;
     for declaration in &ast.program().declarations {
         if let Declaration::VarDef(v) = declaration {
@@ -1653,6 +1920,57 @@ fn gen_code_set(ast: Ast) -> CodeSet {
                     level: 0,
                 }),
             );
+        } else if let Declaration::ClassDef(c) = declaration {
+            let class_name = &c.name.id().name;
+            let mut class_slot = classes.get(&c.super_class.id().name).unwrap().clone();
+            class_slot.methods.get_mut("$dtor").unwrap().link_name = class_name.clone() + ".$dtor";
+            globals.insert(
+                class_name.clone(),
+                LocalSlot::Func(FuncSlot {
+                    link_name: class_name.clone(),
+                    level: 0,
+                }),
+            );
+            for declaration in &c.declarations {
+                if let Declaration::VarDef(v) = declaration {
+                    let source_type = v.value.inferred_type.clone().unwrap();
+                    let target_type = ValueType::from_annotation(&v.var.tv().type_);
+                    let size = if target_type == *TYPE_INT {
+                        4
+                    } else if target_type == *TYPE_BOOL {
+                        1
+                    } else {
+                        8
+                    };
+                    class_slot.object_size += (size - class_slot.object_size % size) % size;
+                    class_slot.attributes.insert(
+                        v.var.tv().identifier.id().name.clone(),
+                        AttributeSlot {
+                            offset: class_slot.object_size,
+                            source_type,
+                            target_type,
+                            init: v.value.content.clone(),
+                        },
+                    );
+                    class_slot.object_size += size;
+                } else if let Declaration::FuncDef(f) = declaration {
+                    let method_name = &f.name.id().name;
+                    let link_name = class_name.clone() + "." + method_name;
+                    if let Some(method) = class_slot.methods.get_mut(method_name) {
+                        method.link_name = link_name;
+                    } else {
+                        class_slot.methods.insert(
+                            method_name.clone(),
+                            MethodSlot {
+                                offset: class_slot.prototype_size,
+                                link_name,
+                            },
+                        );
+                        class_slot.prototype_size += 8;
+                    }
+                }
+            }
+            classes.insert(class_name.clone(), class_slot);
         }
     }
 
@@ -1672,7 +1990,7 @@ fn gen_code_set(ast: Ast) -> CodeSet {
 
     let mut storage_env = StorageEnv::new(globals);
 
-    let mut main_code = Emitter::new(BUILTIN_CHOCOPY_MAIN, &mut storage_env, &[], 0);
+    let mut main_code = Emitter::new(BUILTIN_CHOCOPY_MAIN, &mut storage_env, &classes, &[], 0);
 
     // mov rax,0x12345678
     main_code.emit(&[0x48, 0xC7, 0xC0, 0x78, 0x56, 0x34, 0x12]);
@@ -1713,16 +2031,61 @@ fn gen_code_set(ast: Ast) -> CodeSet {
 
     let main_procedure = main_code.finalize();
 
-    let mut procedures = vec![main_procedure];
+    let mut chunks = vec![main_procedure];
 
     for declaration in &ast.program().declarations {
         if let Declaration::FuncDef(f) = declaration {
-            procedures.append(&mut gen_function(&f, &mut storage_env, 0, ""));
+            chunks.append(&mut gen_function(&f, &mut storage_env, &classes, 0, ""));
+        } else if let Declaration::ClassDef(c) = declaration {
+            let prefix = c.name.id().name.clone() + ".";
+            for declaration in &c.declarations {
+                if let Declaration::FuncDef(f) = declaration {
+                    chunks.append(&mut gen_function(
+                        &f,
+                        &mut storage_env,
+                        &classes,
+                        0,
+                        &prefix,
+                    ));
+                }
+            }
         }
     }
 
+    for (class_name, class_slot) in &classes {
+        chunks.push(gen_ctor(
+            &class_name,
+            &class_slot,
+            &mut storage_env,
+            &classes,
+        ));
+        chunks.push(gen_dtor(
+            &class_name,
+            &class_slot,
+            &mut storage_env,
+            &classes,
+        ));
+
+        let mut prototype = vec![0; class_slot.prototype_size as usize];
+        prototype[0..8].copy_from_slice(&(class_slot.object_size as u64).to_le_bytes());
+        let links = class_slot
+            .methods
+            .iter()
+            .map(|(_, method)| ChunkLink {
+                pos: method.offset as usize,
+                to: method.link_name.clone(),
+            })
+            .collect();
+        chunks.push(Chunk {
+            name: class_name.clone() + ".$proto",
+            is_executable: false,
+            code: prototype,
+            links,
+        });
+    }
+
     CodeSet {
-        procedures,
+        chunks,
         global_size: global_offset as usize,
     }
 }
@@ -1736,11 +2099,10 @@ pub fn gen(ast: Ast, path: &str) -> Result<(), Box<dyn std::error::Error>> {
         .name(obj_name)
         .finish();
 
-    let mut declarations = vec![
+    let declarations = vec![
         (BOOL_PROTOTYPE, Decl::data_import().into()),
         (INT_PROTOTYPE, Decl::data_import().into()),
         (STR_PROTOTYPE, Decl::data_import().into()),
-        (OBJECT_PROTOTYPE, Decl::data_import().into()),
         (BOOL_LIST_PROTOTYPE, Decl::data_import().into()),
         (INT_LIST_PROTOTYPE, Decl::data_import().into()),
         (OBJECT_LIST_PROTOTYPE, Decl::data_import().into()),
@@ -1752,23 +2114,30 @@ pub fn gen(ast: Ast, path: &str) -> Result<(), Box<dyn std::error::Error>> {
         ("len", Decl::function_import().into()),
         ("print", Decl::function_import().into()),
         ("input", Decl::function_import().into()),
+        ("object.__init__", Decl::function_import().into()),
         // global
         (GLOBAL_SECTION, Decl::data().writable().into()),
     ];
 
-    let code_set = gen_code_set(ast);
-
-    for procedure in &code_set.procedures {
-        declarations.push((&procedure.name, Decl::function().global().into()));
-    }
-
     obj.declarations(declarations.into_iter())?;
 
-    for procedure in code_set.procedures {
-        obj.define(&procedure.name, procedure.code)?;
-        for link in procedure.links {
+    let code_set = gen_code_set(ast);
+
+    for chunk in &code_set.chunks {
+        if chunk.name == BUILTIN_CHOCOPY_MAIN {
+            obj.declare(&chunk.name, Decl::function().global())?
+        } else if chunk.is_executable {
+            obj.declare(&chunk.name, Decl::function().local())?
+        } else {
+            obj.declare(&chunk.name, Decl::data())?
+        }
+    }
+
+    for chunk in code_set.chunks {
+        obj.define(&chunk.name, chunk.code)?;
+        for link in chunk.links {
             obj.link(Link {
-                from: &procedure.name,
+                from: &chunk.name,
                 to: &link.to,
                 at: link.pos as u64,
             })?;

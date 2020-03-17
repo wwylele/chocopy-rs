@@ -191,10 +191,6 @@ pub struct CallExpr {
     pub base: NodeBase,
     pub function: FuncId,
     pub args: Vec<Expr>,
-
-    // For gen only
-    #[serde(skip)]
-    pub closure_slot: Option<usize>,
 }
 
 impl_node!(CallExpr);
@@ -697,6 +693,10 @@ pub enum Method {
 }
 
 impl Method {
+    pub fn member(&self) -> &TypedMemberExpr {
+        let Method::MemberExpr(member) = self;
+        member
+    }
     pub fn member_mut(&mut self) -> &mut TypedMemberExpr {
         let Method::MemberExpr(member) = self;
         member

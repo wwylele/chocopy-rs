@@ -369,7 +369,6 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                                 name: function.name,
                             }),
                             args,
-                            closure_slot: None,
                         }),
                         ExprContent::MemberExpr(method) => {
                             Expr::MethodCallExpr(Box::new(MethodCallExpr {
