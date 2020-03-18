@@ -1,0 +1,45 @@
+{
+  "kind" : "Program",
+  "location" : [ 1, 1, 1, 19 ],
+  "declarations" : [ ],
+  "statements" : [ {
+    "kind" : "ExprStmt",
+    "location" : [ 1, 1, 1, 18 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 1, 1, 1, 18 ],
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 1, 1, 1, 16 ],
+        "object" : {
+          "kind" : "ListExpr",
+          "location" : [ 1, 1, 1, 7 ],
+          "elements" : [ {
+            "kind" : "IntegerLiteral",
+            "location" : [ 1, 2, 1, 2 ],
+            "value" : 1
+          }, {
+            "kind" : "IntegerLiteral",
+            "location" : [ 1, 4, 1, 4 ],
+            "value" : 2
+          }, {
+            "kind" : "IntegerLiteral",
+            "location" : [ 1, 6, 1, 6 ],
+            "value" : 3
+          } ]
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 1, 9, 1, 16 ],
+          "name" : "__init__"
+        }
+      },
+      "args" : [ ]
+    }
+  } ],
+  "errors" : {
+    "errors" : [ ],
+    "kind" : "Errors",
+    "location" : [ 0, 0, 0, 0 ]
+  }
+}

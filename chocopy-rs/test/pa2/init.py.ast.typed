@@ -1,0 +1,399 @@
+{
+  "kind" : "Program",
+  "location" : [ 1, 1, 9, 16 ],
+  "declarations" : [ ],
+  "statements" : [ {
+    "kind" : "ExprStmt",
+    "location" : [ 1, 1, 1, 13 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 1, 1, 1, 13 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "<None>"
+      },
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 1, 1, 1, 11 ],
+        "inferredType" : {
+          "kind" : "FuncType",
+          "parameters" : [ {
+            "kind" : "ClassValueType",
+            "className" : "object"
+          } ],
+          "returnType" : {
+            "kind" : "ClassValueType",
+            "className" : "<None>"
+          }
+        },
+        "object" : {
+          "kind" : "IntegerLiteral",
+          "location" : [ 1, 1, 1, 2 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          },
+          "value" : 42
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 1, 4, 1, 11 ],
+          "name" : "__init__"
+        }
+      },
+      "args" : [ ]
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 2, 1, 2, 13 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 2, 1, 2, 13 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "<None>"
+      },
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 2, 1, 2, 11 ],
+        "inferredType" : {
+          "kind" : "FuncType",
+          "parameters" : [ {
+            "kind" : "ClassValueType",
+            "className" : "object"
+          } ],
+          "returnType" : {
+            "kind" : "ClassValueType",
+            "className" : "<None>"
+          }
+        },
+        "object" : {
+          "kind" : "ListExpr",
+          "location" : [ 2, 1, 2, 2 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "<Empty>"
+          },
+          "elements" : [ ]
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 2, 4, 2, 11 ],
+          "name" : "__init__"
+        }
+      },
+      "args" : [ ]
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 3, 1, 3, 19 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 3, 1, 3, 19 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "<None>"
+      },
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 3, 1, 3, 17 ],
+        "inferredType" : {
+          "kind" : "FuncType",
+          "parameters" : [ {
+            "kind" : "ClassValueType",
+            "className" : "object"
+          } ],
+          "returnType" : {
+            "kind" : "ClassValueType",
+            "className" : "<None>"
+          }
+        },
+        "object" : {
+          "kind" : "CallExpr",
+          "location" : [ 3, 1, 3, 8 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "object"
+          },
+          "function" : {
+            "kind" : "Identifier",
+            "location" : [ 3, 1, 3, 6 ],
+            "name" : "object"
+          },
+          "args" : [ ]
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 3, 10, 3, 17 ],
+          "name" : "__init__"
+        }
+      },
+      "args" : [ ]
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 4, 1, 4, 13 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 4, 1, 4, 13 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "<None>"
+      },
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 4, 1, 4, 11 ],
+        "inferredType" : {
+          "kind" : "FuncType",
+          "parameters" : [ {
+            "kind" : "ClassValueType",
+            "className" : "object"
+          } ],
+          "returnType" : {
+            "kind" : "ClassValueType",
+            "className" : "<None>"
+          }
+        },
+        "object" : {
+          "kind" : "StringLiteral",
+          "location" : [ 4, 1, 4, 2 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "str"
+          },
+          "value" : ""
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 4, 4, 4, 11 ],
+          "name" : "__init__"
+        }
+      },
+      "args" : [ ]
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 5, 1, 5, 15 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 5, 1, 5, 15 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "<None>"
+      },
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 5, 1, 5, 13 ],
+        "inferredType" : {
+          "kind" : "FuncType",
+          "parameters" : [ {
+            "kind" : "ClassValueType",
+            "className" : "object"
+          } ],
+          "returnType" : {
+            "kind" : "ClassValueType",
+            "className" : "<None>"
+          }
+        },
+        "object" : {
+          "kind" : "BooleanLiteral",
+          "location" : [ 5, 1, 5, 4 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "bool"
+          },
+          "value" : true
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 5, 6, 5, 13 ],
+          "name" : "__init__"
+        }
+      },
+      "args" : [ ]
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 6, 1, 6, 16 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 6, 1, 6, 16 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "<None>"
+      },
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 6, 1, 6, 14 ],
+        "inferredType" : {
+          "kind" : "FuncType",
+          "parameters" : [ {
+            "kind" : "ClassValueType",
+            "className" : "object"
+          } ],
+          "returnType" : {
+            "kind" : "ClassValueType",
+            "className" : "<None>"
+          }
+        },
+        "object" : {
+          "kind" : "CallExpr",
+          "location" : [ 6, 1, 6, 5 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "str"
+          },
+          "function" : {
+            "kind" : "Identifier",
+            "location" : [ 6, 1, 6, 3 ],
+            "name" : "str"
+          },
+          "args" : [ ]
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 6, 7, 6, 14 ],
+          "name" : "__init__"
+        }
+      },
+      "args" : [ ]
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 7, 1, 7, 16 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 7, 1, 7, 16 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "<None>"
+      },
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 7, 1, 7, 14 ],
+        "inferredType" : {
+          "kind" : "FuncType",
+          "parameters" : [ {
+            "kind" : "ClassValueType",
+            "className" : "object"
+          } ],
+          "returnType" : {
+            "kind" : "ClassValueType",
+            "className" : "<None>"
+          }
+        },
+        "object" : {
+          "kind" : "CallExpr",
+          "location" : [ 7, 1, 7, 5 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          },
+          "function" : {
+            "kind" : "Identifier",
+            "location" : [ 7, 1, 7, 3 ],
+            "name" : "int"
+          },
+          "args" : [ ]
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 7, 7, 7, 14 ],
+          "name" : "__init__"
+        }
+      },
+      "args" : [ ]
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 8, 1, 8, 17 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 8, 1, 8, 17 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "<None>"
+      },
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 8, 1, 8, 15 ],
+        "inferredType" : {
+          "kind" : "FuncType",
+          "parameters" : [ {
+            "kind" : "ClassValueType",
+            "className" : "object"
+          } ],
+          "returnType" : {
+            "kind" : "ClassValueType",
+            "className" : "<None>"
+          }
+        },
+        "object" : {
+          "kind" : "CallExpr",
+          "location" : [ 8, 1, 8, 6 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "bool"
+          },
+          "function" : {
+            "kind" : "Identifier",
+            "location" : [ 8, 1, 8, 4 ],
+            "name" : "bool"
+          },
+          "args" : [ ]
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 8, 8, 8, 15 ],
+          "name" : "__init__"
+        }
+      },
+      "args" : [ ]
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 9, 1, 9, 15 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 9, 1, 9, 15 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "<None>"
+      },
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 9, 1, 9, 13 ],
+        "inferredType" : {
+          "kind" : "FuncType",
+          "parameters" : [ {
+            "kind" : "ClassValueType",
+            "className" : "object"
+          } ],
+          "returnType" : {
+            "kind" : "ClassValueType",
+            "className" : "<None>"
+          }
+        },
+        "object" : {
+          "kind" : "NoneLiteral",
+          "location" : [ 9, 1, 9, 4 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "<None>"
+          }
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 9, 6, 9, 13 ],
+          "name" : "__init__"
+        }
+      },
+      "args" : [ ]
+    }
+  } ],
+  "errors" : {
+    "errors" : [ ],
+    "kind" : "Errors",
+    "location" : [ 0, 0, 0, 0 ]
+  }
+}

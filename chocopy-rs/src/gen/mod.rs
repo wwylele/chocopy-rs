@@ -837,12 +837,17 @@ impl<'a> Emitter<'a> {
         }
 
         if virtual_call {
-            let slot = if let Some(ValueType::ClassValueType(c)) = &args[0].inferred_type {
-                &self.classes[&c.class_name].methods[name]
+            let offset = if let Some(ValueType::ClassValueType(c)) = &args[0].inferred_type {
+                if let "int" | "bool" | "str" | "<None>" | "<Empty>" = c.class_name.as_str() {
+                    assert!(name == "__init__");
+                    16
+                } else {
+                    self.classes[&c.class_name].methods[name].offset
+                }
             } else {
                 panic!()
             };
-            self.call_virtual(slot.offset);
+            self.call_virtual(offset);
         } else {
             let slot = if let Some(EnvSlot::Func(f)) = self.storage_env.get(name) {
                 f
@@ -1886,7 +1891,7 @@ fn gen_code_set(ast: Ast) -> CodeSet {
         "object".to_owned(),
         ClassSlot {
             attributes: HashMap::new(),
-            object_size: 16,
+            object_size: 0,
             methods: base_methods,
             prototype_size: 24,
         },
@@ -1946,7 +1951,7 @@ fn gen_code_set(ast: Ast) -> CodeSet {
                     class_slot.attributes.insert(
                         v.var.tv().identifier.id().name.clone(),
                         AttributeSlot {
-                            offset: class_slot.object_size,
+                            offset: class_slot.object_size + 16,
                             source_type,
                             target_type,
                             init: v.value.content.clone(),
@@ -1987,6 +1992,10 @@ fn gen_code_set(ast: Ast) -> CodeSet {
     insert_builtin(&mut globals, "len");
     insert_builtin(&mut globals, "print");
     insert_builtin(&mut globals, "input");
+    insert_builtin(&mut globals, "str");
+    insert_builtin(&mut globals, "int");
+    insert_builtin(&mut globals, "bool");
+    insert_builtin(&mut globals, "object");
 
     let mut storage_env = StorageEnv::new(globals);
 
@@ -2115,6 +2124,9 @@ pub fn gen(ast: Ast, path: &str) -> Result<(), Box<dyn std::error::Error>> {
         ("print", Decl::function_import().into()),
         ("input", Decl::function_import().into()),
         ("object.__init__", Decl::function_import().into()),
+        ("str", Decl::function_import().into()),
+        ("int", Decl::function_import().into()),
+        ("bool", Decl::function_import().into()),
         // global
         (GLOBAL_SECTION, Decl::data().writable().into()),
     ];

@@ -8,6 +8,8 @@ static ALLOC_COUNTER: AtomicU64 = AtomicU64::new(0);
 pub struct Prototype {
     size: i64,
     dtor: unsafe extern "C" fn(*mut u8),
+    ctor: unsafe extern "C" fn(*mut u8) -> *mut u8,
+    // followed by other method pointers
 }
 
 #[no_mangle]
@@ -15,6 +17,7 @@ pub struct Prototype {
 pub static BOOL_PROTOTYPE: Prototype = Prototype {
     size: 1,
     dtor: dtor_noop,
+    ctor: object_init,
 };
 
 #[no_mangle]
@@ -22,6 +25,7 @@ pub static BOOL_PROTOTYPE: Prototype = Prototype {
 pub static INT_PROTOTYPE: Prototype = Prototype {
     size: 4,
     dtor: dtor_noop,
+    ctor: object_init,
 };
 
 #[no_mangle]
@@ -29,6 +33,7 @@ pub static INT_PROTOTYPE: Prototype = Prototype {
 pub static STR_PROTOTYPE: Prototype = Prototype {
     size: -1,
     dtor: dtor_noop,
+    ctor: object_init,
 };
 
 #[no_mangle]
@@ -36,6 +41,7 @@ pub static STR_PROTOTYPE: Prototype = Prototype {
 pub static BOOL_LIST_PROTOTYPE: Prototype = Prototype {
     size: -1,
     dtor: dtor_noop,
+    ctor: object_init,
 };
 
 #[no_mangle]
@@ -43,6 +49,7 @@ pub static BOOL_LIST_PROTOTYPE: Prototype = Prototype {
 pub static INT_LIST_PROTOTYPE: Prototype = Prototype {
     size: -4,
     dtor: dtor_noop,
+    ctor: object_init,
 };
 
 #[no_mangle]
@@ -50,12 +57,14 @@ pub static INT_LIST_PROTOTYPE: Prototype = Prototype {
 pub static OBJECT_LIST_PROTOTYPE: Prototype = Prototype {
     size: -8,
     dtor: dtor_list,
+    ctor: object_init,
 };
 
 #[repr(C)]
 pub struct Object {
     prototype: *const Prototype,
     ref_count: u64,
+    // followed by attributes
 }
 
 #[repr(C)]
@@ -211,6 +220,22 @@ pub unsafe extern "C" fn input() -> *mut u8 {
         input.len(),
     );
     pointer
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn int() -> i64 {
+    0
+}
+
+#[no_mangle]
+#[export_name = "bool"]
+pub unsafe extern "C" fn bool_() -> i64 {
+    0
+}
+
+#[export_name = "str"]
+pub unsafe extern "C" fn str_() -> *mut u8 {
+    alloc_obj(&STR_PROTOTYPE as *const Prototype, 0)
 }
 
 #[no_mangle]

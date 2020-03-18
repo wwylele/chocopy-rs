@@ -1,0 +1,73 @@
+{
+  "kind" : "Program",
+  "location" : [ 1, 1, 1, 19 ],
+  "declarations" : [ ],
+  "statements" : [ {
+    "kind" : "ExprStmt",
+    "location" : [ 1, 1, 1, 18 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 1, 1, 1, 18 ],
+      "errorMsg" : "Cannot access member of non-class type `[int]`",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "object"
+      },
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 1, 1, 1, 16 ],
+        "object" : {
+          "kind" : "ListExpr",
+          "location" : [ 1, 1, 1, 7 ],
+          "inferredType" : {
+            "kind" : "ListValueType",
+            "elementType" : {
+              "kind" : "ClassValueType",
+              "className" : "int"
+            }
+          },
+          "elements" : [ {
+            "kind" : "IntegerLiteral",
+            "location" : [ 1, 2, 1, 2 ],
+            "inferredType" : {
+              "kind" : "ClassValueType",
+              "className" : "int"
+            },
+            "value" : 1
+          }, {
+            "kind" : "IntegerLiteral",
+            "location" : [ 1, 4, 1, 4 ],
+            "inferredType" : {
+              "kind" : "ClassValueType",
+              "className" : "int"
+            },
+            "value" : 2
+          }, {
+            "kind" : "IntegerLiteral",
+            "location" : [ 1, 6, 1, 6 ],
+            "inferredType" : {
+              "kind" : "ClassValueType",
+              "className" : "int"
+            },
+            "value" : 3
+          } ]
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 1, 9, 1, 16 ],
+          "name" : "__init__"
+        }
+      },
+      "args" : [ ]
+    }
+  } ],
+  "errors" : {
+    "errors" : [ {
+      "kind" : "CompilerError",
+      "location" : [ 1, 1, 1, 18 ],
+      "message" : "Cannot access member of non-class type `[int]`"
+    } ],
+    "kind" : "Errors",
+    "location" : [ 0, 0, 0, 0 ]
+  }
+}

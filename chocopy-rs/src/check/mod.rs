@@ -185,7 +185,7 @@ pub fn check(mut ast: Ast) -> Ast {
                     "__init__".to_owned(),
                     Type::FuncType(FuncType {
                         parameters: vec![ValueType::ClassValueType(ClassValueType {
-                            class_name: name.to_owned(),
+                            class_name: "object".to_owned(),
                         })],
                         return_type: TYPE_NONE.clone(),
                     }),
@@ -364,6 +364,46 @@ pub fn check(mut ast: Ast) -> Ast {
         LocalSlot::Func(FuncType {
             parameters: vec![TYPE_OBJECT.clone()],
             return_type: TYPE_INT.clone(),
+        }),
+    );
+
+    global_env.insert(
+        "int".to_owned(),
+        LocalSlot::Func(FuncType {
+            parameters: vec![],
+            return_type: ValueType::ClassValueType(ClassValueType {
+                class_name: "int".to_owned(),
+            }),
+        }),
+    );
+
+    global_env.insert(
+        "bool".to_owned(),
+        LocalSlot::Func(FuncType {
+            parameters: vec![],
+            return_type: ValueType::ClassValueType(ClassValueType {
+                class_name: "bool".to_owned(),
+            }),
+        }),
+    );
+
+    global_env.insert(
+        "str".to_owned(),
+        LocalSlot::Func(FuncType {
+            parameters: vec![],
+            return_type: ValueType::ClassValueType(ClassValueType {
+                class_name: "str".to_owned(),
+            }),
+        }),
+    );
+
+    global_env.insert(
+        "object".to_owned(),
+        LocalSlot::Func(FuncType {
+            parameters: vec![],
+            return_type: ValueType::ClassValueType(ClassValueType {
+                class_name: "object".to_owned(),
+            }),
         }),
     );
 
