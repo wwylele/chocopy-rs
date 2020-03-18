@@ -354,19 +354,14 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn emit_int_literal(&mut self, i: &IntegerLiteral) {
-        // mov rax,{i}
-        self.emit(&[0x48, 0xc7, 0xc0]);
+        // mov eax,{i}
+        self.emit(&[0xB8]);
         self.emit(&i.value.to_le_bytes());
     }
 
     pub fn emit_bool_literal(&mut self, b: &BooleanLiteral) {
-        if b.value {
-            // mov rax,1
-            self.emit(&[0x48, 0xC7, 0xC0, 0x01, 0x00, 0x00, 0x00]);
-        } else {
-            // xor rax,rax
-            self.emit(&[0x48, 0x31, 0xC0]);
-        }
+        // mov al,{}
+        self.emit(&[0xB0, b.value as u8]);
     }
 
     pub fn emit_string_literal(&mut self, s: &StringLiteral) {
@@ -492,15 +487,11 @@ impl<'a> Emitter<'a> {
         if source_element == &*TYPE_INT {
             // mov eax,[rsi]
             self.emit(&[0x8B, 0x06]);
-            // movsx rax,eax
-            self.emit(&[0x48, 0x63, 0xC0]);
             // add rsi,4
             self.emit(&[0x48, 0x83, 0xC6, 0x04]);
         } else if source_element == &*TYPE_BOOL {
             // mov al,[rsi]
             self.emit(&[0x8A, 0x06]);
-            // movzx rax,al
-            self.emit(&[0x48, 0x0F, 0xB6, 0xC0]);
             // add rsi,1
             self.emit(&[0x48, 0x83, 0xC6, 0x01]);
         } else {
@@ -662,12 +653,10 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn emit_binary_expr(&mut self, expr: &BinaryExpr, target_type: &ValueType) {
-        if expr.operator == BinaryOp::Add && expr.left.inferred_type.as_ref().unwrap() == &*TYPE_STR
-        {
+        let left_type = expr.left.inferred_type.as_ref().unwrap();
+        if expr.operator == BinaryOp::Add && left_type == &*TYPE_STR {
             self.emit_string_add(expr);
-        } else if expr.operator == BinaryOp::Add
-            && expr.left.inferred_type.as_ref().unwrap() != &*TYPE_INT
-        {
+        } else if expr.operator == BinaryOp::Add && left_type != &*TYPE_INT {
             let target_element = if let ValueType::ListValueType(l) = &target_type {
                 &*l.element_type
             } else {
@@ -675,13 +664,13 @@ impl<'a> Emitter<'a> {
             };
             self.emit_list_add(expr, target_element);
         } else if (expr.operator == BinaryOp::Eq || expr.operator == BinaryOp::Ne)
-            && expr.left.inferred_type.as_ref().unwrap() == &*TYPE_STR
+            && left_type == &*TYPE_STR
         {
             self.emit_str_compare(expr);
         } else if expr.operator == BinaryOp::Or || expr.operator == BinaryOp::And {
             self.emit_expression(&expr.left);
-            // test rax,rax
-            self.emit(&[0x48, 0x85, 0xC0]);
+            // test al,al
+            self.emit(&[0x84, 0xC0]);
             if expr.operator == BinaryOp::Or {
                 // jne
                 self.emit(&[0x0f, 0x85]);
@@ -703,43 +692,41 @@ impl<'a> Emitter<'a> {
             match expr.operator {
                 BinaryOp::Add => {
                     // Note: swapped
-                    // add rax,r11
-                    self.emit(&[0x4C, 0x01, 0xD8]);
+                    // add eax,r11d
+                    self.emit(&[0x44, 0x01, 0xD8]);
                 }
                 BinaryOp::Sub => {
-                    // sub r11,rax
-                    // mov rax,r11
-                    self.emit(&[0x49, 0x29, 0xC3, 0x4C, 0x89, 0xD8]);
+                    // sub r11d,eax
+                    // mov eax,r11d
+                    self.emit(&[0x41, 0x29, 0xC3, 0x44, 0x89, 0xD8]);
                 }
                 BinaryOp::Mul => {
-                    // imul rax,r11
-                    self.emit(&[0x49, 0x0F, 0xAF, 0xC3]);
+                    // imul eax,r11d
+                    self.emit(&[0x41, 0x0F, 0xAF, 0xC3]);
                 }
                 BinaryOp::Div => {
-                    // xchg rax,r11
-                    self.emit(&[0x49, 0x93]);
-                    // cqo
-                    self.emit(&[0x48, 0x99]);
-                    // idiv,r11
-                    self.emit(&[0x49, 0xf7, 0xfb]);
+                    // xchg eax,r11d
+                    self.emit(&[0x41, 0x93]);
+                    // cdq
+                    self.emit(&[0x99]);
+                    // idiv,r11d
+                    self.emit(&[0x41, 0xF7, 0xFB]);
                 }
                 BinaryOp::Mod => {
-                    // xchg rax,r11
-                    self.emit(&[0x49, 0x93]);
-                    // cqo
-                    self.emit(&[0x48, 0x99]);
-                    // idiv,r11
-                    self.emit(&[0x49, 0xf7, 0xfb]);
-                    // mov rax,rdx
-                    self.emit(&[0x48, 0x89, 0xD0]);
+                    // xchg eax,r11d
+                    self.emit(&[0x41, 0x93]);
+                    // cdq
+                    self.emit(&[0x99]);
+                    // idiv,r11d
+                    self.emit(&[0x41, 0xF7, 0xFB]);
+                    // mov eax,edx
+                    self.emit(&[0x89, 0xD0]);
                 }
                 BinaryOp::Is => {
                     // cmp r11,rax
                     self.emit(&[0x49, 0x39, 0xC3]);
                     // sete r10b
                     self.emit(&[0x41, 0x0F, 0x94, 0xC2]);
-                    // movzx r10,r10b
-                    self.emit(&[0x4D, 0x0F, 0xB6, 0xD2]);
                     self.emit_push_r10();
                     self.emit_push_r11();
                     self.emit_drop();
@@ -762,12 +749,16 @@ impl<'a> Emitter<'a> {
                         BinaryOp::Gt => 0xf,
                         _ => panic!(),
                     };
-                    // cmp r11,rax
-                    self.emit(&[0x49, 0x39, 0xC3]);
+
+                    if left_type == &*TYPE_BOOL {
+                        // cmp r11b,al
+                        self.emit(&[0x41, 0x38, 0xC3]);
+                    } else {
+                        // cmp r11d,eax
+                        self.emit(&[0x41, 0x39, 0xC3]);
+                    }
                     // set* al
                     self.emit(&[0x0f, 0x90 + code, 0xc0]);
-                    // movzx rax,al
-                    self.emit(&[0x48, 0x0f, 0xb6, 0xc0]);
                 }
                 _ => panic!(),
             }
@@ -875,6 +866,8 @@ impl<'a> Emitter<'a> {
         self.emit_expression(&expr.list);
         self.emit_push_rax();
         self.emit_expression(&expr.index);
+        // cdqe
+        self.emit(&[0x48, 0x98]);
         self.emit_push_rax();
         self.prepare_call(2);
         // mov rdi,[rip+{STR_PROTOTYPE}]
@@ -904,6 +897,8 @@ impl<'a> Emitter<'a> {
         self.emit_expression(&expr.list);
         self.emit_push_rax();
         self.emit_expression(&expr.index);
+        // cdqe
+        self.emit(&[0x48, 0x98]);
         self.emit_pop_rsi();
         let element_type = if let Some(ValueType::ListValueType(l)) = &expr.list.inferred_type {
             &*l.element_type
@@ -914,13 +909,9 @@ impl<'a> Emitter<'a> {
         if element_type == &*TYPE_INT {
             // mov eax,[rsi+rax*4+24]
             self.emit(&[0x8B, 0x44, 0x86, 0x18]);
-            // movsx rax,eax
-            self.emit(&[0x48, 0x63, 0xC0]);
         } else if element_type == &*TYPE_BOOL {
             // mov al,[rsi+rax+24]
             self.emit(&[0x8A, 0x44, 0x06, 0x18]);
-            // movzx rax,al
-            self.emit(&[0x48, 0x0F, 0xB6, 0xC0]);
         } else {
             // mov rax,[rsi+rax*8+24]
             self.emit(&[0x48, 0x8B, 0x44, 0xC6, 0x18]);
@@ -949,14 +940,10 @@ impl<'a> Emitter<'a> {
             // mov eax,[rsi+{}]
             self.emit(&[0x8B, 0x86]);
             self.emit(&slot.offset.to_le_bytes());
-            // movsx rax,eax
-            self.emit(&[0x48, 0x63, 0xC0]);
         } else if slot.target_type == *TYPE_BOOL {
             // mov al,[rsi+{}]
             self.emit(&[0x8A, 0x86]);
             self.emit(&slot.offset.to_le_bytes());
-            // movzx rax,al
-            self.emit(&[0x48, 0x0F, 0xB6, 0xC0]);
         } else {
             // mov rax,[rsi+{}]
             self.emit(&[0x48, 0x8B, 0x86]);
@@ -973,8 +960,8 @@ impl<'a> Emitter<'a> {
 
     pub fn emit_if_expr(&mut self, expr: &IfExpr, target_type: &ValueType) {
         self.emit_expression(&expr.condition);
-        // test rax,rax
-        self.emit(&[0x48, 0x85, 0xC0]);
+        // test al,al
+        self.emit(&[0x84, 0xC0]);
         // je
         self.emit(&[0x0f, 0x84]);
         let pos_if = self.pos();
@@ -999,8 +986,8 @@ impl<'a> Emitter<'a> {
 
     pub fn emit_if_stmt(&mut self, stmt: &IfStmt) {
         self.emit_expression(&stmt.condition);
-        // test rax,rax
-        self.emit(&[0x48, 0x85, 0xC0]);
+        // test al,al
+        self.emit(&[0x84, 0xC0]);
         // je
         self.emit(&[0x0f, 0x84]);
         let pos_if = self.pos();
@@ -1110,8 +1097,6 @@ impl<'a> Emitter<'a> {
                     to: GLOBAL_SECTION.to_owned(),
                 });
                 self.emit(&offset.to_le_bytes());
-                // movsx rax,eax
-                self.emit(&[0x48, 0x63, 0xC0]);
             } else if target_type == &*TYPE_BOOL {
                 // mov al,[rip+{}]
                 self.emit(&[0x8A, 0x05]);
@@ -1120,8 +1105,6 @@ impl<'a> Emitter<'a> {
                     to: GLOBAL_SECTION.to_owned(),
                 });
                 self.emit(&offset.to_le_bytes());
-                // movzx rax,al
-                self.emit(&[0x48, 0x0F, 0xB6, 0xC0]);
             } else {
                 // mov rax,[rip+{}]
                 self.emit(&[0x48, 0x8B, 0x05]);
@@ -1226,8 +1209,8 @@ impl<'a> Emitter<'a> {
     pub fn emit_while_stmt(&mut self, stmt: &WhileStmt) {
         let pos_start = self.pos();
         self.emit_expression(&stmt.condition);
-        // test rax,rax
-        self.emit(&[0x48, 0x85, 0xC0]);
+        // test al,al
+        self.emit(&[0x84, 0xC0]);
         // je
         self.emit(&[0x0f, 0x84]);
         let pos_condition = self.pos();
@@ -1485,13 +1468,9 @@ impl<'a> Emitter<'a> {
             if element_type == &*TYPE_INT {
                 // mov eax,[rsi+rax*4+24]
                 self.emit(&[0x8B, 0x44, 0x86, 0x18]);
-                // movsx rax,eax
-                self.emit(&[0x48, 0x63, 0xC0]);
             } else if element_type == &*TYPE_BOOL {
                 // mov al,[rsi+rax+24]
                 self.emit(&[0x8A, 0x44, 0x06, 0x18]);
-                // movzx rax,al
-                self.emit(&[0x48, 0x0F, 0xB6, 0xC0]);
             } else {
                 // mov rax,[rsi+rax*8+24]
                 self.emit(&[0x48, 0x8B, 0x44, 0xC6, 0x18]);
@@ -1818,7 +1797,7 @@ fn gen_ctor(
             // mov [rdi+{}],eax
             code.emit(&[0x89, 0x87]);
         } else if attribute.target_type == *TYPE_BOOL {
-            // mov [rdi+{}],eal
+            // mov [rdi+{}],al
             code.emit(&[0x88, 0x87]);
         } else {
             // mov [rdi+{}],rax

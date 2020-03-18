@@ -12,7 +12,6 @@ pub struct Prototype {
     // followed by other method pointers
 }
 
-#[no_mangle]
 #[export_name = "bool.$proto"]
 pub static BOOL_PROTOTYPE: Prototype = Prototype {
     size: 1,
@@ -20,7 +19,6 @@ pub static BOOL_PROTOTYPE: Prototype = Prototype {
     ctor: object_init,
 };
 
-#[no_mangle]
 #[export_name = "int.$proto"]
 pub static INT_PROTOTYPE: Prototype = Prototype {
     size: 4,
@@ -28,7 +26,6 @@ pub static INT_PROTOTYPE: Prototype = Prototype {
     ctor: object_init,
 };
 
-#[no_mangle]
 #[export_name = "str.$proto"]
 pub static STR_PROTOTYPE: Prototype = Prototype {
     size: -1,
@@ -36,7 +33,6 @@ pub static STR_PROTOTYPE: Prototype = Prototype {
     ctor: object_init,
 };
 
-#[no_mangle]
 #[export_name = "[bool].$proto"]
 pub static BOOL_LIST_PROTOTYPE: Prototype = Prototype {
     size: -1,
@@ -44,7 +40,6 @@ pub static BOOL_LIST_PROTOTYPE: Prototype = Prototype {
     ctor: object_init,
 };
 
-#[no_mangle]
 #[export_name = "[int].$proto"]
 pub static INT_LIST_PROTOTYPE: Prototype = Prototype {
     size: -4,
@@ -52,7 +47,6 @@ pub static INT_LIST_PROTOTYPE: Prototype = Prototype {
     ctor: object_init,
 };
 
-#[no_mangle]
 #[export_name = "[object].$proto"]
 pub static OBJECT_LIST_PROTOTYPE: Prototype = Prototype {
     size: -8,
@@ -100,7 +94,6 @@ unsafe extern "C" fn dtor_list(pointer: *mut u8) {
     }
 }
 
-#[no_mangle]
 #[export_name = "object.__init__"]
 pub unsafe extern "C" fn object_init(pointer: *mut u8) -> *mut u8 {
     let object = pointer as *mut Object;
@@ -111,7 +104,6 @@ pub unsafe extern "C" fn object_init(pointer: *mut u8) -> *mut u8 {
     std::ptr::null_mut()
 }
 
-#[no_mangle]
 #[export_name = "$alloc_obj"]
 pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mut u8 {
     let size = align_up(if (*prototype).size > 0 {
@@ -133,7 +125,6 @@ pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mu
     pointer
 }
 
-#[no_mangle]
 #[export_name = "$free_obj"]
 pub unsafe extern "C" fn free_obj(pointer: *mut u8) {
     assert!((*(pointer as *mut Object)).ref_count == 0);
@@ -150,7 +141,7 @@ pub unsafe extern "C" fn free_obj(pointer: *mut u8) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn len(pointer: *mut u8) -> u32 {
+pub unsafe extern "C" fn len(pointer: *mut u8) -> i32 {
     if pointer.is_null() {
         runtime_error("len on None");
     }
@@ -163,7 +154,7 @@ pub unsafe extern "C" fn len(pointer: *mut u8) -> u32 {
     {
         runtime_error("len() only works for list or str");
     }
-    let len = (*object).len as u32;
+    let len = (*object).len as i32;
     (*object).object.ref_count -= 1;
     if (*object).object.ref_count == 0 {
         free_obj(pointer);
@@ -223,14 +214,13 @@ pub unsafe extern "C" fn input() -> *mut u8 {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn int() -> i64 {
+pub unsafe extern "C" fn int() -> i32 {
     0
 }
 
-#[no_mangle]
 #[export_name = "bool"]
-pub unsafe extern "C" fn bool_() -> i64 {
-    0
+pub unsafe extern "C" fn bool_() -> bool {
+    false
 }
 
 #[export_name = "str"]
@@ -238,7 +228,6 @@ pub unsafe extern "C" fn str_() -> *mut u8 {
     alloc_obj(&STR_PROTOTYPE as *const Prototype, 0)
 }
 
-#[no_mangle]
 #[export_name = "$report_broken_stack"]
 pub unsafe extern "C" fn report_broken_stack() {
     println!("--- broken stack detected! ---");
