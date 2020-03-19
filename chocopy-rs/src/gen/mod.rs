@@ -15,7 +15,10 @@ const INT_LIST_PROTOTYPE: &'static str = "[int].$proto";
 const OBJECT_LIST_PROTOTYPE: &'static str = "[object].$proto";
 const BUILTIN_ALLOC_OBJ: &'static str = "$alloc_obj";
 const BUILTIN_FREE_OBJ: &'static str = "$free_obj";
-const BUILTIN_REPORT_BROKEN_STACK: &'static str = "$report_broken_stack";
+const BUILTIN_BROKEN_STACK: &'static str = "$broken_stack";
+const BUILTIN_DIV_ZERO: &'static str = "$div_zero";
+const BUILTIN_OUT_OF_BOUND: &'static str = "$out_of_bound";
+const BUILTIN_NONE_OP: &'static str = "$none_op";
 const BUILTIN_CHOCOPY_MAIN: &'static str = "$chocopy_main";
 const GLOBAL_SECTION: &'static str = "$global";
 
@@ -273,6 +276,19 @@ impl<'a> Emitter<'a> {
     pub fn emit_pop_r11(&mut self) {
         self.emit(&[0x41, 0x5B]);
         self.rsp_aligned = !self.rsp_aligned;
+    }
+
+    pub fn emit_check_none(&mut self) {
+        // test rax,rax
+        self.emit(&[0x48, 0x85, 0xC0]);
+        // jne
+        self.emit(&[0x0F, 0x85]);
+        let pos = self.pos();
+        self.emit(&[0; 4]);
+        self.prepare_call(0);
+        self.call(BUILTIN_NONE_OP);
+        let delta = (self.pos() - pos - 4) as u32;
+        self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
     }
 
     pub fn emit_box_int(&mut self) {
@@ -704,23 +720,28 @@ impl<'a> Emitter<'a> {
                     // imul eax,r11d
                     self.emit(&[0x41, 0x0F, 0xAF, 0xC3]);
                 }
-                BinaryOp::Div => {
+                BinaryOp::Div | BinaryOp::Mod => {
+                    // test eax,eax
+                    self.emit(&[0x85, 0xC0]);
+                    // jne
+                    self.emit(&[0x0F, 0x85]);
+                    let pos = self.pos();
+                    self.emit(&[0; 4]);
+                    self.prepare_call(0);
+                    self.call(BUILTIN_DIV_ZERO);
+                    let delta = (self.pos() - pos - 4) as u32;
+                    self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
+
                     // xchg eax,r11d
                     self.emit(&[0x41, 0x93]);
                     // cdq
                     self.emit(&[0x99]);
                     // idiv,r11d
                     self.emit(&[0x41, 0xF7, 0xFB]);
-                }
-                BinaryOp::Mod => {
-                    // xchg eax,r11d
-                    self.emit(&[0x41, 0x93]);
-                    // cdq
-                    self.emit(&[0x99]);
-                    // idiv,r11d
-                    self.emit(&[0x41, 0xF7, 0xFB]);
-                    // mov eax,edx
-                    self.emit(&[0x89, 0xD0]);
+                    if expr.operator == BinaryOp::Mod {
+                        // mov eax,edx
+                        self.emit(&[0x89, 0xD0]);
+                    }
                 }
                 BinaryOp::Is => {
                     // cmp r11,rax
@@ -789,6 +810,10 @@ impl<'a> Emitter<'a> {
             let param_type = &func_type.as_ref().unwrap().func_type().parameters[i];
 
             self.emit_coerce(arg.inferred_type.as_ref().unwrap(), param_type);
+
+            if i == 0 && virtual_call {
+                self.emit_check_none();
+            }
 
             if i < 6 {
                 self.emit_push_rax();
@@ -882,6 +907,16 @@ impl<'a> Emitter<'a> {
         self.call(BUILTIN_ALLOC_OBJ);
         self.emit_pop_rsi();
         self.emit_pop_r11();
+        // cmp rsi,[r11+16]
+        self.emit(&[0x49, 0x3B, 0x73, 0x10]);
+        // jb
+        self.emit(&[0x0F, 0x82]);
+        let pos = self.pos();
+        self.emit(&[0; 4]);
+        self.prepare_call(0);
+        self.call(BUILTIN_OUT_OF_BOUND);
+        let delta = (self.pos() - pos - 4) as u32;
+        self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
         // mov r10b,[r11+rsi+24]
         self.emit(&[0x45, 0x8A, 0x54, 0x33, 0x18]);
         // mov [rax+24],r10b
@@ -895,6 +930,7 @@ impl<'a> Emitter<'a> {
 
     pub fn emit_list_index(&mut self, expr: &IndexExpr) {
         self.emit_expression(&expr.list);
+        self.emit_check_none();
         self.emit_push_rax();
         self.emit_expression(&expr.index);
         // cdqe
@@ -905,6 +941,17 @@ impl<'a> Emitter<'a> {
         } else {
             panic!()
         };
+
+        // cmp rax,[rsi+16]
+        self.emit(&[0x48, 0x3B, 0x46, 0x10]);
+        // jb
+        self.emit(&[0x0F, 0x82]);
+        let pos = self.pos();
+        self.emit(&[0; 4]);
+        self.prepare_call(0);
+        self.call(BUILTIN_OUT_OF_BOUND);
+        let delta = (self.pos() - pos - 4) as u32;
+        self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
 
         if element_type == &*TYPE_INT {
             // mov eax,[rsi+rax*4+24]
@@ -927,6 +974,7 @@ impl<'a> Emitter<'a> {
 
     pub fn emit_member_expr(&mut self, expr: &MemberExpr) {
         self.emit_expression(&expr.object);
+        self.emit_check_none();
         // mov rsi,rax
         self.emit(&[0x48, 0x89, 0xC6]);
 
@@ -1319,10 +1367,22 @@ impl<'a> Emitter<'a> {
                 }
                 ExprContent::IndexExpr(expr) => {
                     self.emit_expression(&expr.list);
+                    self.emit_check_none();
                     self.emit_push_rax();
                     self.emit_expression(&expr.index);
                     // mov rsi,[rsp]
                     self.emit(&[0x48, 0x8B, 0x34, 0x24]);
+
+                    // cmp rax,[rsi+16]
+                    self.emit(&[0x48, 0x3B, 0x46, 0x10]);
+                    // jb
+                    self.emit(&[0x0F, 0x82]);
+                    let pos = self.pos();
+                    self.emit(&[0; 4]);
+                    self.prepare_call(0);
+                    self.call(BUILTIN_OUT_OF_BOUND);
+                    let delta = (self.pos() - pos - 4) as u32;
+                    self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
 
                     if target_type == &*TYPE_INT {
                         // lea rsi,[rsi+rax*4+24]
@@ -1365,6 +1425,7 @@ impl<'a> Emitter<'a> {
                 }
                 ExprContent::MemberExpr(expr) => {
                     self.emit_expression(&expr.object);
+                    self.emit_check_none();
                     self.emit_push_rax();
 
                     let slot =
@@ -1418,6 +1479,7 @@ impl<'a> Emitter<'a> {
     pub fn emit_for_stmt(&mut self, stmt: &ForStmt) {
         //// Compute the iterable
         self.emit_expression(&stmt.iterable);
+        self.emit_check_none();
         self.emit_push_rax();
         // xor rax,rax
         self.emit(&[0x48, 0x31, 0xC0]);
@@ -2010,7 +2072,7 @@ fn gen_code_set(ast: Ast) -> CodeSet {
     main_code.emit(&[0; 4]);
 
     main_code.prepare_call(0);
-    main_code.call(BUILTIN_REPORT_BROKEN_STACK);
+    main_code.call(BUILTIN_BROKEN_STACK);
 
     let delta = (main_code.pos() - pos - 4) as u32;
     main_code.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
@@ -2097,7 +2159,10 @@ pub fn gen(ast: Ast, path: &str) -> Result<(), Box<dyn std::error::Error>> {
         // hidden built-in functions
         (BUILTIN_ALLOC_OBJ, Decl::function_import().into()),
         (BUILTIN_FREE_OBJ, Decl::function_import().into()),
-        (BUILTIN_REPORT_BROKEN_STACK, Decl::function_import().into()),
+        (BUILTIN_BROKEN_STACK, Decl::function_import().into()),
+        (BUILTIN_DIV_ZERO, Decl::function_import().into()),
+        (BUILTIN_OUT_OF_BOUND, Decl::function_import().into()),
+        (BUILTIN_NONE_OP, Decl::function_import().into()),
         // built-in functions
         ("len", Decl::function_import().into()),
         ("print", Decl::function_import().into()),

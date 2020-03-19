@@ -1,5 +1,6 @@
 use std::alloc::*;
 use std::mem::*;
+use std::process::exit;
 use std::sync::atomic::*;
 
 static ALLOC_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -114,7 +115,7 @@ pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mu
     });
     let pointer = alloc(Layout::from_size_align(size, 8).unwrap());
     if pointer.is_null() {
-        runtime_error("Out of memory");
+        out_of_memory();
     }
     (*(pointer as *mut Object)).prototype = prototype;
     (*(pointer as *mut Object)).ref_count = 1;
@@ -143,7 +144,7 @@ pub unsafe extern "C" fn free_obj(pointer: *mut u8) {
 #[no_mangle]
 pub unsafe extern "C" fn len(pointer: *mut u8) -> i32 {
     if pointer.is_null() {
-        runtime_error("len on None");
+        invalid_arg();
     }
     let object = pointer as *mut ArrayObject;
     let prototype = (*object).object.prototype;
@@ -152,7 +153,7 @@ pub unsafe extern "C" fn len(pointer: *mut u8) -> i32 {
         && prototype != &OBJECT_LIST_PROTOTYPE as *const Prototype
         && prototype != &STR_PROTOTYPE as *const Prototype
     {
-        runtime_error("len() only works for list or str");
+        invalid_arg();
     }
     let len = (*object).len as i32;
     (*object).object.ref_count -= 1;
@@ -165,7 +166,7 @@ pub unsafe extern "C" fn len(pointer: *mut u8) -> i32 {
 #[no_mangle]
 pub unsafe extern "C" fn print(pointer: *mut u8) -> *mut u8 {
     if pointer.is_null() {
-        runtime_error("print on None");
+        invalid_arg();
     }
     let object = pointer as *mut Object;
     let prototype = (*object).prototype;
@@ -189,7 +190,7 @@ pub unsafe extern "C" fn print(pointer: *mut u8) -> *mut u8 {
         .unwrap();
         println!("{}", slice);
     } else {
-        runtime_error("print() only works for int, bool or str");
+        invalid_arg();
     }
 
     (*object).ref_count -= 1;
@@ -228,10 +229,44 @@ pub unsafe extern "C" fn str_() -> *mut u8 {
     alloc_obj(&STR_PROTOTYPE as *const Prototype, 0)
 }
 
-#[export_name = "$report_broken_stack"]
-pub unsafe extern "C" fn report_broken_stack() {
-    println!("--- broken stack detected! ---");
-    crash()
+#[cfg(not(test))]
+fn memory_leak() -> ! {
+    println!("--- Memory leak detected! ---");
+    exit(-1)
+}
+
+#[export_name = "$broken_stack"]
+pub unsafe extern "C" fn broken_stack() -> ! {
+    println!("--- Broken stack detected! ---");
+    exit(-2)
+}
+
+fn invalid_arg() -> ! {
+    println!("--- Invalid argument ---");
+    exit(1)
+}
+
+#[export_name = "$div_zero"]
+pub unsafe extern "C" fn div_zero() -> ! {
+    println!("--- Division by zero ---");
+    exit(2)
+}
+
+#[export_name = "$out_of_bound"]
+pub unsafe extern "C" fn out_of_bound() -> ! {
+    println!("--- Index out of bounds ---");
+    exit(3)
+}
+
+#[export_name = "$none_op"]
+pub unsafe extern "C" fn none_op() -> ! {
+    println!("--- Operation on None ---");
+    exit(4)
+}
+
+fn out_of_memory() -> ! {
+    println!("--- Out of memory ---");
+    exit(5)
 }
 
 extern "C" {
@@ -239,87 +274,12 @@ extern "C" {
     #[link_name = "$chocopy_main"]
     fn chocopy_main();
 }
+
 #[no_mangle]
 #[cfg(not(test))]
 pub unsafe extern "C" fn main() {
     chocopy_main();
     if ALLOC_COUNTER.load(Ordering::SeqCst) != 0 {
-        println!("--- memory leak detected! ---");
+        memory_leak();
     }
 }
-
-fn runtime_error(message: &str) -> ! {
-    println!("Runtime error: {}", message);
-    crash()
-}
-
-fn crash() -> ! {
-    std::process::exit(-1)
-}
-
-/*
-#[no_mangle]
-pub extern "C" fn _Unwind_Resume() -> ! {
-    crash()
-}
-
-#[no_mangle]
-pub extern "C" fn _Unwind_Backtrace() -> ! {
-    crash()
-}
-
-#[no_mangle]
-pub extern "C" fn _Unwind_GetTextRelBase() -> ! {
-    crash()
-}
-
-#[no_mangle]
-pub extern "C" fn _Unwind_GetDataRelBase() -> ! {
-    crash()
-}
-
-#[no_mangle]
-pub extern "C" fn _Unwind_DeleteException() -> ! {
-    crash()
-}
-
-#[no_mangle]
-pub extern "C" fn _Unwind_RaiseException() -> ! {
-    crash()
-}
-
-#[no_mangle]
-pub extern "C" fn _Unwind_GetLanguageSpecificData() -> ! {
-    crash()
-}
-
-#[no_mangle]
-pub extern "C" fn _Unwind_GetIPInfo() -> ! {
-    crash()
-}
-
-#[no_mangle]
-pub extern "C" fn _Unwind_GetRegionStart() -> ! {
-    crash()
-}
-
-#[no_mangle]
-pub extern "C" fn _Unwind_SetGR() -> ! {
-    crash()
-}
-
-#[no_mangle]
-pub extern "C" fn _Unwind_SetIP() -> ! {
-    crash()
-}
-
-#[no_mangle]
-pub extern "C" fn _Unwind_GetIP() -> ! {
-    crash()
-}
-
-#[no_mangle]
-pub extern "C" fn _Unwind_FindEnclosingFunction() -> ! {
-    crash()
-}
-*/
