@@ -5,44 +5,22 @@ mod location;
 mod node;
 mod parse;
 
+use getopts::Options;
 use location::*;
 use node::*;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-fn compile(file: &str, out: Option<&str>) -> Option<Ast> {
-    let mut ast = parse::process(&file).unwrap();
-    if ast.program().errors.errors().errors.is_empty() {
-        ast = check::check(ast);
-    }
-
-    if !ast.program().errors.errors().errors.is_empty() {
-        return Some(ast);
-    }
-
-    if let Some(out) = out {
-        gen::gen(ast, out).unwrap();
-        None
-    } else {
-        Some(ast)
-    }
+fn print_usage(program: &str, opts: Options) {
+    let brief = format!("Usage: {} INPUT [-a|-t|OUTPUT]", program);
+    print!("{}", opts.usage(&brief));
 }
 
-fn main() {
-    let args: Vec<_> = std::env::args().collect();
-    let file = &args[1];
-    let out = args.get(2);
-
-    let ast = compile(file, out.map(|s: &String| s.as_str()));
-
-    if ast.is_none() {
-        return;
-    }
-
-    let ast = ast.unwrap();
-
+fn check_error(file: &str, ast: &Ast) -> bool {
     let errors = &ast.program().errors.errors().errors;
-    if !errors.is_empty() {
+    if errors.is_empty() {
+        true
+    } else {
         let mut errors: Vec<_> = errors
             .iter()
             .map(|e| {
@@ -88,9 +66,72 @@ fn main() {
                 println!("^");
             }
         }
+        false
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = std::env::args().collect();
+    let program = args[0].clone();
+
+    let mut opts = Options::new();
+    opts.optflag("h", "help", "print this help menu");
+    opts.optflag("a", "ast", "output bare AST");
+    opts.optflag("t", "typed", "output typed AST");
+
+    let matches = match opts.parse(&args[1..]) {
+        Ok(m) => m,
+        Err(f) => {
+            println!("Failed to parse the arguments: {}", f);
+            print_usage(&program, opts);
+            return Ok(());
+        }
+    };
+
+    if matches.opt_present("h") {
+        print_usage(&program, opts);
+        return Ok(());
     }
 
-    println!("{}", serde_json::to_string_pretty(&ast).unwrap());
+    let input = if let Some(input) = matches.free.get(0) {
+        input
+    } else {
+        println!("Please specifiy source file");
+        return Ok(());
+    };
+
+    let ast = parse::process(input)?;
+
+    if matches.opt_present("ast") {
+        println!("{}", serde_json::to_string_pretty(&ast).unwrap());
+        return Ok(());
+    }
+
+    if !check_error(input, &ast) {
+        return Ok(());
+    }
+
+    let ast = check::check(ast);
+
+    if matches.opt_present("typed") {
+        println!("{}", serde_json::to_string_pretty(&ast).unwrap());
+        return Ok(());
+    }
+
+    if !check_error(input, &ast) {
+        return Ok(());
+    }
+
+    let output = if let Some(output) = matches.free.get(1) {
+        output
+    } else {
+        println!("Please specifiy output path");
+        return Ok(());
+    };
+
+    gen::gen(ast, output)?;
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -118,7 +159,12 @@ mod test {
                 let mut exe_path = temp_path.clone();
                 exe_path.push(exe_file);
 
-                compile(file.to_str().unwrap(), Some(exe_path.to_str().unwrap()));
+                let file = file.to_str().unwrap();
+                let ast = parse::process(file).unwrap();
+                assert!(check_error(file, &ast));
+                let ast = check::check(ast);
+                assert!(check_error(file, &ast));
+                gen::gen(ast, exe_path.to_str().unwrap()).unwrap();
 
                 let mut file = BufReader::new(std::fs::File::open(&file).unwrap());
 
