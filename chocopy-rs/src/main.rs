@@ -12,7 +12,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 fn print_usage(program: &str, opts: Options) {
-    let brief = format!("Usage: {} INPUT [-a|-t|OUTPUT]", program);
+    let brief = format!("Usage: {} INPUT [-a|-t|[-n] OUTPUT]", program);
     print!("{}", opts.usage(&brief));
 }
 
@@ -78,6 +78,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     opts.optflag("h", "help", "print this help menu");
     opts.optflag("a", "ast", "output bare AST");
     opts.optflag("t", "typed", "output typed AST");
+    opts.optflag("n", "no-link", "output object file without linking");
 
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
@@ -129,7 +130,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     };
 
-    gen::gen(ast, output)?;
+    gen::gen(input, ast, output, matches.opt_present("n"))?;
 
     Ok(())
 }
@@ -164,7 +165,7 @@ mod test {
                 assert!(check_error(file, &ast));
                 let ast = check::check(ast);
                 assert!(check_error(file, &ast));
-                gen::gen(ast, exe_path.to_str().unwrap()).unwrap();
+                gen::gen(file, ast, exe_path.to_str().unwrap(), false).unwrap();
 
                 let mut file = BufReader::new(std::fs::File::open(&file).unwrap());
 
