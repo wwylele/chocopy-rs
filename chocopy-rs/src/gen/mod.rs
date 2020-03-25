@@ -351,9 +351,10 @@ pub fn gen(
 
     let root_id = dwarf.unit.root();
     let compile_unit = dwarf.unit.get_mut(root_id);
+    // I wanted to set this to python but LLDB didn't like it
     compile_unit.set(
         gimli::DW_AT_language,
-        gimli::write::AttributeValue::Language(gimli::DW_LANG_Python),
+        gimli::write::AttributeValue::Language(gimli::DW_LANG_C11),
     );
     compile_unit.set(
         gimli::DW_AT_comp_dir,
