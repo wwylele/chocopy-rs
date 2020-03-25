@@ -50,6 +50,7 @@ impl std::fmt::Display for TypeDebug {
     }
 }
 
+#[derive(Clone)]
 struct VarDebug {
     offset: i32,
     line: u32,
@@ -87,10 +88,24 @@ struct Chunk {
     extra: ChunkExtra,
 }
 
+#[derive(Clone)]
+struct ClassDebug {
+    size: u32,
+    attributes: Vec<VarDebug>,
+    methods: Vec<(String, i32)>,
+}
+
+impl ClassDebug {
+    fn used_types(&self) -> impl Iterator<Item = &TypeDebug> {
+        self.attributes.iter().map(|attribute| &attribute.var_type)
+    }
+}
+
 struct CodeSet {
     chunks: Vec<Chunk>,
     global_size: usize,
     globals_debug: Vec<VarDebug>,
+    classes_debug: HashMap<String, ClassDebug>,
 }
 
 impl CodeSet {
@@ -106,6 +121,12 @@ impl CodeSet {
             })
             .flatten()
             .chain(self.globals_debug.iter().map(|global| &global.var_type))
+            .chain(
+                self.classes_debug
+                    .iter()
+                    .map(|(_, class)| class.used_types())
+                    .flatten(),
+            )
     }
 }
 
@@ -136,7 +157,7 @@ fn dwarf_add_base_type(
 fn dwarf_add_struct_type(
     dwarf: &mut gimli::write::DwarfUnit,
     name: &str,
-    byte_size: u8,
+    byte_size: u64,
 ) -> gimli::write::UnitEntryId {
     let root_id = dwarf.unit.root();
     let id = dwarf.unit.add(root_id, gimli::DW_TAG_structure_type);
@@ -147,7 +168,7 @@ fn dwarf_add_struct_type(
     );
     tag.set(
         gimli::DW_AT_byte_size,
-        gimli::write::AttributeValue::Data1(byte_size),
+        gimli::write::AttributeValue::Udata(byte_size),
     );
     id
 }
@@ -157,7 +178,7 @@ fn dwarf_add_member(
     parent_id: gimli::write::UnitEntryId,
     name: &str,
     member_type_id: gimli::write::UnitEntryId,
-    offset: u8,
+    offset: u64,
 ) -> gimli::write::UnitEntryId {
     let id = dwarf.unit.add(parent_id, gimli::DW_TAG_member);
     let tag = dwarf.unit.get_mut(id);
@@ -167,7 +188,7 @@ fn dwarf_add_member(
     );
     tag.set(
         gimli::DW_AT_data_member_location,
-        gimli::write::AttributeValue::Data1(offset),
+        gimli::write::AttributeValue::Udata(offset),
     );
     tag.set(
         gimli::DW_AT_type,
@@ -368,11 +389,12 @@ pub fn gen(
 
     let size_t_id = dwarf_add_base_type(&mut dwarf, "$size_t", gimli::DW_ATE_signed, 8);
     let char_id = dwarf_add_base_type(&mut dwarf, "$char", gimli::DW_ATE_signed, 1);
-    let prototype_id = dwarf_add_struct_type(&mut dwarf, "object.$prototype", 24);
-    dwarf_add_member(&mut dwarf, prototype_id, "$size", size_t_id, 0);
-    dwarf_add_member(&mut dwarf, prototype_id, "$dtor", fptr_id, 8);
-    dwarf_add_member(&mut dwarf, prototype_id, "__init__", fptr_id, 16);
-    let prototype_ptr_id = dwarf_add_pointer_type(&mut dwarf, "$prototype*", prototype_id);
+    let default_prototype_id = dwarf_add_struct_type(&mut dwarf, "object.$prototype", 24);
+    dwarf_add_member(&mut dwarf, default_prototype_id, "$size", size_t_id, 0);
+    dwarf_add_member(&mut dwarf, default_prototype_id, "$dtor", fptr_id, 8);
+    dwarf_add_member(&mut dwarf, default_prototype_id, "__init__", fptr_id, 16);
+    let default_prototype_ptr_id =
+        dwarf_add_pointer_type(&mut dwarf, "$prototype*", default_prototype_id);
 
     let mut debug_types = HashMap::new();
     for type_debug_seed in code_set.used_types() {
@@ -398,9 +420,17 @@ pub fn gen(
                     if is_array { 24 } else { 16 },
                 );
 
-                dwarf_add_member(&mut dwarf, storage_type_id, "$proto", prototype_ptr_id, 0);
-                dwarf_add_member(&mut dwarf, storage_type_id, "$ref", size_t_id, 8);
                 if is_array {
+                    dwarf_add_member(
+                        &mut dwarf,
+                        storage_type_id,
+                        "$proto",
+                        default_prototype_ptr_id,
+                        0,
+                    );
+
+                    dwarf_add_member(&mut dwarf, storage_type_id, "$ref", size_t_id, 8);
+
                     let len_id =
                         dwarf_add_member(&mut dwarf, storage_type_id, "$len", size_t_id, 16);
 
@@ -419,6 +449,57 @@ pub fn gen(
                 dwarf_add_pointer_type(&mut dwarf, &type_debug.to_string(), storage_type_id)
             };
             debug_types.insert(type_debug, node_id);
+        }
+    }
+
+    for (class_name, class_debug) in code_set.classes_debug {
+        let prototype_name = class_name.clone() + ".$prototype";
+        let prototype_ptr_name = prototype_name.clone() + "*";
+        let tag_id = debug_types[&TypeDebug {
+            name: class_name,
+            array_level: 0,
+        }];
+
+        let tag_id = if let gimli::write::AttributeValue::ThisUnitEntryRef(id) =
+            dwarf.unit.get(tag_id).get(gimli::DW_AT_type).unwrap()
+        {
+            *id
+        } else {
+            panic!()
+        };
+
+        dwarf.unit.get_mut(tag_id).set(
+            gimli::DW_AT_byte_size,
+            gimli::write::AttributeValue::Udata((class_debug.size + 16) as u64),
+        );
+
+        let prototype_id = dwarf_add_struct_type(
+            &mut dwarf,
+            &prototype_name,
+            ((class_debug.methods.len() + 2) * 8) as u64,
+        );
+
+        dwarf_add_member(&mut dwarf, prototype_id, "$size", size_t_id, 0);
+        dwarf_add_member(&mut dwarf, prototype_id, "$dtor", fptr_id, 8);
+
+        for (method, offset) in class_debug.methods {
+            dwarf_add_member(&mut dwarf, prototype_id, &method, fptr_id, offset as u64);
+        }
+
+        let prototype_ptr_id =
+            dwarf_add_pointer_type(&mut dwarf, &prototype_ptr_name, prototype_id);
+
+        dwarf_add_member(&mut dwarf, tag_id, "$proto", prototype_ptr_id, 0);
+        dwarf_add_member(&mut dwarf, tag_id, "$ref", size_t_id, 8);
+
+        for attribute in class_debug.attributes {
+            dwarf_add_member(
+                &mut dwarf,
+                tag_id,
+                &attribute.name,
+                debug_types[&attribute.var_type],
+                attribute.offset as u64,
+            );
         }
     }
 

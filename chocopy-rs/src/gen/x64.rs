@@ -1991,6 +1991,15 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
     );
     let mut global_offset = 0;
     let mut globals_debug = vec![];
+    let mut classes_debug = HashMap::new();
+    classes_debug.insert(
+        "object".to_owned(),
+        ClassDebug {
+            size: 0,
+            attributes: vec![],
+            methods: vec![("__init__".to_owned(), 16)],
+        },
+    );
     for declaration in &ast.program().declarations {
         if let Declaration::VarDef(v) = declaration {
             let name = &v.var.tv().identifier.id().name;
@@ -2034,7 +2043,9 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
             );
         } else if let Declaration::ClassDef(c) = declaration {
             let class_name = &c.name.id().name;
-            let mut class_slot = classes.get(&c.super_class.id().name).unwrap().clone();
+            let super_name = &c.super_class.id().name;
+            let mut class_slot = classes.get(super_name).unwrap().clone();
+            let mut class_debug = classes_debug.get(super_name).unwrap().clone();
             class_slot.methods.get_mut("$dtor").unwrap().link_name = class_name.clone() + ".$dtor";
             globals.insert(
                 class_name.clone(),
@@ -2055,34 +2066,50 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
                         8
                     };
                     class_slot.object_size += (size - class_slot.object_size % size) % size;
+                    let offset = class_slot.object_size + 16;
+                    let name = &v.var.tv().identifier.id().name;
                     class_slot.attributes.insert(
-                        v.var.tv().identifier.id().name.clone(),
+                        name.clone(),
                         AttributeSlot {
-                            offset: class_slot.object_size + 16,
+                            offset,
                             source_type,
                             target_type,
                             init: v.value.content.clone(),
                         },
                     );
                     class_slot.object_size += size;
+
+                    let (type_name, array_level) = v.var.tv().type_.flatten();
+                    class_debug.attributes.push(VarDebug {
+                        offset: offset as i32,
+                        line: v.base().location.start.row,
+                        name: name.clone(),
+                        var_type: TypeDebug {
+                            name: type_name.to_owned(),
+                            array_level,
+                        },
+                    });
                 } else if let Declaration::FuncDef(f) = declaration {
                     let method_name = &f.name.id().name;
                     let link_name = class_name.clone() + "." + method_name;
                     if let Some(method) = class_slot.methods.get_mut(method_name) {
                         method.link_name = link_name;
                     } else {
-                        class_slot.methods.insert(
-                            method_name.clone(),
-                            MethodSlot {
-                                offset: class_slot.prototype_size,
-                                link_name,
-                            },
-                        );
+                        let offset = class_slot.prototype_size;
+                        class_slot
+                            .methods
+                            .insert(method_name.clone(), MethodSlot { offset, link_name });
                         class_slot.prototype_size += 8;
+
+                        class_debug
+                            .methods
+                            .push((method_name.clone(), offset as i32));
                     }
                 }
             }
+            class_debug.size = class_slot.object_size;
             classes.insert(class_name.clone(), class_slot);
+            classes_debug.insert(class_name.clone(), class_debug);
         }
     }
 
@@ -2220,5 +2247,6 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
         chunks,
         global_size: global_offset as usize,
         globals_debug,
+        classes_debug,
     }
 }
