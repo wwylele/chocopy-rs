@@ -50,11 +50,11 @@ impl std::fmt::Display for TypeDebug {
     }
 }
 
-struct ParamDebug {
+struct VarDebug {
     offset: i32,
     line: u32,
     name: String,
-    param_type: TypeDebug,
+    var_type: TypeDebug,
 }
 
 struct ProcedureDebug {
@@ -63,12 +63,15 @@ struct ProcedureDebug {
     parent: Option<String>,
     lines: Vec<(usize, u32)>,
     return_type: TypeDebug,
-    params: Vec<ParamDebug>,
+    params: Vec<VarDebug>,
+    locals: Vec<VarDebug>,
 }
 
 impl ProcedureDebug {
     fn used_types(&self) -> impl Iterator<Item = &TypeDebug> {
-        std::iter::once(&self.return_type).chain(self.params.iter().map(|param| &param.param_type))
+        std::iter::once(&self.return_type)
+            .chain(self.params.iter().map(|param| &param.var_type))
+            .chain(self.locals.iter().map(|local| &local.var_type))
     }
 }
 
@@ -87,6 +90,7 @@ struct Chunk {
 struct CodeSet {
     chunks: Vec<Chunk>,
     global_size: usize,
+    globals_debug: Vec<VarDebug>,
 }
 
 impl CodeSet {
@@ -101,7 +105,132 @@ impl CodeSet {
                 }
             })
             .flatten()
+            .chain(self.globals_debug.iter().map(|global| &global.var_type))
     }
+}
+
+fn dwarf_add_base_type(
+    dwarf: &mut gimli::write::DwarfUnit,
+    name: &str,
+    encoding: gimli::DwAte,
+    byte_size: u8,
+) -> gimli::write::UnitEntryId {
+    let root_id = dwarf.unit.root();
+    let id = dwarf.unit.add(root_id, gimli::DW_TAG_base_type);
+    let tag = dwarf.unit.get_mut(id);
+    tag.set(
+        gimli::DW_AT_name,
+        gimli::write::AttributeValue::String(name.into()),
+    );
+    tag.set(
+        gimli::DW_AT_encoding,
+        gimli::write::AttributeValue::Encoding(encoding),
+    );
+    tag.set(
+        gimli::DW_AT_byte_size,
+        gimli::write::AttributeValue::Data1(byte_size),
+    );
+    id
+}
+
+fn dwarf_add_struct_type(
+    dwarf: &mut gimli::write::DwarfUnit,
+    name: &str,
+    byte_size: u8,
+) -> gimli::write::UnitEntryId {
+    let root_id = dwarf.unit.root();
+    let id = dwarf.unit.add(root_id, gimli::DW_TAG_structure_type);
+    let tag = dwarf.unit.get_mut(id);
+    tag.set(
+        gimli::DW_AT_name,
+        gimli::write::AttributeValue::String(name.into()),
+    );
+    tag.set(
+        gimli::DW_AT_byte_size,
+        gimli::write::AttributeValue::Data1(byte_size),
+    );
+    id
+}
+
+fn dwarf_add_member(
+    dwarf: &mut gimli::write::DwarfUnit,
+    parent_id: gimli::write::UnitEntryId,
+    name: &str,
+    member_type_id: gimli::write::UnitEntryId,
+    offset: u8,
+) -> gimli::write::UnitEntryId {
+    let id = dwarf.unit.add(parent_id, gimli::DW_TAG_member);
+    let tag = dwarf.unit.get_mut(id);
+    tag.set(
+        gimli::DW_AT_name,
+        gimli::write::AttributeValue::String(name.into()),
+    );
+    tag.set(
+        gimli::DW_AT_data_member_location,
+        gimli::write::AttributeValue::Data1(offset),
+    );
+    tag.set(
+        gimli::DW_AT_type,
+        gimli::write::AttributeValue::ThisUnitEntryRef(member_type_id),
+    );
+    id
+}
+
+fn dwarf_add_pointer_type(
+    dwarf: &mut gimli::write::DwarfUnit,
+    name: &str,
+    pointee: gimli::write::UnitEntryId,
+) -> gimli::write::UnitEntryId {
+    let root_id = dwarf.unit.root();
+    let id = dwarf.unit.add(root_id, gimli::DW_TAG_pointer_type);
+    let tag = dwarf.unit.get_mut(id);
+    tag.set(
+        gimli::DW_AT_name,
+        gimli::write::AttributeValue::String(name.into()),
+    );
+    tag.set(
+        gimli::DW_AT_type,
+        gimli::write::AttributeValue::ThisUnitEntryRef(pointee),
+    );
+    tag.set(
+        gimli::DW_AT_byte_size,
+        gimli::write::AttributeValue::Data1(8),
+    );
+    id
+}
+
+fn dwarf_add_subroutine_type(dwarf: &mut gimli::write::DwarfUnit) -> gimli::write::UnitEntryId {
+    let root_id = dwarf.unit.root();
+    let id = dwarf.unit.add(root_id, gimli::DW_TAG_subroutine_type);
+    id
+}
+
+fn dwarf_add_array_type(
+    dwarf: &mut gimli::write::DwarfUnit,
+    element_type: gimli::write::UnitEntryId,
+    index_type: gimli::write::UnitEntryId,
+    len_member: gimli::write::UnitEntryId,
+) -> gimli::write::UnitEntryId {
+    let root_id = dwarf.unit.root();
+    let id = dwarf.unit.add(root_id, gimli::DW_TAG_array_type);
+    let tag = dwarf.unit.get_mut(id);
+    tag.set(
+        gimli::DW_AT_type,
+        gimli::write::AttributeValue::ThisUnitEntryRef(element_type),
+    );
+
+    let index_id = dwarf.unit.add(id, gimli::DW_TAG_subrange_type);
+    let index_tag = dwarf.unit.get_mut(index_id);
+    index_tag.set(
+        gimli::DW_AT_type,
+        gimli::write::AttributeValue::ThisUnitEntryRef(index_type),
+    );
+    index_tag.set(
+        gimli::DW_AT_count,
+        gimli::write::AttributeValue::ThisUnitEntryRef(len_member),
+    );
+
+    id
 }
 
 pub fn gen(
@@ -234,61 +363,63 @@ pub fn gen(
         }
     }
 
+    let ftype_id = dwarf_add_subroutine_type(&mut dwarf);
+    let fptr_id = dwarf_add_pointer_type(&mut dwarf, "$fptr", ftype_id);
+
+    let size_t_id = dwarf_add_base_type(&mut dwarf, "$size_t", gimli::DW_ATE_signed, 8);
+    let char_id = dwarf_add_base_type(&mut dwarf, "$char", gimli::DW_ATE_signed, 1);
+    let prototype_id = dwarf_add_struct_type(&mut dwarf, "object.$prototype", 24);
+    dwarf_add_member(&mut dwarf, prototype_id, "$size", size_t_id, 0);
+    dwarf_add_member(&mut dwarf, prototype_id, "$dtor", fptr_id, 8);
+    dwarf_add_member(&mut dwarf, prototype_id, "__init__", fptr_id, 16);
+    let prototype_ptr_id = dwarf_add_pointer_type(&mut dwarf, "$prototype*", prototype_id);
+
     let mut debug_types = HashMap::new();
-    for type_debug in code_set.used_types() {
-        if debug_types.contains_key(type_debug) {
-            continue;
+    for type_debug_seed in code_set.used_types() {
+        for array_level in 0..=type_debug_seed.array_level {
+            let type_debug = TypeDebug {
+                name: type_debug_seed.name.clone(),
+                array_level,
+            };
+            if debug_types.contains_key(&type_debug) {
+                continue;
+            }
+            let node_id = if type_debug.array_level == 0 && type_debug.name == "bool" {
+                dwarf_add_base_type(&mut dwarf, "bool", gimli::DW_ATE_boolean, 1)
+            } else if type_debug.array_level == 0 && type_debug.name == "int" {
+                dwarf_add_base_type(&mut dwarf, "int", gimli::DW_ATE_signed, 4)
+            } else {
+                let type_string = type_debug.to_string();
+                let is_array = array_level != 0 || type_string == "str";
+
+                let storage_type_id = dwarf_add_struct_type(
+                    &mut dwarf,
+                    &(type_debug.to_string() + ".$storage"),
+                    if is_array { 24 } else { 16 },
+                );
+
+                dwarf_add_member(&mut dwarf, storage_type_id, "$proto", prototype_ptr_id, 0);
+                dwarf_add_member(&mut dwarf, storage_type_id, "$ref", size_t_id, 8);
+                if is_array {
+                    let len_id =
+                        dwarf_add_member(&mut dwarf, storage_type_id, "$len", size_t_id, 16);
+
+                    let element_type = if type_string == "str" {
+                        char_id
+                    } else {
+                        let mut element_type = type_debug.clone();
+                        element_type.array_level -= 1;
+                        debug_types[&element_type]
+                    };
+                    let array_type_id =
+                        dwarf_add_array_type(&mut dwarf, element_type, size_t_id, len_id);
+                    dwarf_add_member(&mut dwarf, storage_type_id, "$array", array_type_id, 24);
+                }
+
+                dwarf_add_pointer_type(&mut dwarf, &type_debug.to_string(), storage_type_id)
+            };
+            debug_types.insert(type_debug, node_id);
         }
-        let node_id = if type_debug.array_level == 0 && type_debug.name == "bool" {
-            let node_type_bool_id = dwarf.unit.add(root_id, gimli::DW_TAG_base_type);
-            let node_type_bool = dwarf.unit.get_mut(node_type_bool_id);
-            node_type_bool.set(
-                gimli::DW_AT_name,
-                gimli::write::AttributeValue::String("bool".into()),
-            );
-            node_type_bool.set(
-                gimli::DW_AT_encoding,
-                gimli::write::AttributeValue::Encoding(gimli::DW_ATE_boolean),
-            );
-            node_type_bool.set(
-                gimli::DW_AT_byte_size,
-                gimli::write::AttributeValue::Data1(1),
-            );
-            node_type_bool_id
-        } else if type_debug.array_level == 0 && type_debug.name == "int" {
-            let node_type_int_id = dwarf.unit.add(root_id, gimli::DW_TAG_base_type);
-            let node_type_int = dwarf.unit.get_mut(node_type_int_id);
-            node_type_int.set(
-                gimli::DW_AT_name,
-                gimli::write::AttributeValue::String("int".into()),
-            );
-            node_type_int.set(
-                gimli::DW_AT_encoding,
-                gimli::write::AttributeValue::Encoding(gimli::DW_ATE_signed),
-            );
-            node_type_int.set(
-                gimli::DW_AT_byte_size,
-                gimli::write::AttributeValue::Data1(4),
-            );
-            node_type_int_id
-        } else {
-            let node_type_object_id = dwarf.unit.add(root_id, gimli::DW_TAG_base_type);
-            let node_type_object = dwarf.unit.get_mut(node_type_object_id);
-            node_type_object.set(
-                gimli::DW_AT_name,
-                gimli::write::AttributeValue::String(type_debug.to_string().into()),
-            );
-            node_type_object.set(
-                gimli::DW_AT_encoding,
-                gimli::write::AttributeValue::Encoding(gimli::DW_ATE_address),
-            );
-            node_type_object.set(
-                gimli::DW_AT_byte_size,
-                gimli::write::AttributeValue::Data1(8),
-            );
-            node_type_object_id
-        };
-        debug_types.insert(type_debug.clone(), node_id);
     }
 
     let mut range_list = vec![];
@@ -345,12 +476,11 @@ pub fn gen(
                 ),
             );
             if procedure_debug.parent.is_some() {
-                // Is this correct?
                 sub_program.set(
                     gimli::DW_AT_static_link,
                     gimli::write::AttributeValue::Exprloc(gimli::write::Expression(vec![
                         gimli::DW_OP_fbreg.0,
-                        -8i8 as u8,
+                        0x78, // -8 in SLEB128
                         gimli::DW_OP_deref.0,
                     ])),
                 )
@@ -372,37 +502,52 @@ pub fn gen(
                 line_program.end_sequence(chunk.code.len() as u64);
             }
 
-            for param in procedure_debug.params {
-                let param_node = dwarf
-                    .unit
-                    .add(sub_program_id, gimli::DW_TAG_formal_parameter);
-                let param_node = dwarf.unit.get_mut(param_node);
+            for (var, is_param) in procedure_debug
+                .params
+                .into_iter()
+                .zip(std::iter::repeat(true))
+                .chain(
+                    procedure_debug
+                        .locals
+                        .into_iter()
+                        .zip(std::iter::repeat(false)),
+                )
+            {
+                let node_id = dwarf.unit.add(
+                    sub_program_id,
+                    if is_param {
+                        gimli::DW_TAG_formal_parameter
+                    } else {
+                        gimli::DW_TAG_variable
+                    },
+                );
+                let node = dwarf.unit.get_mut(node_id);
                 let mut offset_expr = vec![gimli::DW_OP_fbreg.0];
-                gimli::leb128::write::signed(&mut offset_expr, param.offset as i64)?;
+                gimli::leb128::write::signed(&mut offset_expr, var.offset as i64)?;
 
-                param_node.set(
+                node.set(
                     gimli::DW_AT_location,
                     gimli::write::AttributeValue::Exprloc(gimli::write::Expression(offset_expr)),
                 );
 
-                param_node.set(
+                node.set(
                     gimli::DW_AT_name,
-                    gimli::write::AttributeValue::String(param.name.into()),
+                    gimli::write::AttributeValue::String(var.name.into()),
                 );
 
-                param_node.set(
+                node.set(
                     gimli::DW_AT_decl_file,
                     gimli::write::AttributeValue::Data1(1),
                 );
 
-                param_node.set(
+                node.set(
                     gimli::DW_AT_decl_line,
-                    gimli::write::AttributeValue::Udata(param.line as u64),
+                    gimli::write::AttributeValue::Udata(var.line as u64),
                 );
 
-                param_node.set(
+                node.set(
                     gimli::DW_AT_type,
-                    gimli::write::AttributeValue::ThisUnitEntryRef(debug_types[&param.param_type]),
+                    gimli::write::AttributeValue::ThisUnitEntryRef(debug_types[&var.var_type]),
                 );
             }
 
@@ -434,6 +579,42 @@ pub fn gen(
 
     obj.define(GLOBAL_SECTION, vec![0; code_set.global_size])?;
 
+    let global_reloc_hack_magic = 0xDEADB00Fu32;
+
+    for global_debug in code_set.globals_debug {
+        let node_id = dwarf.unit.add(root_id, gimli::DW_TAG_variable);
+        let node = dwarf.unit.get_mut(node_id);
+
+        let mut location = vec![gimli::DW_OP_addr.0];
+        location.extend_from_slice(&global_debug.offset.to_le_bytes());
+        location.extend_from_slice(&global_reloc_hack_magic.to_le_bytes());
+
+        node.set(
+            gimli::DW_AT_location,
+            gimli::write::AttributeValue::Exprloc(gimli::write::Expression(location)),
+        );
+
+        node.set(
+            gimli::DW_AT_name,
+            gimli::write::AttributeValue::String(global_debug.name.into()),
+        );
+
+        node.set(
+            gimli::DW_AT_decl_file,
+            gimli::write::AttributeValue::Data1(1),
+        );
+
+        node.set(
+            gimli::DW_AT_decl_line,
+            gimli::write::AttributeValue::Udata(global_debug.line as u64),
+        );
+
+        node.set(
+            gimli::DW_AT_type,
+            gimli::write::AttributeValue::ThisUnitEntryRef(debug_types[&global_debug.var_type]),
+        );
+    }
+
     let mut dwarf_sections = gimli::write::Sections::new(DwarfWriter::new());
     dwarf.write(&mut dwarf_sections)?;
     dwarf_sections.for_each(|id, _| -> Result<(), ArtifactError> {
@@ -441,7 +622,24 @@ pub fn gen(
         Ok(())
     })?;
     dwarf_sections.for_each_mut(|id, data| -> Result<(), Box<dyn std::error::Error>> {
-        let (data, relocs, self_relocs) = data.take();
+        let (mut data, relocs, self_relocs) = data.take();
+
+        if data.len() >= 4 {
+            for i in 0..data.len() - 3 {
+                if &data[i..i + 4] == &global_reloc_hack_magic.to_le_bytes() {
+                    data[i..i + 4].copy_from_slice(&[0; 4]);
+                    obj.link_with(
+                        Link {
+                            from: &id.name(),
+                            to: GLOBAL_SECTION,
+                            at: (i - 4) as u64,
+                        },
+                        Reloc::Debug { size: 8, addend: 0 },
+                    )?;
+                }
+            }
+        }
+
         obj.define(&id.name(), data)?;
 
         for reloc in relocs {

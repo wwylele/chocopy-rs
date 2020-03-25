@@ -1,0 +1,1262 @@
+{
+  "kind" : "Program",
+  "location" : [ 1, 1, 62, 15 ],
+  "declarations" : [ {
+    "kind" : "FuncDef",
+    "location" : [ 1, 1, 2, 19 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 1, 5, 1, 10 ],
+      "name" : "append"
+    },
+    "params" : [ {
+      "kind" : "TypedVar",
+      "location" : [ 1, 12, 1, 19 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 1, 12, 1, 12 ],
+        "name" : "a"
+      },
+      "type" : {
+        "kind" : "ListType",
+        "location" : [ 1, 15, 1, 19 ],
+        "elementType" : {
+          "kind" : "ClassType",
+          "location" : [ 1, 16, 1, 18 ],
+          "className" : "int"
+        }
+      }
+    }, {
+      "kind" : "TypedVar",
+      "location" : [ 1, 22, 1, 27 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 1, 22, 1, 22 ],
+        "name" : "k"
+      },
+      "type" : {
+        "kind" : "ClassType",
+        "location" : [ 1, 25, 1, 27 ],
+        "className" : "int"
+      }
+    } ],
+    "returnType" : {
+      "kind" : "ListType",
+      "location" : [ 1, 33, 1, 37 ],
+      "elementType" : {
+        "kind" : "ClassType",
+        "location" : [ 1, 34, 1, 36 ],
+        "className" : "int"
+      }
+    },
+    "declarations" : [ ],
+    "statements" : [ {
+      "kind" : "ReturnStmt",
+      "location" : [ 2, 5, 2, 18 ],
+      "value" : {
+        "kind" : "BinaryExpr",
+        "location" : [ 2, 12, 2, 18 ],
+        "left" : {
+          "kind" : "Identifier",
+          "location" : [ 2, 12, 2, 12 ],
+          "name" : "a"
+        },
+        "operator" : "+",
+        "right" : {
+          "kind" : "ListExpr",
+          "location" : [ 2, 16, 2, 18 ],
+          "elements" : [ {
+            "kind" : "Identifier",
+            "location" : [ 2, 17, 2, 17 ],
+            "name" : "k"
+          } ]
+        }
+      }
+    } ]
+  }, {
+    "kind" : "FuncDef",
+    "location" : [ 5, 1, 14, 20 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 5, 5, 5, 10 ],
+      "name" : "extend"
+    },
+    "params" : [ {
+      "kind" : "TypedVar",
+      "location" : [ 5, 12, 5, 19 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 5, 12, 5, 12 ],
+        "name" : "a"
+      },
+      "type" : {
+        "kind" : "ListType",
+        "location" : [ 5, 15, 5, 19 ],
+        "elementType" : {
+          "kind" : "ClassType",
+          "location" : [ 5, 16, 5, 18 ],
+          "className" : "int"
+        }
+      }
+    }, {
+      "kind" : "TypedVar",
+      "location" : [ 5, 22, 5, 29 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 5, 22, 5, 22 ],
+        "name" : "b"
+      },
+      "type" : {
+        "kind" : "ListType",
+        "location" : [ 5, 25, 5, 29 ],
+        "elementType" : {
+          "kind" : "ClassType",
+          "location" : [ 5, 26, 5, 28 ],
+          "className" : "int"
+        }
+      }
+    }, {
+      "kind" : "TypedVar",
+      "location" : [ 5, 32, 5, 43 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 5, 32, 5, 38 ],
+        "name" : "b_start"
+      },
+      "type" : {
+        "kind" : "ClassType",
+        "location" : [ 5, 41, 5, 43 ],
+        "className" : "int"
+      }
+    }, {
+      "kind" : "TypedVar",
+      "location" : [ 5, 46, 5, 55 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 5, 46, 5, 50 ],
+        "name" : "b_end"
+      },
+      "type" : {
+        "kind" : "ClassType",
+        "location" : [ 5, 53, 5, 55 ],
+        "className" : "int"
+      }
+    } ],
+    "returnType" : {
+      "kind" : "ListType",
+      "location" : [ 5, 61, 5, 65 ],
+      "elementType" : {
+        "kind" : "ClassType",
+        "location" : [ 5, 62, 5, 64 ],
+        "className" : "int"
+      }
+    },
+    "declarations" : [ {
+      "kind" : "VarDef",
+      "location" : [ 6, 5, 6, 26 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 6, 5, 6, 19 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 6, 5, 6, 12 ],
+          "name" : "extended"
+        },
+        "type" : {
+          "kind" : "ListType",
+          "location" : [ 6, 15, 6, 19 ],
+          "elementType" : {
+            "kind" : "ClassType",
+            "location" : [ 6, 16, 6, 18 ],
+            "className" : "int"
+          }
+        }
+      },
+      "value" : {
+        "kind" : "NoneLiteral",
+        "location" : [ 6, 23, 6, 26 ]
+      }
+    }, {
+      "kind" : "VarDef",
+      "location" : [ 7, 5, 7, 14 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 7, 5, 7, 10 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 7, 5, 7, 5 ],
+          "name" : "i"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 7, 8, 7, 10 ],
+          "className" : "int"
+        }
+      },
+      "value" : {
+        "kind" : "IntegerLiteral",
+        "location" : [ 7, 14, 7, 14 ],
+        "value" : 0
+      }
+    } ],
+    "statements" : [ {
+      "kind" : "AssignStmt",
+      "location" : [ 9, 5, 9, 16 ],
+      "targets" : [ {
+        "kind" : "Identifier",
+        "location" : [ 9, 5, 9, 12 ],
+        "name" : "extended"
+      } ],
+      "value" : {
+        "kind" : "Identifier",
+        "location" : [ 9, 16, 9, 16 ],
+        "name" : "a"
+      }
+    }, {
+      "kind" : "AssignStmt",
+      "location" : [ 10, 5, 10, 15 ],
+      "targets" : [ {
+        "kind" : "Identifier",
+        "location" : [ 10, 5, 10, 5 ],
+        "name" : "i"
+      } ],
+      "value" : {
+        "kind" : "Identifier",
+        "location" : [ 10, 9, 10, 15 ],
+        "name" : "b_start"
+      }
+    }, {
+      "kind" : "WhileStmt",
+      "location" : [ 11, 5, 14, 4 ],
+      "condition" : {
+        "kind" : "BinaryExpr",
+        "location" : [ 11, 11, 11, 19 ],
+        "left" : {
+          "kind" : "Identifier",
+          "location" : [ 11, 11, 11, 11 ],
+          "name" : "i"
+        },
+        "operator" : "<",
+        "right" : {
+          "kind" : "Identifier",
+          "location" : [ 11, 15, 11, 19 ],
+          "name" : "b_end"
+        }
+      },
+      "body" : [ {
+        "kind" : "AssignStmt",
+        "location" : [ 12, 9, 12, 41 ],
+        "targets" : [ {
+          "kind" : "Identifier",
+          "location" : [ 12, 9, 12, 16 ],
+          "name" : "extended"
+        } ],
+        "value" : {
+          "kind" : "CallExpr",
+          "location" : [ 12, 20, 12, 41 ],
+          "function" : {
+            "kind" : "Identifier",
+            "location" : [ 12, 20, 12, 25 ],
+            "name" : "append"
+          },
+          "args" : [ {
+            "kind" : "Identifier",
+            "location" : [ 12, 27, 12, 34 ],
+            "name" : "extended"
+          }, {
+            "kind" : "IndexExpr",
+            "location" : [ 12, 37, 12, 40 ],
+            "list" : {
+              "kind" : "Identifier",
+              "location" : [ 12, 37, 12, 37 ],
+              "name" : "b"
+            },
+            "index" : {
+              "kind" : "Identifier",
+              "location" : [ 12, 39, 12, 39 ],
+              "name" : "i"
+            }
+          } ]
+        }
+      }, {
+        "kind" : "AssignStmt",
+        "location" : [ 13, 9, 13, 17 ],
+        "targets" : [ {
+          "kind" : "Identifier",
+          "location" : [ 13, 9, 13, 9 ],
+          "name" : "i"
+        } ],
+        "value" : {
+          "kind" : "BinaryExpr",
+          "location" : [ 13, 13, 13, 17 ],
+          "left" : {
+            "kind" : "Identifier",
+            "location" : [ 13, 13, 13, 13 ],
+            "name" : "i"
+          },
+          "operator" : "+",
+          "right" : {
+            "kind" : "IntegerLiteral",
+            "location" : [ 13, 17, 13, 17 ],
+            "value" : 1
+          }
+        }
+      } ]
+    }, {
+      "kind" : "ReturnStmt",
+      "location" : [ 14, 5, 14, 19 ],
+      "value" : {
+        "kind" : "Identifier",
+        "location" : [ 14, 12, 14, 19 ],
+        "name" : "extended"
+      }
+    } ]
+  }, {
+    "kind" : "FuncDef",
+    "location" : [ 17, 1, 36, 18 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 17, 5, 17, 9 ],
+      "name" : "merge"
+    },
+    "params" : [ {
+      "kind" : "TypedVar",
+      "location" : [ 17, 11, 17, 21 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 17, 11, 17, 14 ],
+        "name" : "left"
+      },
+      "type" : {
+        "kind" : "ListType",
+        "location" : [ 17, 17, 17, 21 ],
+        "elementType" : {
+          "kind" : "ClassType",
+          "location" : [ 17, 18, 17, 20 ],
+          "className" : "int"
+        }
+      }
+    }, {
+      "kind" : "TypedVar",
+      "location" : [ 17, 24, 17, 35 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 17, 24, 17, 28 ],
+        "name" : "right"
+      },
+      "type" : {
+        "kind" : "ListType",
+        "location" : [ 17, 31, 17, 35 ],
+        "elementType" : {
+          "kind" : "ClassType",
+          "location" : [ 17, 32, 17, 34 ],
+          "className" : "int"
+        }
+      }
+    } ],
+    "returnType" : {
+      "kind" : "ListType",
+      "location" : [ 17, 41, 17, 45 ],
+      "elementType" : {
+        "kind" : "ClassType",
+        "location" : [ 17, 42, 17, 44 ],
+        "className" : "int"
+      }
+    },
+    "declarations" : [ {
+      "kind" : "VarDef",
+      "location" : [ 18, 5, 18, 24 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 18, 5, 18, 17 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 18, 5, 18, 10 ],
+          "name" : "merged"
+        },
+        "type" : {
+          "kind" : "ListType",
+          "location" : [ 18, 13, 18, 17 ],
+          "elementType" : {
+            "kind" : "ClassType",
+            "location" : [ 18, 14, 18, 16 ],
+            "className" : "int"
+          }
+        }
+      },
+      "value" : {
+        "kind" : "NoneLiteral",
+        "location" : [ 18, 21, 18, 24 ]
+      }
+    }, {
+      "kind" : "VarDef",
+      "location" : [ 19, 5, 19, 14 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 19, 5, 19, 10 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 19, 5, 19, 5 ],
+          "name" : "i"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 19, 8, 19, 10 ],
+          "className" : "int"
+        }
+      },
+      "value" : {
+        "kind" : "IntegerLiteral",
+        "location" : [ 19, 14, 19, 14 ],
+        "value" : 0
+      }
+    }, {
+      "kind" : "VarDef",
+      "location" : [ 20, 5, 20, 14 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 20, 5, 20, 10 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 20, 5, 20, 5 ],
+          "name" : "j"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 20, 8, 20, 10 ],
+          "className" : "int"
+        }
+      },
+      "value" : {
+        "kind" : "IntegerLiteral",
+        "location" : [ 20, 14, 20, 14 ],
+        "value" : 0
+      }
+    } ],
+    "statements" : [ {
+      "kind" : "AssignStmt",
+      "location" : [ 22, 5, 22, 15 ],
+      "targets" : [ {
+        "kind" : "Identifier",
+        "location" : [ 22, 5, 22, 10 ],
+        "name" : "merged"
+      } ],
+      "value" : {
+        "kind" : "ListExpr",
+        "location" : [ 22, 14, 22, 15 ],
+        "elements" : [ ]
+      }
+    }, {
+      "kind" : "WhileStmt",
+      "location" : [ 23, 5, 31, 4 ],
+      "condition" : {
+        "kind" : "BinaryExpr",
+        "location" : [ 23, 11, 23, 42 ],
+        "left" : {
+          "kind" : "BinaryExpr",
+          "location" : [ 23, 11, 23, 23 ],
+          "left" : {
+            "kind" : "Identifier",
+            "location" : [ 23, 11, 23, 11 ],
+            "name" : "i"
+          },
+          "operator" : "<",
+          "right" : {
+            "kind" : "CallExpr",
+            "location" : [ 23, 15, 23, 23 ],
+            "function" : {
+              "kind" : "Identifier",
+              "location" : [ 23, 15, 23, 17 ],
+              "name" : "len"
+            },
+            "args" : [ {
+              "kind" : "Identifier",
+              "location" : [ 23, 19, 23, 22 ],
+              "name" : "left"
+            } ]
+          }
+        },
+        "operator" : "and",
+        "right" : {
+          "kind" : "BinaryExpr",
+          "location" : [ 23, 29, 23, 42 ],
+          "left" : {
+            "kind" : "Identifier",
+            "location" : [ 23, 29, 23, 29 ],
+            "name" : "j"
+          },
+          "operator" : "<",
+          "right" : {
+            "kind" : "CallExpr",
+            "location" : [ 23, 33, 23, 42 ],
+            "function" : {
+              "kind" : "Identifier",
+              "location" : [ 23, 33, 23, 35 ],
+              "name" : "len"
+            },
+            "args" : [ {
+              "kind" : "Identifier",
+              "location" : [ 23, 37, 23, 41 ],
+              "name" : "right"
+            } ]
+          }
+        }
+      },
+      "body" : [ {
+        "kind" : "IfStmt",
+        "location" : [ 24, 9, 31, 4 ],
+        "condition" : {
+          "kind" : "BinaryExpr",
+          "location" : [ 24, 12, 24, 29 ],
+          "left" : {
+            "kind" : "IndexExpr",
+            "location" : [ 24, 12, 24, 18 ],
+            "list" : {
+              "kind" : "Identifier",
+              "location" : [ 24, 12, 24, 15 ],
+              "name" : "left"
+            },
+            "index" : {
+              "kind" : "Identifier",
+              "location" : [ 24, 17, 24, 17 ],
+              "name" : "i"
+            }
+          },
+          "operator" : "<",
+          "right" : {
+            "kind" : "IndexExpr",
+            "location" : [ 24, 22, 24, 29 ],
+            "list" : {
+              "kind" : "Identifier",
+              "location" : [ 24, 22, 24, 26 ],
+              "name" : "right"
+            },
+            "index" : {
+              "kind" : "Identifier",
+              "location" : [ 24, 28, 24, 28 ],
+              "name" : "j"
+            }
+          }
+        },
+        "thenBody" : [ {
+          "kind" : "AssignStmt",
+          "location" : [ 25, 13, 25, 44 ],
+          "targets" : [ {
+            "kind" : "Identifier",
+            "location" : [ 25, 13, 25, 18 ],
+            "name" : "merged"
+          } ],
+          "value" : {
+            "kind" : "CallExpr",
+            "location" : [ 25, 22, 25, 44 ],
+            "function" : {
+              "kind" : "Identifier",
+              "location" : [ 25, 22, 25, 27 ],
+              "name" : "append"
+            },
+            "args" : [ {
+              "kind" : "Identifier",
+              "location" : [ 25, 29, 25, 34 ],
+              "name" : "merged"
+            }, {
+              "kind" : "IndexExpr",
+              "location" : [ 25, 37, 25, 43 ],
+              "list" : {
+                "kind" : "Identifier",
+                "location" : [ 25, 37, 25, 40 ],
+                "name" : "left"
+              },
+              "index" : {
+                "kind" : "Identifier",
+                "location" : [ 25, 42, 25, 42 ],
+                "name" : "i"
+              }
+            } ]
+          }
+        }, {
+          "kind" : "AssignStmt",
+          "location" : [ 26, 13, 26, 21 ],
+          "targets" : [ {
+            "kind" : "Identifier",
+            "location" : [ 26, 13, 26, 13 ],
+            "name" : "i"
+          } ],
+          "value" : {
+            "kind" : "BinaryExpr",
+            "location" : [ 26, 17, 26, 21 ],
+            "left" : {
+              "kind" : "Identifier",
+              "location" : [ 26, 17, 26, 17 ],
+              "name" : "i"
+            },
+            "operator" : "+",
+            "right" : {
+              "kind" : "IntegerLiteral",
+              "location" : [ 26, 21, 26, 21 ],
+              "value" : 1
+            }
+          }
+        } ],
+        "elseBody" : [ {
+          "kind" : "AssignStmt",
+          "location" : [ 28, 13, 28, 45 ],
+          "targets" : [ {
+            "kind" : "Identifier",
+            "location" : [ 28, 13, 28, 18 ],
+            "name" : "merged"
+          } ],
+          "value" : {
+            "kind" : "CallExpr",
+            "location" : [ 28, 22, 28, 45 ],
+            "function" : {
+              "kind" : "Identifier",
+              "location" : [ 28, 22, 28, 27 ],
+              "name" : "append"
+            },
+            "args" : [ {
+              "kind" : "Identifier",
+              "location" : [ 28, 29, 28, 34 ],
+              "name" : "merged"
+            }, {
+              "kind" : "IndexExpr",
+              "location" : [ 28, 37, 28, 44 ],
+              "list" : {
+                "kind" : "Identifier",
+                "location" : [ 28, 37, 28, 41 ],
+                "name" : "right"
+              },
+              "index" : {
+                "kind" : "Identifier",
+                "location" : [ 28, 43, 28, 43 ],
+                "name" : "j"
+              }
+            } ]
+          }
+        }, {
+          "kind" : "AssignStmt",
+          "location" : [ 29, 13, 29, 21 ],
+          "targets" : [ {
+            "kind" : "Identifier",
+            "location" : [ 29, 13, 29, 13 ],
+            "name" : "j"
+          } ],
+          "value" : {
+            "kind" : "BinaryExpr",
+            "location" : [ 29, 17, 29, 21 ],
+            "left" : {
+              "kind" : "Identifier",
+              "location" : [ 29, 17, 29, 17 ],
+              "name" : "j"
+            },
+            "operator" : "+",
+            "right" : {
+              "kind" : "IntegerLiteral",
+              "location" : [ 29, 21, 29, 21 ],
+              "value" : 1
+            }
+          }
+        } ]
+      } ]
+    }, {
+      "kind" : "IfStmt",
+      "location" : [ 31, 5, 33, 4 ],
+      "condition" : {
+        "kind" : "BinaryExpr",
+        "location" : [ 31, 8, 31, 20 ],
+        "left" : {
+          "kind" : "Identifier",
+          "location" : [ 31, 8, 31, 8 ],
+          "name" : "i"
+        },
+        "operator" : "<",
+        "right" : {
+          "kind" : "CallExpr",
+          "location" : [ 31, 12, 31, 20 ],
+          "function" : {
+            "kind" : "Identifier",
+            "location" : [ 31, 12, 31, 14 ],
+            "name" : "len"
+          },
+          "args" : [ {
+            "kind" : "Identifier",
+            "location" : [ 31, 16, 31, 19 ],
+            "name" : "left"
+          } ]
+        }
+      },
+      "thenBody" : [ {
+        "kind" : "AssignStmt",
+        "location" : [ 32, 9, 32, 51 ],
+        "targets" : [ {
+          "kind" : "Identifier",
+          "location" : [ 32, 9, 32, 14 ],
+          "name" : "merged"
+        } ],
+        "value" : {
+          "kind" : "CallExpr",
+          "location" : [ 32, 18, 32, 51 ],
+          "function" : {
+            "kind" : "Identifier",
+            "location" : [ 32, 18, 32, 23 ],
+            "name" : "extend"
+          },
+          "args" : [ {
+            "kind" : "Identifier",
+            "location" : [ 32, 25, 32, 30 ],
+            "name" : "merged"
+          }, {
+            "kind" : "Identifier",
+            "location" : [ 32, 33, 32, 36 ],
+            "name" : "left"
+          }, {
+            "kind" : "Identifier",
+            "location" : [ 32, 39, 32, 39 ],
+            "name" : "i"
+          }, {
+            "kind" : "CallExpr",
+            "location" : [ 32, 42, 32, 50 ],
+            "function" : {
+              "kind" : "Identifier",
+              "location" : [ 32, 42, 32, 44 ],
+              "name" : "len"
+            },
+            "args" : [ {
+              "kind" : "Identifier",
+              "location" : [ 32, 46, 32, 49 ],
+              "name" : "left"
+            } ]
+          } ]
+        }
+      } ],
+      "elseBody" : [ ]
+    }, {
+      "kind" : "IfStmt",
+      "location" : [ 33, 5, 36, 4 ],
+      "condition" : {
+        "kind" : "BinaryExpr",
+        "location" : [ 33, 8, 33, 21 ],
+        "left" : {
+          "kind" : "Identifier",
+          "location" : [ 33, 8, 33, 8 ],
+          "name" : "j"
+        },
+        "operator" : "<",
+        "right" : {
+          "kind" : "CallExpr",
+          "location" : [ 33, 12, 33, 21 ],
+          "function" : {
+            "kind" : "Identifier",
+            "location" : [ 33, 12, 33, 14 ],
+            "name" : "len"
+          },
+          "args" : [ {
+            "kind" : "Identifier",
+            "location" : [ 33, 16, 33, 20 ],
+            "name" : "right"
+          } ]
+        }
+      },
+      "thenBody" : [ {
+        "kind" : "AssignStmt",
+        "location" : [ 34, 9, 34, 53 ],
+        "targets" : [ {
+          "kind" : "Identifier",
+          "location" : [ 34, 9, 34, 14 ],
+          "name" : "merged"
+        } ],
+        "value" : {
+          "kind" : "CallExpr",
+          "location" : [ 34, 18, 34, 53 ],
+          "function" : {
+            "kind" : "Identifier",
+            "location" : [ 34, 18, 34, 23 ],
+            "name" : "extend"
+          },
+          "args" : [ {
+            "kind" : "Identifier",
+            "location" : [ 34, 25, 34, 30 ],
+            "name" : "merged"
+          }, {
+            "kind" : "Identifier",
+            "location" : [ 34, 33, 34, 37 ],
+            "name" : "right"
+          }, {
+            "kind" : "Identifier",
+            "location" : [ 34, 40, 34, 40 ],
+            "name" : "j"
+          }, {
+            "kind" : "CallExpr",
+            "location" : [ 34, 43, 34, 52 ],
+            "function" : {
+              "kind" : "Identifier",
+              "location" : [ 34, 43, 34, 45 ],
+              "name" : "len"
+            },
+            "args" : [ {
+              "kind" : "Identifier",
+              "location" : [ 34, 47, 34, 51 ],
+              "name" : "right"
+            } ]
+          } ]
+        }
+      } ],
+      "elseBody" : [ ]
+    }, {
+      "kind" : "ReturnStmt",
+      "location" : [ 36, 5, 36, 17 ],
+      "value" : {
+        "kind" : "Identifier",
+        "location" : [ 36, 12, 36, 17 ],
+        "name" : "merged"
+      }
+    } ]
+  }, {
+    "kind" : "FuncDef",
+    "location" : [ 39, 1, 53, 30 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 39, 5, 39, 13 ],
+      "name" : "mergesort"
+    },
+    "params" : [ {
+      "kind" : "TypedVar",
+      "location" : [ 39, 15, 39, 22 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 39, 15, 39, 15 ],
+        "name" : "a"
+      },
+      "type" : {
+        "kind" : "ListType",
+        "location" : [ 39, 18, 39, 22 ],
+        "elementType" : {
+          "kind" : "ClassType",
+          "location" : [ 39, 19, 39, 21 ],
+          "className" : "int"
+        }
+      }
+    } ],
+    "returnType" : {
+      "kind" : "ListType",
+      "location" : [ 39, 28, 39, 32 ],
+      "elementType" : {
+        "kind" : "ClassType",
+        "location" : [ 39, 29, 39, 31 ],
+        "className" : "int"
+      }
+    },
+    "declarations" : [ {
+      "kind" : "VarDef",
+      "location" : [ 40, 5, 40, 16 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 40, 5, 40, 12 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 40, 5, 40, 7 ],
+          "name" : "mid"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 40, 10, 40, 12 ],
+          "className" : "int"
+        }
+      },
+      "value" : {
+        "kind" : "IntegerLiteral",
+        "location" : [ 40, 16, 40, 16 ],
+        "value" : 0
+      }
+    }, {
+      "kind" : "VarDef",
+      "location" : [ 41, 5, 41, 22 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 41, 5, 41, 15 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 41, 5, 41, 8 ],
+          "name" : "left"
+        },
+        "type" : {
+          "kind" : "ListType",
+          "location" : [ 41, 11, 41, 15 ],
+          "elementType" : {
+            "kind" : "ClassType",
+            "location" : [ 41, 12, 41, 14 ],
+            "className" : "int"
+          }
+        }
+      },
+      "value" : {
+        "kind" : "NoneLiteral",
+        "location" : [ 41, 19, 41, 22 ]
+      }
+    }, {
+      "kind" : "VarDef",
+      "location" : [ 42, 5, 42, 23 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 42, 5, 42, 16 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 42, 5, 42, 9 ],
+          "name" : "right"
+        },
+        "type" : {
+          "kind" : "ListType",
+          "location" : [ 42, 12, 42, 16 ],
+          "elementType" : {
+            "kind" : "ClassType",
+            "location" : [ 42, 13, 42, 15 ],
+            "className" : "int"
+          }
+        }
+      },
+      "value" : {
+        "kind" : "NoneLiteral",
+        "location" : [ 42, 20, 42, 23 ]
+      }
+    } ],
+    "statements" : [ {
+      "kind" : "IfStmt",
+      "location" : [ 44, 5, 47, 4 ],
+      "condition" : {
+        "kind" : "BinaryExpr",
+        "location" : [ 44, 8, 44, 17 ],
+        "left" : {
+          "kind" : "CallExpr",
+          "location" : [ 44, 8, 44, 13 ],
+          "function" : {
+            "kind" : "Identifier",
+            "location" : [ 44, 8, 44, 10 ],
+            "name" : "len"
+          },
+          "args" : [ {
+            "kind" : "Identifier",
+            "location" : [ 44, 12, 44, 12 ],
+            "name" : "a"
+          } ]
+        },
+        "operator" : "<",
+        "right" : {
+          "kind" : "IntegerLiteral",
+          "location" : [ 44, 17, 44, 17 ],
+          "value" : 2
+        }
+      },
+      "thenBody" : [ {
+        "kind" : "ReturnStmt",
+        "location" : [ 45, 9, 45, 16 ],
+        "value" : {
+          "kind" : "Identifier",
+          "location" : [ 45, 16, 45, 16 ],
+          "name" : "a"
+        }
+      } ],
+      "elseBody" : [ ]
+    }, {
+      "kind" : "AssignStmt",
+      "location" : [ 47, 5, 47, 21 ],
+      "targets" : [ {
+        "kind" : "Identifier",
+        "location" : [ 47, 5, 47, 7 ],
+        "name" : "mid"
+      } ],
+      "value" : {
+        "kind" : "BinaryExpr",
+        "location" : [ 47, 11, 47, 21 ],
+        "left" : {
+          "kind" : "CallExpr",
+          "location" : [ 47, 11, 47, 16 ],
+          "function" : {
+            "kind" : "Identifier",
+            "location" : [ 47, 11, 47, 13 ],
+            "name" : "len"
+          },
+          "args" : [ {
+            "kind" : "Identifier",
+            "location" : [ 47, 15, 47, 15 ],
+            "name" : "a"
+          } ]
+        },
+        "operator" : "//",
+        "right" : {
+          "kind" : "IntegerLiteral",
+          "location" : [ 47, 21, 47, 21 ],
+          "value" : 2
+        }
+      }
+    }, {
+      "kind" : "AssignStmt",
+      "location" : [ 48, 5, 48, 32 ],
+      "targets" : [ {
+        "kind" : "Identifier",
+        "location" : [ 48, 5, 48, 8 ],
+        "name" : "left"
+      } ],
+      "value" : {
+        "kind" : "CallExpr",
+        "location" : [ 48, 12, 48, 32 ],
+        "function" : {
+          "kind" : "Identifier",
+          "location" : [ 48, 12, 48, 17 ],
+          "name" : "extend"
+        },
+        "args" : [ {
+          "kind" : "ListExpr",
+          "location" : [ 48, 19, 48, 20 ],
+          "elements" : [ ]
+        }, {
+          "kind" : "Identifier",
+          "location" : [ 48, 23, 48, 23 ],
+          "name" : "a"
+        }, {
+          "kind" : "IntegerLiteral",
+          "location" : [ 48, 26, 48, 26 ],
+          "value" : 0
+        }, {
+          "kind" : "Identifier",
+          "location" : [ 48, 29, 48, 31 ],
+          "name" : "mid"
+        } ]
+      }
+    }, {
+      "kind" : "AssignStmt",
+      "location" : [ 49, 5, 49, 38 ],
+      "targets" : [ {
+        "kind" : "Identifier",
+        "location" : [ 49, 5, 49, 9 ],
+        "name" : "right"
+      } ],
+      "value" : {
+        "kind" : "CallExpr",
+        "location" : [ 49, 13, 49, 38 ],
+        "function" : {
+          "kind" : "Identifier",
+          "location" : [ 49, 13, 49, 18 ],
+          "name" : "extend"
+        },
+        "args" : [ {
+          "kind" : "ListExpr",
+          "location" : [ 49, 20, 49, 21 ],
+          "elements" : [ ]
+        }, {
+          "kind" : "Identifier",
+          "location" : [ 49, 24, 49, 24 ],
+          "name" : "a"
+        }, {
+          "kind" : "Identifier",
+          "location" : [ 49, 27, 49, 29 ],
+          "name" : "mid"
+        }, {
+          "kind" : "CallExpr",
+          "location" : [ 49, 32, 49, 37 ],
+          "function" : {
+            "kind" : "Identifier",
+            "location" : [ 49, 32, 49, 34 ],
+            "name" : "len"
+          },
+          "args" : [ {
+            "kind" : "Identifier",
+            "location" : [ 49, 36, 49, 36 ],
+            "name" : "a"
+          } ]
+        } ]
+      }
+    }, {
+      "kind" : "AssignStmt",
+      "location" : [ 51, 5, 51, 26 ],
+      "targets" : [ {
+        "kind" : "Identifier",
+        "location" : [ 51, 5, 51, 8 ],
+        "name" : "left"
+      } ],
+      "value" : {
+        "kind" : "CallExpr",
+        "location" : [ 51, 12, 51, 26 ],
+        "function" : {
+          "kind" : "Identifier",
+          "location" : [ 51, 12, 51, 20 ],
+          "name" : "mergesort"
+        },
+        "args" : [ {
+          "kind" : "Identifier",
+          "location" : [ 51, 22, 51, 25 ],
+          "name" : "left"
+        } ]
+      }
+    }, {
+      "kind" : "AssignStmt",
+      "location" : [ 52, 5, 52, 28 ],
+      "targets" : [ {
+        "kind" : "Identifier",
+        "location" : [ 52, 5, 52, 9 ],
+        "name" : "right"
+      } ],
+      "value" : {
+        "kind" : "CallExpr",
+        "location" : [ 52, 13, 52, 28 ],
+        "function" : {
+          "kind" : "Identifier",
+          "location" : [ 52, 13, 52, 21 ],
+          "name" : "mergesort"
+        },
+        "args" : [ {
+          "kind" : "Identifier",
+          "location" : [ 52, 23, 52, 27 ],
+          "name" : "right"
+        } ]
+      }
+    }, {
+      "kind" : "ReturnStmt",
+      "location" : [ 53, 5, 53, 29 ],
+      "value" : {
+        "kind" : "CallExpr",
+        "location" : [ 53, 12, 53, 29 ],
+        "function" : {
+          "kind" : "Identifier",
+          "location" : [ 53, 12, 53, 16 ],
+          "name" : "merge"
+        },
+        "args" : [ {
+          "kind" : "Identifier",
+          "location" : [ 53, 18, 53, 21 ],
+          "name" : "left"
+        }, {
+          "kind" : "Identifier",
+          "location" : [ 53, 24, 53, 28 ],
+          "name" : "right"
+        } ]
+      }
+    } ]
+  }, {
+    "kind" : "VarDef",
+    "location" : [ 56, 1, 56, 21 ],
+    "var" : {
+      "kind" : "TypedVar",
+      "location" : [ 56, 1, 56, 14 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 56, 1, 56, 7 ],
+        "name" : "initial"
+      },
+      "type" : {
+        "kind" : "ListType",
+        "location" : [ 56, 10, 56, 14 ],
+        "elementType" : {
+          "kind" : "ClassType",
+          "location" : [ 56, 11, 56, 13 ],
+          "className" : "int"
+        }
+      }
+    },
+    "value" : {
+      "kind" : "NoneLiteral",
+      "location" : [ 56, 18, 56, 21 ]
+    }
+  }, {
+    "kind" : "VarDef",
+    "location" : [ 57, 1, 57, 21 ],
+    "var" : {
+      "kind" : "TypedVar",
+      "location" : [ 57, 1, 57, 14 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 57, 1, 57, 7 ],
+        "name" : "ordered"
+      },
+      "type" : {
+        "kind" : "ListType",
+        "location" : [ 57, 10, 57, 14 ],
+        "elementType" : {
+          "kind" : "ClassType",
+          "location" : [ 57, 11, 57, 13 ],
+          "className" : "int"
+        }
+      }
+    },
+    "value" : {
+      "kind" : "NoneLiteral",
+      "location" : [ 57, 18, 57, 21 ]
+    }
+  } ],
+  "statements" : [ {
+    "kind" : "AssignStmt",
+    "location" : [ 59, 1, 59, 26 ],
+    "targets" : [ {
+      "kind" : "Identifier",
+      "location" : [ 59, 1, 59, 7 ],
+      "name" : "initial"
+    } ],
+    "value" : {
+      "kind" : "ListExpr",
+      "location" : [ 59, 11, 59, 26 ],
+      "elements" : [ {
+        "kind" : "IntegerLiteral",
+        "location" : [ 59, 12, 59, 12 ],
+        "value" : 2
+      }, {
+        "kind" : "IntegerLiteral",
+        "location" : [ 59, 15, 59, 15 ],
+        "value" : 7
+      }, {
+        "kind" : "IntegerLiteral",
+        "location" : [ 59, 18, 59, 18 ],
+        "value" : 3
+      }, {
+        "kind" : "IntegerLiteral",
+        "location" : [ 59, 21, 59, 22 ],
+        "value" : 11
+      }, {
+        "kind" : "IntegerLiteral",
+        "location" : [ 59, 25, 59, 25 ],
+        "value" : 5
+      } ]
+    }
+  }, {
+    "kind" : "AssignStmt",
+    "location" : [ 60, 1, 60, 28 ],
+    "targets" : [ {
+      "kind" : "Identifier",
+      "location" : [ 60, 1, 60, 7 ],
+      "name" : "ordered"
+    } ],
+    "value" : {
+      "kind" : "CallExpr",
+      "location" : [ 60, 11, 60, 28 ],
+      "function" : {
+        "kind" : "Identifier",
+        "location" : [ 60, 11, 60, 19 ],
+        "name" : "mergesort"
+      },
+      "args" : [ {
+        "kind" : "Identifier",
+        "location" : [ 60, 21, 60, 27 ],
+        "name" : "initial"
+      } ]
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 62, 1, 62, 14 ],
+    "expr" : {
+      "kind" : "CallExpr",
+      "location" : [ 62, 1, 62, 14 ],
+      "function" : {
+        "kind" : "Identifier",
+        "location" : [ 62, 1, 62, 5 ],
+        "name" : "print"
+      },
+      "args" : [ {
+        "kind" : "Identifier",
+        "location" : [ 62, 7, 62, 13 ],
+        "name" : "ordered"
+      } ]
+    }
+  } ],
+  "errors" : {
+    "errors" : [ ],
+    "kind" : "Errors",
+    "location" : [ 0, 0, 0, 0 ]
+  }
+}

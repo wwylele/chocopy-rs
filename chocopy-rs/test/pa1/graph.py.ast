@@ -1,0 +1,1110 @@
+{
+  "kind" : "Program",
+  "location" : [ 1, 1, 52, 25 ],
+  "declarations" : [ {
+    "kind" : "ClassDef",
+    "location" : [ 1, 1, 11, 0 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 1, 7, 1, 12 ],
+      "name" : "weight"
+    },
+    "superClass" : {
+      "kind" : "Identifier",
+      "location" : [ 1, 14, 1, 19 ],
+      "name" : "object"
+    },
+    "declarations" : [ {
+      "kind" : "VarDef",
+      "location" : [ 2, 5, 2, 18 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 2, 5, 2, 14 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 2, 5, 2, 9 ],
+          "name" : "value"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 2, 12, 2, 14 ],
+          "className" : "int"
+        }
+      },
+      "value" : {
+        "kind" : "IntegerLiteral",
+        "location" : [ 2, 18, 2, 18 ],
+        "value" : 0
+      }
+    }, {
+      "kind" : "FuncDef",
+      "location" : [ 4, 5, 5, 27 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 4, 9, 4, 16 ],
+        "name" : "__init__"
+      },
+      "params" : [ {
+        "kind" : "TypedVar",
+        "location" : [ 4, 18, 4, 31 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 4, 18, 4, 21 ],
+          "name" : "self"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 4, 24, 4, 31 ],
+          "className" : "weight"
+        }
+      }, {
+        "kind" : "TypedVar",
+        "location" : [ 4, 34, 4, 43 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 4, 34, 4, 38 ],
+          "name" : "value"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 4, 41, 4, 43 ],
+          "className" : "int"
+        }
+      } ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 4, 45, 4, 45 ],
+        "className" : "<None>"
+      },
+      "declarations" : [ ],
+      "statements" : [ {
+        "kind" : "AssignStmt",
+        "location" : [ 5, 9, 5, 26 ],
+        "targets" : [ {
+          "kind" : "MemberExpr",
+          "location" : [ 5, 9, 5, 18 ],
+          "object" : {
+            "kind" : "Identifier",
+            "location" : [ 5, 9, 5, 12 ],
+            "name" : "self"
+          },
+          "member" : {
+            "kind" : "Identifier",
+            "location" : [ 5, 14, 5, 18 ],
+            "name" : "value"
+          }
+        } ],
+        "value" : {
+          "kind" : "Identifier",
+          "location" : [ 5, 22, 5, 26 ],
+          "name" : "value"
+        }
+      } ]
+    }, {
+      "kind" : "FuncDef",
+      "location" : [ 7, 5, 8, 49 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 7, 9, 7, 16 ],
+        "name" : "__repr__"
+      },
+      "params" : [ {
+        "kind" : "TypedVar",
+        "location" : [ 7, 18, 7, 31 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 7, 18, 7, 21 ],
+          "name" : "self"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 7, 24, 7, 31 ],
+          "className" : "weight"
+        }
+      } ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 7, 33, 7, 33 ],
+        "className" : "<None>"
+      },
+      "declarations" : [ ],
+      "statements" : [ {
+        "kind" : "ReturnStmt",
+        "location" : [ 8, 9, 8, 48 ],
+        "value" : {
+          "kind" : "BinaryExpr",
+          "location" : [ 8, 16, 8, 48 ],
+          "left" : {
+            "kind" : "BinaryExpr",
+            "location" : [ 8, 16, 8, 42 ],
+            "left" : {
+              "kind" : "StringLiteral",
+              "location" : [ 8, 16, 8, 24 ],
+              "value" : "weight("
+            },
+            "operator" : "+",
+            "right" : {
+              "kind" : "CallExpr",
+              "location" : [ 8, 28, 8, 42 ],
+              "function" : {
+                "kind" : "Identifier",
+                "location" : [ 8, 28, 8, 30 ],
+                "name" : "str"
+              },
+              "args" : [ {
+                "kind" : "MemberExpr",
+                "location" : [ 8, 32, 8, 41 ],
+                "object" : {
+                  "kind" : "Identifier",
+                  "location" : [ 8, 32, 8, 35 ],
+                  "name" : "self"
+                },
+                "member" : {
+                  "kind" : "Identifier",
+                  "location" : [ 8, 37, 8, 41 ],
+                  "name" : "value"
+                }
+              } ]
+            }
+          },
+          "operator" : "+",
+          "right" : {
+            "kind" : "StringLiteral",
+            "location" : [ 8, 46, 8, 48 ],
+            "value" : ")"
+          }
+        }
+      } ]
+    } ]
+  }, {
+    "kind" : "ClassDef",
+    "location" : [ 11, 1, 37, 0 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 11, 7, 11, 11 ],
+      "name" : "graph"
+    },
+    "superClass" : {
+      "kind" : "Identifier",
+      "location" : [ 11, 13, 11, 18 ],
+      "name" : "object"
+    },
+    "declarations" : [ {
+      "kind" : "VarDef",
+      "location" : [ 12, 5, 12, 29 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 12, 5, 12, 22 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 12, 5, 12, 10 ],
+          "name" : "matrix"
+        },
+        "type" : {
+          "kind" : "ListType",
+          "location" : [ 12, 13, 12, 22 ],
+          "elementType" : {
+            "kind" : "ListType",
+            "location" : [ 12, 14, 12, 21 ],
+            "elementType" : {
+              "kind" : "ClassType",
+              "location" : [ 12, 15, 12, 20 ],
+              "className" : "weight"
+            }
+          }
+        }
+      },
+      "value" : {
+        "kind" : "NoneLiteral",
+        "location" : [ 12, 26, 12, 29 ]
+      }
+    }, {
+      "kind" : "FuncDef",
+      "location" : [ 14, 5, 29, 4 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 14, 9, 14, 16 ],
+        "name" : "__init__"
+      },
+      "params" : [ {
+        "kind" : "TypedVar",
+        "location" : [ 14, 18, 14, 30 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 14, 18, 14, 21 ],
+          "name" : "self"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 14, 24, 14, 30 ],
+          "className" : "graph"
+        }
+      }, {
+        "kind" : "TypedVar",
+        "location" : [ 14, 33, 14, 49 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 14, 33, 14, 44 ],
+          "name" : "num_vertices"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 14, 47, 14, 49 ],
+          "className" : "int"
+        }
+      } ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 14, 51, 14, 51 ],
+        "className" : "<None>"
+      },
+      "declarations" : [ {
+        "kind" : "VarDef",
+        "location" : [ 15, 9, 15, 18 ],
+        "var" : {
+          "kind" : "TypedVar",
+          "location" : [ 15, 9, 15, 14 ],
+          "identifier" : {
+            "kind" : "Identifier",
+            "location" : [ 15, 9, 15, 9 ],
+            "name" : "i"
+          },
+          "type" : {
+            "kind" : "ClassType",
+            "location" : [ 15, 12, 15, 14 ],
+            "className" : "int"
+          }
+        },
+        "value" : {
+          "kind" : "IntegerLiteral",
+          "location" : [ 15, 18, 15, 18 ],
+          "value" : 0
+        }
+      }, {
+        "kind" : "VarDef",
+        "location" : [ 16, 9, 16, 18 ],
+        "var" : {
+          "kind" : "TypedVar",
+          "location" : [ 16, 9, 16, 14 ],
+          "identifier" : {
+            "kind" : "Identifier",
+            "location" : [ 16, 9, 16, 9 ],
+            "name" : "j"
+          },
+          "type" : {
+            "kind" : "ClassType",
+            "location" : [ 16, 12, 16, 14 ],
+            "className" : "int"
+          }
+        },
+        "value" : {
+          "kind" : "IntegerLiteral",
+          "location" : [ 16, 18, 16, 18 ],
+          "value" : 0
+        }
+      }, {
+        "kind" : "VarDef",
+        "location" : [ 17, 9, 17, 28 ],
+        "var" : {
+          "kind" : "TypedVar",
+          "location" : [ 17, 9, 17, 21 ],
+          "identifier" : {
+            "kind" : "Identifier",
+            "location" : [ 17, 9, 17, 11 ],
+            "name" : "row"
+          },
+          "type" : {
+            "kind" : "ListType",
+            "location" : [ 17, 14, 17, 21 ],
+            "elementType" : {
+              "kind" : "ClassType",
+              "location" : [ 17, 15, 17, 20 ],
+              "className" : "weight"
+            }
+          }
+        },
+        "value" : {
+          "kind" : "NoneLiteral",
+          "location" : [ 17, 25, 17, 28 ]
+        }
+      } ],
+      "statements" : [ {
+        "kind" : "AssignStmt",
+        "location" : [ 19, 9, 19, 24 ],
+        "targets" : [ {
+          "kind" : "MemberExpr",
+          "location" : [ 19, 9, 19, 19 ],
+          "object" : {
+            "kind" : "Identifier",
+            "location" : [ 19, 9, 19, 12 ],
+            "name" : "self"
+          },
+          "member" : {
+            "kind" : "Identifier",
+            "location" : [ 19, 14, 19, 19 ],
+            "name" : "matrix"
+          }
+        } ],
+        "value" : {
+          "kind" : "ListExpr",
+          "location" : [ 19, 23, 19, 24 ],
+          "elements" : [ ]
+        }
+      }, {
+        "kind" : "WhileStmt",
+        "location" : [ 20, 9, 29, 4 ],
+        "condition" : {
+          "kind" : "BinaryExpr",
+          "location" : [ 20, 15, 20, 30 ],
+          "left" : {
+            "kind" : "Identifier",
+            "location" : [ 20, 15, 20, 15 ],
+            "name" : "i"
+          },
+          "operator" : "<",
+          "right" : {
+            "kind" : "Identifier",
+            "location" : [ 20, 19, 20, 30 ],
+            "name" : "num_vertices"
+          }
+        },
+        "body" : [ {
+          "kind" : "AssignStmt",
+          "location" : [ 21, 13, 21, 17 ],
+          "targets" : [ {
+            "kind" : "Identifier",
+            "location" : [ 21, 13, 21, 13 ],
+            "name" : "j"
+          } ],
+          "value" : {
+            "kind" : "IntegerLiteral",
+            "location" : [ 21, 17, 21, 17 ],
+            "value" : 0
+          }
+        }, {
+          "kind" : "AssignStmt",
+          "location" : [ 22, 13, 22, 20 ],
+          "targets" : [ {
+            "kind" : "Identifier",
+            "location" : [ 22, 13, 22, 15 ],
+            "name" : "row"
+          } ],
+          "value" : {
+            "kind" : "ListExpr",
+            "location" : [ 22, 19, 22, 20 ],
+            "elements" : [ ]
+          }
+        }, {
+          "kind" : "WhileStmt",
+          "location" : [ 23, 13, 26, 12 ],
+          "condition" : {
+            "kind" : "BinaryExpr",
+            "location" : [ 23, 19, 23, 34 ],
+            "left" : {
+              "kind" : "Identifier",
+              "location" : [ 23, 19, 23, 19 ],
+              "name" : "j"
+            },
+            "operator" : "<",
+            "right" : {
+              "kind" : "Identifier",
+              "location" : [ 23, 23, 23, 34 ],
+              "name" : "num_vertices"
+            }
+          },
+          "body" : [ {
+            "kind" : "AssignStmt",
+            "location" : [ 24, 17, 24, 39 ],
+            "targets" : [ {
+              "kind" : "Identifier",
+              "location" : [ 24, 17, 24, 19 ],
+              "name" : "row"
+            } ],
+            "value" : {
+              "kind" : "BinaryExpr",
+              "location" : [ 24, 23, 24, 39 ],
+              "left" : {
+                "kind" : "Identifier",
+                "location" : [ 24, 23, 24, 25 ],
+                "name" : "row"
+              },
+              "operator" : "+",
+              "right" : {
+                "kind" : "ListExpr",
+                "location" : [ 24, 29, 24, 39 ],
+                "elements" : [ {
+                  "kind" : "CallExpr",
+                  "location" : [ 24, 30, 24, 38 ],
+                  "function" : {
+                    "kind" : "Identifier",
+                    "location" : [ 24, 30, 24, 35 ],
+                    "name" : "weight"
+                  },
+                  "args" : [ {
+                    "kind" : "IntegerLiteral",
+                    "location" : [ 24, 37, 24, 37 ],
+                    "value" : 0
+                  } ]
+                } ]
+              }
+            }
+          }, {
+            "kind" : "AssignStmt",
+            "location" : [ 25, 17, 25, 25 ],
+            "targets" : [ {
+              "kind" : "Identifier",
+              "location" : [ 25, 17, 25, 17 ],
+              "name" : "j"
+            } ],
+            "value" : {
+              "kind" : "BinaryExpr",
+              "location" : [ 25, 21, 25, 25 ],
+              "left" : {
+                "kind" : "Identifier",
+                "location" : [ 25, 21, 25, 21 ],
+                "name" : "j"
+              },
+              "operator" : "+",
+              "right" : {
+                "kind" : "IntegerLiteral",
+                "location" : [ 25, 25, 25, 25 ],
+                "value" : 1
+              }
+            }
+          } ]
+        }, {
+          "kind" : "AssignStmt",
+          "location" : [ 26, 13, 26, 45 ],
+          "targets" : [ {
+            "kind" : "MemberExpr",
+            "location" : [ 26, 13, 26, 23 ],
+            "object" : {
+              "kind" : "Identifier",
+              "location" : [ 26, 13, 26, 16 ],
+              "name" : "self"
+            },
+            "member" : {
+              "kind" : "Identifier",
+              "location" : [ 26, 18, 26, 23 ],
+              "name" : "matrix"
+            }
+          } ],
+          "value" : {
+            "kind" : "BinaryExpr",
+            "location" : [ 26, 27, 26, 45 ],
+            "left" : {
+              "kind" : "MemberExpr",
+              "location" : [ 26, 27, 26, 37 ],
+              "object" : {
+                "kind" : "Identifier",
+                "location" : [ 26, 27, 26, 30 ],
+                "name" : "self"
+              },
+              "member" : {
+                "kind" : "Identifier",
+                "location" : [ 26, 32, 26, 37 ],
+                "name" : "matrix"
+              }
+            },
+            "operator" : "+",
+            "right" : {
+              "kind" : "ListExpr",
+              "location" : [ 26, 41, 26, 45 ],
+              "elements" : [ {
+                "kind" : "Identifier",
+                "location" : [ 26, 42, 26, 44 ],
+                "name" : "row"
+              } ]
+            }
+          }
+        }, {
+          "kind" : "AssignStmt",
+          "location" : [ 27, 13, 27, 21 ],
+          "targets" : [ {
+            "kind" : "Identifier",
+            "location" : [ 27, 13, 27, 13 ],
+            "name" : "i"
+          } ],
+          "value" : {
+            "kind" : "BinaryExpr",
+            "location" : [ 27, 17, 27, 21 ],
+            "left" : {
+              "kind" : "Identifier",
+              "location" : [ 27, 17, 27, 17 ],
+              "name" : "i"
+            },
+            "operator" : "+",
+            "right" : {
+              "kind" : "IntegerLiteral",
+              "location" : [ 27, 21, 27, 21 ],
+              "value" : 1
+            }
+          }
+        } ]
+      } ]
+    }, {
+      "kind" : "FuncDef",
+      "location" : [ 29, 5, 30, 13 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 29, 9, 29, 16 ],
+        "name" : "add_edge"
+      },
+      "params" : [ {
+        "kind" : "TypedVar",
+        "location" : [ 29, 18, 29, 30 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 29, 18, 29, 21 ],
+          "name" : "self"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 29, 24, 29, 30 ],
+          "className" : "graph"
+        }
+      }, {
+        "kind" : "TypedVar",
+        "location" : [ 29, 33, 29, 48 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 29, 33, 29, 43 ],
+          "name" : "from_vertex"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 29, 46, 29, 48 ],
+          "className" : "int"
+        }
+      }, {
+        "kind" : "TypedVar",
+        "location" : [ 29, 51, 29, 64 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 29, 51, 29, 59 ],
+          "name" : "to_vertex"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 29, 62, 29, 64 ],
+          "className" : "int"
+        }
+      }, {
+        "kind" : "TypedVar",
+        "location" : [ 29, 67, 29, 82 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 29, 67, 29, 77 ],
+          "name" : "edge_weight"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 29, 80, 29, 82 ],
+          "className" : "int"
+        }
+      } ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 29, 84, 29, 84 ],
+        "className" : "<None>"
+      },
+      "declarations" : [ ],
+      "statements" : [ ]
+    }, {
+      "kind" : "FuncDef",
+      "location" : [ 32, 5, 37, 0 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 32, 9, 32, 13 ],
+        "name" : "print"
+      },
+      "params" : [ {
+        "kind" : "TypedVar",
+        "location" : [ 32, 15, 32, 27 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 32, 15, 32, 18 ],
+          "name" : "self"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 32, 21, 32, 27 ],
+          "className" : "graph"
+        }
+      } ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 32, 29, 32, 29 ],
+        "className" : "<None>"
+      },
+      "declarations" : [ ],
+      "statements" : [ {
+        "kind" : "ForStmt",
+        "location" : [ 33, 9, 37, 0 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 33, 13, 33, 15 ],
+          "name" : "row"
+        },
+        "iterable" : {
+          "kind" : "MemberExpr",
+          "location" : [ 33, 20, 33, 30 ],
+          "object" : {
+            "kind" : "Identifier",
+            "location" : [ 33, 20, 33, 23 ],
+            "name" : "self"
+          },
+          "member" : {
+            "kind" : "Identifier",
+            "location" : [ 33, 25, 33, 30 ],
+            "name" : "matrix"
+          }
+        },
+        "body" : [ {
+          "kind" : "ExprStmt",
+          "location" : [ 34, 13, 34, 22 ],
+          "expr" : {
+            "kind" : "CallExpr",
+            "location" : [ 34, 13, 34, 22 ],
+            "function" : {
+              "kind" : "Identifier",
+              "location" : [ 34, 13, 34, 17 ],
+              "name" : "print"
+            },
+            "args" : [ {
+              "kind" : "Identifier",
+              "location" : [ 34, 19, 34, 21 ],
+              "name" : "row"
+            } ]
+          }
+        } ]
+      } ]
+    } ]
+  }, {
+    "kind" : "ClassDef",
+    "location" : [ 37, 1, 43, 0 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 37, 7, 37, 21 ],
+      "name" : "undirectedgraph"
+    },
+    "superClass" : {
+      "kind" : "Identifier",
+      "location" : [ 37, 23, 37, 27 ],
+      "name" : "graph"
+    },
+    "declarations" : [ {
+      "kind" : "FuncDef",
+      "location" : [ 38, 5, 40, 66 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 38, 9, 38, 16 ],
+        "name" : "add_edge"
+      },
+      "params" : [ {
+        "kind" : "TypedVar",
+        "location" : [ 38, 18, 38, 40 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 38, 18, 38, 21 ],
+          "name" : "self"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 38, 24, 38, 40 ],
+          "className" : "undirectedgraph"
+        }
+      }, {
+        "kind" : "TypedVar",
+        "location" : [ 38, 43, 38, 58 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 38, 43, 38, 53 ],
+          "name" : "from_vertex"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 38, 56, 38, 58 ],
+          "className" : "int"
+        }
+      }, {
+        "kind" : "TypedVar",
+        "location" : [ 38, 61, 38, 74 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 38, 61, 38, 69 ],
+          "name" : "to_vertex"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 38, 72, 38, 74 ],
+          "className" : "int"
+        }
+      }, {
+        "kind" : "TypedVar",
+        "location" : [ 38, 77, 38, 92 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 38, 77, 38, 87 ],
+          "name" : "edge_weight"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 38, 90, 38, 92 ],
+          "className" : "int"
+        }
+      } ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 38, 94, 38, 94 ],
+        "className" : "<None>"
+      },
+      "declarations" : [ ],
+      "statements" : [ {
+        "kind" : "AssignStmt",
+        "location" : [ 39, 9, 39, 65 ],
+        "targets" : [ {
+          "kind" : "IndexExpr",
+          "location" : [ 39, 9, 39, 43 ],
+          "list" : {
+            "kind" : "IndexExpr",
+            "location" : [ 39, 9, 39, 32 ],
+            "list" : {
+              "kind" : "MemberExpr",
+              "location" : [ 39, 9, 39, 19 ],
+              "object" : {
+                "kind" : "Identifier",
+                "location" : [ 39, 9, 39, 12 ],
+                "name" : "self"
+              },
+              "member" : {
+                "kind" : "Identifier",
+                "location" : [ 39, 14, 39, 19 ],
+                "name" : "matrix"
+              }
+            },
+            "index" : {
+              "kind" : "Identifier",
+              "location" : [ 39, 21, 39, 31 ],
+              "name" : "from_vertex"
+            }
+          },
+          "index" : {
+            "kind" : "Identifier",
+            "location" : [ 39, 34, 39, 42 ],
+            "name" : "to_vertex"
+          }
+        } ],
+        "value" : {
+          "kind" : "CallExpr",
+          "location" : [ 39, 47, 39, 65 ],
+          "function" : {
+            "kind" : "Identifier",
+            "location" : [ 39, 47, 39, 52 ],
+            "name" : "weight"
+          },
+          "args" : [ {
+            "kind" : "Identifier",
+            "location" : [ 39, 54, 39, 64 ],
+            "name" : "edge_weight"
+          } ]
+        }
+      }, {
+        "kind" : "AssignStmt",
+        "location" : [ 40, 9, 40, 65 ],
+        "targets" : [ {
+          "kind" : "IndexExpr",
+          "location" : [ 40, 9, 40, 43 ],
+          "list" : {
+            "kind" : "IndexExpr",
+            "location" : [ 40, 9, 40, 30 ],
+            "list" : {
+              "kind" : "MemberExpr",
+              "location" : [ 40, 9, 40, 19 ],
+              "object" : {
+                "kind" : "Identifier",
+                "location" : [ 40, 9, 40, 12 ],
+                "name" : "self"
+              },
+              "member" : {
+                "kind" : "Identifier",
+                "location" : [ 40, 14, 40, 19 ],
+                "name" : "matrix"
+              }
+            },
+            "index" : {
+              "kind" : "Identifier",
+              "location" : [ 40, 21, 40, 29 ],
+              "name" : "to_vertex"
+            }
+          },
+          "index" : {
+            "kind" : "Identifier",
+            "location" : [ 40, 32, 40, 42 ],
+            "name" : "from_vertex"
+          }
+        } ],
+        "value" : {
+          "kind" : "CallExpr",
+          "location" : [ 40, 47, 40, 65 ],
+          "function" : {
+            "kind" : "Identifier",
+            "location" : [ 40, 47, 40, 52 ],
+            "name" : "weight"
+          },
+          "args" : [ {
+            "kind" : "Identifier",
+            "location" : [ 40, 54, 40, 64 ],
+            "name" : "edge_weight"
+          } ]
+        }
+      } ]
+    } ]
+  }, {
+    "kind" : "ClassDef",
+    "location" : [ 43, 1, 48, 0 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 43, 7, 43, 19 ],
+      "name" : "directedgraph"
+    },
+    "superClass" : {
+      "kind" : "Identifier",
+      "location" : [ 43, 21, 43, 25 ],
+      "name" : "graph"
+    },
+    "declarations" : [ {
+      "kind" : "FuncDef",
+      "location" : [ 44, 5, 45, 66 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 44, 9, 44, 16 ],
+        "name" : "add_edge"
+      },
+      "params" : [ {
+        "kind" : "TypedVar",
+        "location" : [ 44, 18, 44, 40 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 44, 18, 44, 21 ],
+          "name" : "self"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 44, 24, 44, 40 ],
+          "className" : "undirectedgraph"
+        }
+      }, {
+        "kind" : "TypedVar",
+        "location" : [ 44, 43, 44, 58 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 44, 43, 44, 53 ],
+          "name" : "from_vertex"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 44, 56, 44, 58 ],
+          "className" : "int"
+        }
+      }, {
+        "kind" : "TypedVar",
+        "location" : [ 44, 61, 44, 74 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 44, 61, 44, 69 ],
+          "name" : "to_vertex"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 44, 72, 44, 74 ],
+          "className" : "int"
+        }
+      }, {
+        "kind" : "TypedVar",
+        "location" : [ 44, 77, 44, 92 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 44, 77, 44, 87 ],
+          "name" : "edge_weight"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 44, 90, 44, 92 ],
+          "className" : "int"
+        }
+      } ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 44, 94, 44, 94 ],
+        "className" : "<None>"
+      },
+      "declarations" : [ ],
+      "statements" : [ {
+        "kind" : "AssignStmt",
+        "location" : [ 45, 9, 45, 65 ],
+        "targets" : [ {
+          "kind" : "IndexExpr",
+          "location" : [ 45, 9, 45, 43 ],
+          "list" : {
+            "kind" : "IndexExpr",
+            "location" : [ 45, 9, 45, 32 ],
+            "list" : {
+              "kind" : "MemberExpr",
+              "location" : [ 45, 9, 45, 19 ],
+              "object" : {
+                "kind" : "Identifier",
+                "location" : [ 45, 9, 45, 12 ],
+                "name" : "self"
+              },
+              "member" : {
+                "kind" : "Identifier",
+                "location" : [ 45, 14, 45, 19 ],
+                "name" : "matrix"
+              }
+            },
+            "index" : {
+              "kind" : "Identifier",
+              "location" : [ 45, 21, 45, 31 ],
+              "name" : "from_vertex"
+            }
+          },
+          "index" : {
+            "kind" : "Identifier",
+            "location" : [ 45, 34, 45, 42 ],
+            "name" : "to_vertex"
+          }
+        } ],
+        "value" : {
+          "kind" : "CallExpr",
+          "location" : [ 45, 47, 45, 65 ],
+          "function" : {
+            "kind" : "Identifier",
+            "location" : [ 45, 47, 45, 52 ],
+            "name" : "weight"
+          },
+          "args" : [ {
+            "kind" : "Identifier",
+            "location" : [ 45, 54, 45, 64 ],
+            "name" : "edge_weight"
+          } ]
+        }
+      } ]
+    } ]
+  } ],
+  "statements" : [ {
+    "kind" : "AssignStmt",
+    "location" : [ 48, 1, 48, 22 ],
+    "targets" : [ {
+      "kind" : "Identifier",
+      "location" : [ 48, 1, 48, 1 ],
+      "name" : "g"
+    } ],
+    "value" : {
+      "kind" : "CallExpr",
+      "location" : [ 48, 5, 48, 22 ],
+      "function" : {
+        "kind" : "Identifier",
+        "location" : [ 48, 5, 48, 19 ],
+        "name" : "undirectedgraph"
+      },
+      "args" : [ {
+        "kind" : "IntegerLiteral",
+        "location" : [ 48, 21, 48, 21 ],
+        "value" : 3
+      } ]
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 49, 1, 49, 21 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 49, 1, 49, 21 ],
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 49, 1, 49, 10 ],
+        "object" : {
+          "kind" : "Identifier",
+          "location" : [ 49, 1, 49, 1 ],
+          "name" : "g"
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 49, 3, 49, 10 ],
+          "name" : "add_edge"
+        }
+      },
+      "args" : [ {
+        "kind" : "IntegerLiteral",
+        "location" : [ 49, 12, 49, 12 ],
+        "value" : 0
+      }, {
+        "kind" : "IntegerLiteral",
+        "location" : [ 49, 15, 49, 15 ],
+        "value" : 2
+      }, {
+        "kind" : "IntegerLiteral",
+        "location" : [ 49, 18, 49, 20 ],
+        "value" : 100
+      } ]
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 50, 1, 50, 9 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 50, 1, 50, 9 ],
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 50, 1, 50, 7 ],
+        "object" : {
+          "kind" : "Identifier",
+          "location" : [ 50, 1, 50, 1 ],
+          "name" : "g"
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 50, 3, 50, 7 ],
+          "name" : "print"
+        }
+      },
+      "args" : [ ]
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 52, 1, 52, 24 ],
+    "expr" : {
+      "kind" : "MethodCallExpr",
+      "location" : [ 52, 1, 52, 24 ],
+      "method" : {
+        "kind" : "MemberExpr",
+        "location" : [ 52, 1, 52, 22 ],
+        "object" : {
+          "kind" : "CallExpr",
+          "location" : [ 52, 1, 52, 16 ],
+          "function" : {
+            "kind" : "Identifier",
+            "location" : [ 52, 1, 52, 13 ],
+            "name" : "directedgraph"
+          },
+          "args" : [ {
+            "kind" : "IntegerLiteral",
+            "location" : [ 52, 15, 52, 15 ],
+            "value" : 3
+          } ]
+        },
+        "member" : {
+          "kind" : "Identifier",
+          "location" : [ 52, 18, 52, 22 ],
+          "name" : "print"
+        }
+      },
+      "args" : [ ]
+    }
+  } ],
+  "errors" : {
+    "errors" : [ ],
+    "kind" : "Errors",
+    "location" : [ 0, 0, 0, 0 ]
+  }
+}

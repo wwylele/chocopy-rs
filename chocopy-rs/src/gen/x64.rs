@@ -1699,23 +1699,26 @@ fn gen_function(
         }
 
         let (flatten_name, array_level) = param.tv().type_.flatten();
-
-        params_debug.push(ParamDebug {
+        params_debug.push(VarDebug {
             offset,
             line: param.base().location.start.row,
             name: name.clone(),
-            param_type: TypeDebug {
+            var_type: TypeDebug {
                 name: flatten_name.to_owned(),
                 array_level,
             },
         })
     }
+
+    let mut locals_debug = vec![];
+
     for declaration in &function.declarations {
         if let Declaration::VarDef(v) = declaration {
+            let name = &v.var.tv().identifier.id().name;
             let offset = local_offset;
             local_offset -= 8;
             locals.insert(
-                v.var.tv().identifier.id().name.clone(),
+                name.clone(),
                 LocalSlot::Var(VarSlot {
                     offset,
                     level: level + 1,
@@ -1725,6 +1728,17 @@ fn gen_function(
             if local_type != *TYPE_INT && local_type != *TYPE_BOOL {
                 clean_up_list.push(offset);
             }
+
+            let (flatten_name, array_level) = v.var.tv().type_.flatten();
+            locals_debug.push(VarDebug {
+                offset,
+                line: v.base().location.start.row,
+                name: name.clone(),
+                var_type: TypeDebug {
+                    name: flatten_name.to_owned(),
+                    array_level,
+                },
+            })
         } else if let Declaration::FuncDef(f) = declaration {
             let name = &f.name.id().name;
             locals.insert(
@@ -1802,6 +1816,7 @@ fn gen_function(
         lines,
         return_type: return_type_debug,
         params: params_debug,
+        locals: locals_debug,
     })];
 
     // Note: put children functions after the parent one
@@ -1895,6 +1910,7 @@ fn gen_ctor(
             array_level: 0,
         },
         params: vec![],
+        locals: vec![],
     })
 }
 
@@ -1933,15 +1949,16 @@ fn gen_dtor(
             name: "<None>".to_owned(),
             array_level: 0,
         },
-        params: vec![ParamDebug {
+        params: vec![VarDebug {
             offset: -8,
             line: 0,
             name: "self".to_owned(),
-            param_type: TypeDebug {
+            var_type: TypeDebug {
                 name: class_name.to_owned(),
                 array_level: 0,
             },
         }],
+        locals: vec![],
     })
 }
 
@@ -1973,8 +1990,10 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
         },
     );
     let mut global_offset = 0;
+    let mut globals_debug = vec![];
     for declaration in &ast.program().declarations {
         if let Declaration::VarDef(v) = declaration {
+            let name = &v.var.tv().identifier.id().name;
             let target_type = ValueType::from_annotation(&v.var.tv().type_);
             let size = if target_type == *TYPE_INT {
                 4
@@ -1985,12 +2004,24 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
             };
             global_offset += (size - global_offset % size) % size;
             globals.insert(
-                v.var.tv().identifier.id().name.clone(),
+                name.clone(),
                 LocalSlot::Var(VarSlot {
                     offset: global_offset,
                     level: 0,
                 }),
             );
+
+            let (flatten_name, array_level) = v.var.tv().type_.flatten();
+            globals_debug.push(VarDebug {
+                offset: global_offset,
+                line: v.base().location.start.row,
+                name: name.clone(),
+                var_type: TypeDebug {
+                    name: flatten_name.to_owned(),
+                    array_level,
+                },
+            });
+
             global_offset += size;
         } else if let Declaration::FuncDef(f) = declaration {
             let name = &f.name.id().name;
@@ -2130,6 +2161,7 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
             array_level: 0,
         },
         params: vec![],
+        locals: vec![],
     });
 
     let mut chunks = vec![main_procedure];
@@ -2187,5 +2219,6 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
     CodeSet {
         chunks,
         global_size: global_offset as usize,
+        globals_debug,
     }
 }

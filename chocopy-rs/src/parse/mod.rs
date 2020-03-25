@@ -69,6 +69,7 @@ mod tests {
         let mut passed = true;
 
         let test_dirs = [
+            "test/pa1",
             "../chocopy-wars/src/test/data/pa1/sample",
             "../chocopy-wars/src/test/data/pa1/student_contributed",
             "../chocopy-wars/src/test/data/pa2/sample",
@@ -97,9 +98,12 @@ mod tests {
                 let ast_reference = serde_json::from_str::<Ast>(&ast_string).unwrap();
 
                 let (sender, receiver) = std::sync::mpsc::channel();
-                std::thread::spawn(move || {
-                    sender.send(process(source_file.as_os_str().to_str().unwrap()).unwrap())
-                });
+                std::thread::Builder::new()
+                    .stack_size(16_000_000)
+                    .spawn(move || {
+                        sender.send(process(source_file.as_os_str().to_str().unwrap()).unwrap())
+                    })
+                    .unwrap();
 
                 if let Ok(ast) = receiver.recv_timeout(std::time::Duration::from_secs(1)) {
                     if compare_ast(&ast, &ast_reference) {

@@ -1,0 +1,799 @@
+{
+  "kind" : "Program",
+  "location" : [ 1, 1, 46, 1 ],
+  "declarations" : [ {
+    "kind" : "ClassDef",
+    "location" : [ 1, 1, 2, 21 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 1, 7, 1, 7 ],
+      "name" : "s"
+    },
+    "superClass" : {
+      "kind" : "Identifier",
+      "location" : [ 1, 9, 1, 14 ],
+      "name" : "object"
+    },
+    "declarations" : [ {
+      "kind" : "VarDef",
+      "location" : [ 2, 5, 2, 20 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 2, 5, 2, 13 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 2, 5, 2, 5 ],
+          "name" : "t"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 2, 8, 2, 13 ],
+          "className" : "object"
+        }
+      },
+      "value" : {
+        "kind" : "NoneLiteral",
+        "location" : [ 2, 17, 2, 20 ]
+      }
+    } ]
+  }, {
+    "kind" : "ClassDef",
+    "location" : [ 4, 1, 5, 19 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 4, 7, 4, 7 ],
+      "name" : "r"
+    },
+    "superClass" : {
+      "kind" : "Identifier",
+      "location" : [ 4, 9, 4, 14 ],
+      "name" : "object"
+    },
+    "declarations" : [ {
+      "kind" : "VarDef",
+      "location" : [ 5, 5, 5, 18 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 5, 5, 5, 11 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 5, 5, 5, 8 ],
+          "name" : "sobj"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 5, 11, 5, 11 ],
+          "className" : "s"
+        }
+      },
+      "value" : {
+        "kind" : "NoneLiteral",
+        "location" : [ 5, 15, 5, 18 ]
+      }
+    } ]
+  }, {
+    "kind" : "ClassDef",
+    "location" : [ 7, 1, 8, 19 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 7, 7, 7, 7 ],
+      "name" : "q"
+    },
+    "superClass" : {
+      "kind" : "Identifier",
+      "location" : [ 7, 9, 7, 14 ],
+      "name" : "object"
+    },
+    "declarations" : [ {
+      "kind" : "VarDef",
+      "location" : [ 8, 5, 8, 18 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 8, 5, 8, 11 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 8, 5, 8, 8 ],
+          "name" : "robj"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 8, 11, 8, 11 ],
+          "className" : "r"
+        }
+      },
+      "value" : {
+        "kind" : "NoneLiteral",
+        "location" : [ 8, 15, 8, 18 ]
+      }
+    } ]
+  }, {
+    "kind" : "ClassDef",
+    "location" : [ 10, 1, 14, 0 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 10, 7, 10, 7 ],
+      "name" : "p"
+    },
+    "superClass" : {
+      "kind" : "Identifier",
+      "location" : [ 10, 9, 10, 9 ],
+      "name" : "q"
+    },
+    "declarations" : [ {
+      "kind" : "FuncDef",
+      "location" : [ 11, 5, 12, 32 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 11, 9, 11, 9 ],
+        "name" : "f"
+      },
+      "params" : [ {
+        "kind" : "TypedVar",
+        "location" : [ 11, 11, 11, 19 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 11, 11, 11, 14 ],
+          "name" : "self"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 11, 17, 11, 19 ],
+          "className" : "p"
+        }
+      } ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 11, 25, 11, 30 ],
+        "className" : "object"
+      },
+      "declarations" : [ ],
+      "statements" : [ {
+        "kind" : "ReturnStmt",
+        "location" : [ 12, 9, 12, 31 ],
+        "value" : {
+          "kind" : "MemberExpr",
+          "location" : [ 12, 16, 12, 31 ],
+          "object" : {
+            "kind" : "MemberExpr",
+            "location" : [ 12, 16, 12, 29 ],
+            "object" : {
+              "kind" : "MemberExpr",
+              "location" : [ 12, 16, 12, 24 ],
+              "object" : {
+                "kind" : "Identifier",
+                "location" : [ 12, 16, 12, 19 ],
+                "name" : "self"
+              },
+              "member" : {
+                "kind" : "Identifier",
+                "location" : [ 12, 21, 12, 24 ],
+                "name" : "robj"
+              }
+            },
+            "member" : {
+              "kind" : "Identifier",
+              "location" : [ 12, 26, 12, 29 ],
+              "name" : "sobj"
+            }
+          },
+          "member" : {
+            "kind" : "Identifier",
+            "location" : [ 12, 31, 12, 31 ],
+            "name" : "t"
+          }
+        }
+      } ]
+    } ]
+  }, {
+    "kind" : "FuncDef",
+    "location" : [ 14, 1, 23, 15 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 14, 5, 14, 5 ],
+      "name" : "a"
+    },
+    "params" : [ ],
+    "returnType" : {
+      "kind" : "ClassType",
+      "location" : [ 14, 12, 14, 14 ],
+      "className" : "int"
+    },
+    "declarations" : [ {
+      "kind" : "FuncDef",
+      "location" : [ 15, 5, 22, 19 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 15, 9, 15, 9 ],
+        "name" : "b"
+      },
+      "params" : [ ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 15, 16, 15, 18 ],
+        "className" : "int"
+      },
+      "declarations" : [ {
+        "kind" : "FuncDef",
+        "location" : [ 16, 9, 21, 23 ],
+        "name" : {
+          "kind" : "Identifier",
+          "location" : [ 16, 13, 16, 13 ],
+          "name" : "c"
+        },
+        "params" : [ ],
+        "returnType" : {
+          "kind" : "ClassType",
+          "location" : [ 16, 20, 16, 22 ],
+          "className" : "int"
+        },
+        "declarations" : [ {
+          "kind" : "FuncDef",
+          "location" : [ 17, 13, 20, 27 ],
+          "name" : {
+            "kind" : "Identifier",
+            "location" : [ 17, 17, 17, 17 ],
+            "name" : "d"
+          },
+          "params" : [ ],
+          "returnType" : {
+            "kind" : "ClassType",
+            "location" : [ 17, 24, 17, 26 ],
+            "className" : "int"
+          },
+          "declarations" : [ {
+            "kind" : "FuncDef",
+            "location" : [ 18, 17, 19, 29 ],
+            "name" : {
+              "kind" : "Identifier",
+              "location" : [ 18, 21, 18, 21 ],
+              "name" : "e"
+            },
+            "params" : [ ],
+            "returnType" : {
+              "kind" : "ClassType",
+              "location" : [ 18, 28, 18, 30 ],
+              "className" : "int"
+            },
+            "declarations" : [ ],
+            "statements" : [ {
+              "kind" : "ReturnStmt",
+              "location" : [ 19, 21, 19, 28 ],
+              "value" : {
+                "kind" : "IntegerLiteral",
+                "location" : [ 19, 28, 19, 28 ],
+                "value" : 1
+              }
+            } ]
+          } ],
+          "statements" : [ {
+            "kind" : "ReturnStmt",
+            "location" : [ 20, 17, 20, 26 ],
+            "value" : {
+              "kind" : "CallExpr",
+              "location" : [ 20, 24, 20, 26 ],
+              "function" : {
+                "kind" : "Identifier",
+                "location" : [ 20, 24, 20, 24 ],
+                "name" : "e"
+              },
+              "args" : [ ]
+            }
+          } ]
+        } ],
+        "statements" : [ {
+          "kind" : "ReturnStmt",
+          "location" : [ 21, 13, 21, 22 ],
+          "value" : {
+            "kind" : "CallExpr",
+            "location" : [ 21, 20, 21, 22 ],
+            "function" : {
+              "kind" : "Identifier",
+              "location" : [ 21, 20, 21, 20 ],
+              "name" : "d"
+            },
+            "args" : [ ]
+          }
+        } ]
+      } ],
+      "statements" : [ {
+        "kind" : "ReturnStmt",
+        "location" : [ 22, 9, 22, 18 ],
+        "value" : {
+          "kind" : "CallExpr",
+          "location" : [ 22, 16, 22, 18 ],
+          "function" : {
+            "kind" : "Identifier",
+            "location" : [ 22, 16, 22, 16 ],
+            "name" : "c"
+          },
+          "args" : [ ]
+        }
+      } ]
+    } ],
+    "statements" : [ {
+      "kind" : "ReturnStmt",
+      "location" : [ 23, 5, 23, 14 ],
+      "value" : {
+        "kind" : "CallExpr",
+        "location" : [ 23, 12, 23, 14 ],
+        "function" : {
+          "kind" : "Identifier",
+          "location" : [ 23, 12, 23, 12 ],
+          "name" : "b"
+        },
+        "args" : [ ]
+      }
+    } ]
+  }, {
+    "kind" : "FuncDef",
+    "location" : [ 25, 1, 32, 3 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 25, 5, 25, 5 ],
+      "name" : "w"
+    },
+    "params" : [ ],
+    "returnType" : {
+      "kind" : "ClassType",
+      "location" : [ 25, 8, 25, 8 ],
+      "className" : "<None>"
+    },
+    "declarations" : [ {
+      "kind" : "FuncDef",
+      "location" : [ 26, 2, 31, 5 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 26, 6, 26, 6 ],
+        "name" : "x"
+      },
+      "params" : [ ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 26, 9, 26, 9 ],
+        "className" : "<None>"
+      },
+      "declarations" : [ {
+        "kind" : "FuncDef",
+        "location" : [ 27, 4, 30, 8 ],
+        "name" : {
+          "kind" : "Identifier",
+          "location" : [ 27, 8, 27, 8 ],
+          "name" : "y"
+        },
+        "params" : [ ],
+        "returnType" : {
+          "kind" : "ClassType",
+          "location" : [ 27, 11, 27, 11 ],
+          "className" : "<None>"
+        },
+        "declarations" : [ {
+          "kind" : "FuncDef",
+          "location" : [ 28, 7, 29, 12 ],
+          "name" : {
+            "kind" : "Identifier",
+            "location" : [ 28, 11, 28, 11 ],
+            "name" : "z"
+          },
+          "params" : [ ],
+          "returnType" : {
+            "kind" : "ClassType",
+            "location" : [ 28, 14, 28, 14 ],
+            "className" : "<None>"
+          },
+          "declarations" : [ ],
+          "statements" : [ {
+            "kind" : "ExprStmt",
+            "location" : [ 29, 11, 29, 11 ],
+            "expr" : {
+              "kind" : "IntegerLiteral",
+              "location" : [ 29, 11, 29, 11 ],
+              "value" : 4
+            }
+          } ]
+        } ],
+        "statements" : [ {
+          "kind" : "ExprStmt",
+          "location" : [ 30, 7, 30, 7 ],
+          "expr" : {
+            "kind" : "IntegerLiteral",
+            "location" : [ 30, 7, 30, 7 ],
+            "value" : 3
+          }
+        } ]
+      } ],
+      "statements" : [ {
+        "kind" : "ExprStmt",
+        "location" : [ 31, 4, 31, 4 ],
+        "expr" : {
+          "kind" : "IntegerLiteral",
+          "location" : [ 31, 4, 31, 4 ],
+          "value" : 2
+        }
+      } ]
+    } ],
+    "statements" : [ {
+      "kind" : "ExprStmt",
+      "location" : [ 32, 2, 32, 2 ],
+      "expr" : {
+        "kind" : "IntegerLiteral",
+        "location" : [ 32, 2, 32, 2 ],
+        "value" : 1
+      }
+    } ]
+  }, {
+    "kind" : "VarDef",
+    "location" : [ 34, 1, 34, 78 ],
+    "var" : {
+      "kind" : "TypedVar",
+      "location" : [ 34, 1, 34, 71 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 34, 1, 34, 2 ],
+        "name" : "xs"
+      },
+      "type" : {
+        "kind" : "ListType",
+        "location" : [ 34, 5, 34, 71 ],
+        "elementType" : {
+          "kind" : "ListType",
+          "location" : [ 34, 6, 34, 70 ],
+          "elementType" : {
+            "kind" : "ListType",
+            "location" : [ 34, 7, 34, 69 ],
+            "elementType" : {
+              "kind" : "ListType",
+              "location" : [ 34, 8, 34, 68 ],
+              "elementType" : {
+                "kind" : "ListType",
+                "location" : [ 34, 9, 34, 67 ],
+                "elementType" : {
+                  "kind" : "ListType",
+                  "location" : [ 34, 10, 34, 66 ],
+                  "elementType" : {
+                    "kind" : "ListType",
+                    "location" : [ 34, 11, 34, 65 ],
+                    "elementType" : {
+                      "kind" : "ListType",
+                      "location" : [ 34, 12, 34, 64 ],
+                      "elementType" : {
+                        "kind" : "ListType",
+                        "location" : [ 34, 13, 34, 63 ],
+                        "elementType" : {
+                          "kind" : "ListType",
+                          "location" : [ 34, 14, 34, 62 ],
+                          "elementType" : {
+                            "kind" : "ListType",
+                            "location" : [ 34, 15, 34, 61 ],
+                            "elementType" : {
+                              "kind" : "ListType",
+                              "location" : [ 34, 16, 34, 60 ],
+                              "elementType" : {
+                                "kind" : "ListType",
+                                "location" : [ 34, 17, 34, 59 ],
+                                "elementType" : {
+                                  "kind" : "ListType",
+                                  "location" : [ 34, 18, 34, 58 ],
+                                  "elementType" : {
+                                    "kind" : "ListType",
+                                    "location" : [ 34, 19, 34, 57 ],
+                                    "elementType" : {
+                                      "kind" : "ListType",
+                                      "location" : [ 34, 20, 34, 56 ],
+                                      "elementType" : {
+                                        "kind" : "ListType",
+                                        "location" : [ 34, 21, 34, 55 ],
+                                        "elementType" : {
+                                          "kind" : "ListType",
+                                          "location" : [ 34, 22, 34, 54 ],
+                                          "elementType" : {
+                                            "kind" : "ListType",
+                                            "location" : [ 34, 23, 34, 53 ],
+                                            "elementType" : {
+                                              "kind" : "ListType",
+                                              "location" : [ 34, 24, 34, 52 ],
+                                              "elementType" : {
+                                                "kind" : "ListType",
+                                                "location" : [ 34, 25, 34, 51 ],
+                                                "elementType" : {
+                                                  "kind" : "ListType",
+                                                  "location" : [ 34, 26, 34, 50 ],
+                                                  "elementType" : {
+                                                    "kind" : "ListType",
+                                                    "location" : [ 34, 27, 34, 49 ],
+                                                    "elementType" : {
+                                                      "kind" : "ListType",
+                                                      "location" : [ 34, 28, 34, 48 ],
+                                                      "elementType" : {
+                                                        "kind" : "ListType",
+                                                        "location" : [ 34, 29, 34, 47 ],
+                                                        "elementType" : {
+                                                          "kind" : "ListType",
+                                                          "location" : [ 34, 30, 34, 46 ],
+                                                          "elementType" : {
+                                                            "kind" : "ListType",
+                                                            "location" : [ 34, 31, 34, 45 ],
+                                                            "elementType" : {
+                                                              "kind" : "ListType",
+                                                              "location" : [ 34, 32, 34, 44 ],
+                                                              "elementType" : {
+                                                                "kind" : "ListType",
+                                                                "location" : [ 34, 33, 34, 43 ],
+                                                                "elementType" : {
+                                                                  "kind" : "ListType",
+                                                                  "location" : [ 34, 34, 34, 42 ],
+                                                                  "elementType" : {
+                                                                    "kind" : "ListType",
+                                                                    "location" : [ 34, 35, 34, 41 ],
+                                                                    "elementType" : {
+                                                                      "kind" : "ListType",
+                                                                      "location" : [ 34, 36, 34, 40 ],
+                                                                      "elementType" : {
+                                                                        "kind" : "ClassType",
+                                                                        "location" : [ 34, 37, 34, 39 ],
+                                                                        "className" : "int"
+                                                                      }
+                                                                    }
+                                                                  }
+                                                                }
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "value" : {
+      "kind" : "NoneLiteral",
+      "location" : [ 34, 75, 34, 78 ]
+    }
+  } ],
+  "statements" : [ {
+    "kind" : "AssignStmt",
+    "location" : [ 35, 1, 35, 70 ],
+    "targets" : [ {
+      "kind" : "Identifier",
+      "location" : [ 35, 1, 35, 2 ],
+      "name" : "xs"
+    } ],
+    "value" : {
+      "kind" : "ListExpr",
+      "location" : [ 35, 6, 35, 70 ],
+      "elements" : [ {
+        "kind" : "ListExpr",
+        "location" : [ 35, 7, 35, 69 ],
+        "elements" : [ {
+          "kind" : "ListExpr",
+          "location" : [ 35, 8, 35, 68 ],
+          "elements" : [ {
+            "kind" : "ListExpr",
+            "location" : [ 35, 9, 35, 67 ],
+            "elements" : [ {
+              "kind" : "ListExpr",
+              "location" : [ 35, 10, 35, 66 ],
+              "elements" : [ {
+                "kind" : "ListExpr",
+                "location" : [ 35, 11, 35, 65 ],
+                "elements" : [ {
+                  "kind" : "ListExpr",
+                  "location" : [ 35, 12, 35, 64 ],
+                  "elements" : [ {
+                    "kind" : "ListExpr",
+                    "location" : [ 35, 13, 35, 63 ],
+                    "elements" : [ {
+                      "kind" : "ListExpr",
+                      "location" : [ 35, 14, 35, 62 ],
+                      "elements" : [ {
+                        "kind" : "ListExpr",
+                        "location" : [ 35, 15, 35, 61 ],
+                        "elements" : [ {
+                          "kind" : "ListExpr",
+                          "location" : [ 35, 16, 35, 60 ],
+                          "elements" : [ {
+                            "kind" : "ListExpr",
+                            "location" : [ 35, 17, 35, 59 ],
+                            "elements" : [ {
+                              "kind" : "ListExpr",
+                              "location" : [ 35, 18, 35, 58 ],
+                              "elements" : [ {
+                                "kind" : "ListExpr",
+                                "location" : [ 35, 19, 35, 57 ],
+                                "elements" : [ {
+                                  "kind" : "ListExpr",
+                                  "location" : [ 35, 20, 35, 56 ],
+                                  "elements" : [ {
+                                    "kind" : "ListExpr",
+                                    "location" : [ 35, 21, 35, 55 ],
+                                    "elements" : [ {
+                                      "kind" : "ListExpr",
+                                      "location" : [ 35, 22, 35, 54 ],
+                                      "elements" : [ {
+                                        "kind" : "ListExpr",
+                                        "location" : [ 35, 23, 35, 53 ],
+                                        "elements" : [ {
+                                          "kind" : "ListExpr",
+                                          "location" : [ 35, 24, 35, 52 ],
+                                          "elements" : [ {
+                                            "kind" : "ListExpr",
+                                            "location" : [ 35, 25, 35, 51 ],
+                                            "elements" : [ {
+                                              "kind" : "ListExpr",
+                                              "location" : [ 35, 26, 35, 50 ],
+                                              "elements" : [ {
+                                                "kind" : "ListExpr",
+                                                "location" : [ 35, 27, 35, 49 ],
+                                                "elements" : [ {
+                                                  "kind" : "ListExpr",
+                                                  "location" : [ 35, 28, 35, 48 ],
+                                                  "elements" : [ {
+                                                    "kind" : "ListExpr",
+                                                    "location" : [ 35, 29, 35, 47 ],
+                                                    "elements" : [ {
+                                                      "kind" : "ListExpr",
+                                                      "location" : [ 35, 30, 35, 46 ],
+                                                      "elements" : [ {
+                                                        "kind" : "ListExpr",
+                                                        "location" : [ 35, 31, 35, 45 ],
+                                                        "elements" : [ {
+                                                          "kind" : "ListExpr",
+                                                          "location" : [ 35, 32, 35, 44 ],
+                                                          "elements" : [ {
+                                                            "kind" : "ListExpr",
+                                                            "location" : [ 35, 33, 35, 43 ],
+                                                            "elements" : [ {
+                                                              "kind" : "ListExpr",
+                                                              "location" : [ 35, 34, 35, 42 ],
+                                                              "elements" : [ {
+                                                                "kind" : "ListExpr",
+                                                                "location" : [ 35, 35, 35, 41 ],
+                                                                "elements" : [ {
+                                                                  "kind" : "ListExpr",
+                                                                  "location" : [ 35, 36, 35, 40 ],
+                                                                  "elements" : [ {
+                                                                    "kind" : "ListExpr",
+                                                                    "location" : [ 35, 37, 35, 39 ],
+                                                                    "elements" : [ {
+                                                                      "kind" : "IntegerLiteral",
+                                                                      "location" : [ 35, 38, 35, 38 ],
+                                                                      "value" : 1
+                                                                    } ]
+                                                                  } ]
+                                                                } ]
+                                                              } ]
+                                                            } ]
+                                                          } ]
+                                                        } ]
+                                                      } ]
+                                                    } ]
+                                                  } ]
+                                                } ]
+                                              } ]
+                                            } ]
+                                          } ]
+                                        } ]
+                                      } ]
+                                    } ]
+                                  } ]
+                                } ]
+                              } ]
+                            } ]
+                          } ]
+                        } ]
+                      } ]
+                    } ]
+                  } ]
+                } ]
+              } ]
+            } ]
+          } ]
+        } ]
+      } ]
+    }
+  }, {
+    "kind" : "IfStmt",
+    "location" : [ 37, 1, 46, 1 ],
+    "condition" : {
+      "kind" : "IntegerLiteral",
+      "location" : [ 37, 4, 37, 4 ],
+      "value" : 1
+    },
+    "thenBody" : [ {
+      "kind" : "IfStmt",
+      "location" : [ 38, 5, 44, 0 ],
+      "condition" : {
+        "kind" : "IntegerLiteral",
+        "location" : [ 38, 8, 38, 8 ],
+        "value" : 2
+      },
+      "thenBody" : [ {
+        "kind" : "IfStmt",
+        "location" : [ 39, 9, 44, 0 ],
+        "condition" : {
+          "kind" : "IntegerLiteral",
+          "location" : [ 39, 12, 39, 12 ],
+          "value" : 3
+        },
+        "thenBody" : [ {
+          "kind" : "IfStmt",
+          "location" : [ 40, 13, 42, 8 ],
+          "condition" : {
+            "kind" : "IntegerLiteral",
+            "location" : [ 40, 16, 40, 16 ],
+            "value" : 4
+          },
+          "thenBody" : [ {
+            "kind" : "ExprStmt",
+            "location" : [ 41, 17, 41, 20 ],
+            "expr" : {
+              "kind" : "BooleanLiteral",
+              "location" : [ 41, 17, 41, 20 ],
+              "value" : true
+            }
+          } ],
+          "elseBody" : [ ]
+        } ],
+        "elseBody" : [ {
+          "kind" : "IfStmt",
+          "location" : [ 42, 9, 44, 0 ],
+          "condition" : {
+            "kind" : "UnaryExpr",
+            "location" : [ 42, 14, 42, 15 ],
+            "operator" : "-",
+            "operand" : {
+              "kind" : "IntegerLiteral",
+              "location" : [ 42, 15, 42, 15 ],
+              "value" : 3
+            }
+          },
+          "thenBody" : [ {
+            "kind" : "ExprStmt",
+            "location" : [ 43, 13, 43, 17 ],
+            "expr" : {
+              "kind" : "BooleanLiteral",
+              "location" : [ 43, 13, 43, 17 ],
+              "value" : false
+            }
+          } ],
+          "elseBody" : [ ]
+        } ]
+      } ],
+      "elseBody" : [ ]
+    } ],
+    "elseBody" : [ {
+      "kind" : "ExprStmt",
+      "location" : [ 45, 5, 45, 9 ],
+      "expr" : {
+        "kind" : "BooleanLiteral",
+        "location" : [ 45, 5, 45, 9 ],
+        "value" : false
+      }
+    } ]
+  } ],
+  "errors" : {
+    "errors" : [ ],
+    "kind" : "Errors",
+    "location" : [ 0, 0, 0, 0 ]
+  }
+}
