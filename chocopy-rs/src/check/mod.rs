@@ -170,6 +170,7 @@ pub fn check(mut ast: Ast) -> Ast {
     id_set.insert("str".to_owned());
     id_set.insert("bool".to_owned());
     id_set.insert("int".to_owned());
+    id_set.insert("object".to_owned());
     id_set.insert("print".to_owned());
     id_set.insert("input".to_owned());
     id_set.insert("len".to_owned());
