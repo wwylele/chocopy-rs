@@ -1,13 +1,8 @@
-use crate::local_env::*;
 use crate::location::*;
 use enum_dispatch::*;
 use lazy_static::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::convert::*;
 use std::fmt::{self, Display, Formatter};
-
-pub type TypeLocalEnv = LocalEnv<FuncType, ValueType>;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
@@ -40,40 +35,10 @@ impl NodeBase {
     }
 }
 
-pub struct ClassInfo {
-    pub super_class: String,
-    pub items: HashMap<String, Type>,
-}
-
-pub struct ClassEnv(pub HashMap<String, ClassInfo>);
-
 #[enum_dispatch(Node)]
 pub trait Node {
     fn base(&self) -> &NodeBase;
     fn base_mut(&mut self) -> &mut NodeBase;
-    fn analyze(
-        &mut self,
-        errors: &mut Vec<Error>,
-        o: &mut TypeLocalEnv,
-        m: &ClassEnv,
-        r: Option<&ValueType>,
-    ) -> Option<ValueType>;
-}
-
-macro_rules! impl_default_analyze {
-    ($type:ty) => {
-        impl $type {
-            fn analyze_impl(
-                &mut self,
-                _: &mut Vec<Error>,
-                _: &TypeLocalEnv,
-                _: &ClassEnv,
-                _: Option<&ValueType>,
-            ) -> Option<ValueType> {
-                None
-            }
-        }
-    };
 }
 
 macro_rules! impl_node {
@@ -85,16 +50,6 @@ macro_rules! impl_node {
 
             fn base_mut(&mut self) -> &mut NodeBase {
                 &mut self.base
-            }
-
-            fn analyze(
-                &mut self,
-                errors: &mut Vec<Error>,
-                o: &mut TypeLocalEnv,
-                m: &ClassEnv,
-                r: Option<&ValueType>,
-            ) -> Option<ValueType> {
-                self.analyze_impl(errors, o, m, r)
             }
         }
     };
@@ -218,7 +173,6 @@ pub struct ClassType {
 }
 
 impl_node!(ClassType);
-impl_default_analyze!(ClassType);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
@@ -248,7 +202,6 @@ pub struct CompilerError {
 }
 
 impl_node!(CompilerError);
-impl_default_analyze!(CompilerError);
 
 #[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -293,7 +246,6 @@ pub struct Errors {
 }
 
 impl_node!(Errors);
-impl_default_analyze!(Errors);
 
 #[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -325,18 +277,6 @@ impl Node for Expr {
 
     fn base_mut(&mut self) -> &mut NodeBase {
         self.content.base_mut()
-    }
-
-    fn analyze(
-        &mut self,
-        errors: &mut Vec<Error>,
-        o: &mut TypeLocalEnv,
-        m: &ClassEnv,
-        r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        let t = self.content.analyze(errors, o, m, r);
-        self.inferred_type = t.clone();
-        t
     }
 }
 
@@ -474,7 +414,6 @@ pub struct FuncIdentifier {
 }
 
 impl_node!(FuncIdentifier);
-impl_default_analyze!(FuncIdentifier);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
@@ -485,7 +424,6 @@ pub struct GlobalDecl {
 }
 
 impl_node!(GlobalDecl);
-impl_default_analyze!(GlobalDecl);
 
 #[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -585,7 +523,6 @@ pub struct ListType {
 }
 
 impl_node!(ListType);
-impl_default_analyze!(ListType);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
@@ -616,18 +553,6 @@ impl Node for Literal {
 
     fn base_mut(&mut self) -> &mut NodeBase {
         self.content.base_mut()
-    }
-
-    fn analyze(
-        &mut self,
-        errors: &mut Vec<Error>,
-        o: &mut TypeLocalEnv,
-        m: &ClassEnv,
-        r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        let t = self.content.analyze(errors, o, m, r);
-        self.inferred_type = t.clone();
-        t
     }
 }
 
@@ -683,7 +608,6 @@ pub struct TypedMemberExpr {
 }
 
 impl_node!(TypedMemberExpr);
-impl_default_analyze!(TypedMemberExpr);
 
 #[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -732,7 +656,6 @@ pub struct NonLocalDecl {
 }
 
 impl_node!(NonLocalDecl);
-impl_default_analyze!(NonLocalDecl);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
@@ -797,12 +720,6 @@ impl Tv {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub enum Type {
-    ValueType(ValueType),
-    FuncType(FuncType),
-}
-
 #[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind", deny_unknown_fields)]
@@ -849,7 +766,6 @@ pub struct TypedIdentifier {
 }
 
 impl_node!(TypedIdentifier);
-impl_default_analyze!(TypedIdentifier);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
@@ -862,7 +778,6 @@ pub struct TypedVar {
 }
 
 impl_node!(TypedVar);
-impl_default_analyze!(TypedVar);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
@@ -909,22 +824,6 @@ impl ValueType {
             TypeAnnotation::ListType(c) => ValueType::ListValueType(ListValueType {
                 element_type: Box::new(ValueType::from_annotation(&c.element_type)),
             }),
-        }
-    }
-}
-
-impl From<ValueType> for Type {
-    fn from(t: ValueType) -> Type {
-        Type::ValueType(t)
-    }
-}
-
-impl TryFrom<Type> for ValueType {
-    type Error = ();
-    fn try_from(t: Type) -> Result<ValueType, ()> {
-        match t {
-            Type::ValueType(c) => Ok(c),
-            _ => Err(()),
         }
     }
 }

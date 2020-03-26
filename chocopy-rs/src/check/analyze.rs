@@ -1,43 +1,89 @@
+use super::class_env::*;
 use super::error::*;
 use crate::local_env::*;
 use crate::node::*;
 use std::collections::HashMap;
-use std::convert::*;
+
+type TypeLocalEnv = LocalEnv<FuncType, ValueType>;
+
+impl Expr {
+    pub fn analyze(
+        &mut self,
+        errors: &mut Vec<Error>,
+        o: &mut TypeLocalEnv,
+        m: &ClassEnv,
+    ) -> ValueType {
+        let inferred_type = match &mut self.content {
+            ExprContent::BinaryExpr(s) => s.analyze(errors, o, m),
+            ExprContent::IntegerLiteral(s) => s.analyze(errors, o, m),
+            ExprContent::BooleanLiteral(s) => s.analyze(errors, o, m),
+            ExprContent::CallExpr(s) => s.analyze(errors, o, m),
+            ExprContent::Identifier(s) => s.analyze(errors, o, m),
+            ExprContent::IfExpr(s) => s.analyze(errors, o, m),
+            ExprContent::IndexExpr(s) => s.analyze(errors, o, m),
+            ExprContent::ListExpr(s) => s.analyze(errors, o, m),
+            ExprContent::MemberExpr(s) => s.analyze(errors, o, m),
+            ExprContent::MethodCallExpr(s) => s.analyze(errors, o, m),
+            ExprContent::NoneLiteral(s) => s.analyze(errors, o, m),
+            ExprContent::StringLiteral(s) => s.analyze(errors, o, m),
+            ExprContent::UnaryExpr(s) => s.analyze(errors, o, m),
+        };
+        self.inferred_type = Some(inferred_type.clone());
+        inferred_type
+    }
+}
+
+impl Literal {
+    pub fn analyze(
+        &mut self,
+        errors: &mut Vec<Error>,
+        o: &mut TypeLocalEnv,
+        m: &ClassEnv,
+    ) -> ValueType {
+        let inferred_type = match &mut self.content {
+            LiteralContent::IntegerLiteral(s) => s.analyze(errors, o, m),
+            LiteralContent::BooleanLiteral(s) => s.analyze(errors, o, m),
+            LiteralContent::NoneLiteral(s) => s.analyze(errors, o, m),
+            LiteralContent::StringLiteral(s) => s.analyze(errors, o, m),
+        };
+        self.inferred_type = Some(inferred_type.clone());
+        inferred_type
+    }
+}
 
 // Only for variable
 impl Identifier {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         errors: &mut Vec<Error>,
         o: &mut TypeLocalEnv,
         _m: &ClassEnv,
-        _r: Option<&ValueType>,
-    ) -> Option<ValueType> {
+    ) -> ValueType {
         match o.get(&self.name) {
             None | Some(EnvSlot::Func(_)) => {
                 let msg = error_variable(&self.name);
                 self.base_mut().error_msg = Some(msg);
                 errors.push(error_from(self));
-                Some(TYPE_OBJECT.clone())
+                TYPE_OBJECT.clone()
             }
-            Some(EnvSlot::Var(t, _)) => Some(t.clone()),
+            Some(EnvSlot::Var(t, _)) => t.clone(),
         }
     }
 }
 
 impl AssignStmt {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         errors: &mut Vec<Error>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
-        r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        let right: ValueType = self.value.analyze(errors, o, m, r).unwrap();
+        _r: Option<&ValueType>,
+    ) {
+        let right: ValueType = self.value.analyze(errors, o, m);
 
         // We don't do `for target in &mut self.targets` because of mut ref conflict
         for i in 0..self.targets.len() {
-            let left: ValueType = self.targets[i].analyze(errors, o, m, r).unwrap();
+            let left: ValueType = self.targets[i].analyze(errors, o, m);
             if let ExprContent::Identifier(Identifier { name, .. }) = &self.targets[i].content {
                 if let Some(EnvSlot::Var(_, Assignable(false))) = o.get(name) {
                     let msg = error_nonlocal_assign(name);
@@ -64,99 +110,85 @@ impl AssignStmt {
             self.base_mut().error_msg = Some(msg);
             errors.push(error_from(self));
         }
-
-        None
     }
 }
 
 impl VarDef {
-    pub fn analyze_impl(
-        &mut self,
-        errors: &mut Vec<Error>,
-        o: &mut TypeLocalEnv,
-        m: &ClassEnv,
-        r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        let right = self.value.analyze(errors, o, m, r).unwrap();
+    pub fn analyze(&mut self, errors: &mut Vec<Error>, o: &mut TypeLocalEnv, m: &ClassEnv) {
+        let right = self.value.analyze(errors, o, m);
         let left = ValueType::from_annotation(&self.var.tv().type_);
         if !m.is_compatible(&right, &left) {
             let msg = error_assign(&left, &right);
             self.base_mut().error_msg = Some(msg);
             errors.push(error_from(self));
         }
-        None
     }
 }
 
 impl ExprStmt {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         errors: &mut Vec<Error>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
-        r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        self.expr.analyze(errors, o, m, r)
+        _r: Option<&ValueType>,
+    ) {
+        self.expr.analyze(errors, o, m);
     }
 }
 
 impl BooleanLiteral {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         _errors: &mut Vec<Error>,
         _o: &mut TypeLocalEnv,
         _m: &ClassEnv,
-        _r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        Some(TYPE_BOOL.clone())
+    ) -> ValueType {
+        TYPE_BOOL.clone()
     }
 }
 
 impl IntegerLiteral {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         _errors: &mut Vec<Error>,
         _o: &mut TypeLocalEnv,
         _m: &ClassEnv,
-        _r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        Some(TYPE_INT.clone())
+    ) -> ValueType {
+        TYPE_INT.clone()
     }
 }
 
 impl StringLiteral {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         _errors: &mut Vec<Error>,
         _o: &mut TypeLocalEnv,
         _m: &ClassEnv,
-        _r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        Some(TYPE_STR.clone())
+    ) -> ValueType {
+        TYPE_STR.clone()
     }
 }
 
 impl NoneLiteral {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         _errors: &mut Vec<Error>,
         _o: &mut TypeLocalEnv,
         _m: &ClassEnv,
-        _r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        Some(TYPE_NONE.clone())
+    ) -> ValueType {
+        TYPE_NONE.clone()
     }
 }
 
 impl UnaryExpr {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         errors: &mut Vec<Error>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
-        r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        let operand: ValueType = self.operand.analyze(errors, o, m, r).unwrap();
+    ) -> ValueType {
+        let operand: ValueType = self.operand.analyze(errors, o, m);
         match self.operator {
             UnaryOp::Negative => {
                 if operand != *TYPE_INT {
@@ -164,7 +196,7 @@ impl UnaryExpr {
                     self.base_mut().error_msg = Some(msg);
                     errors.push(error_from(self));
                 }
-                Some(TYPE_INT.clone())
+                TYPE_INT.clone()
             }
             UnaryOp::Not => {
                 if operand != *TYPE_BOOL {
@@ -172,22 +204,21 @@ impl UnaryExpr {
                     self.base_mut().error_msg = Some(msg);
                     errors.push(error_from(self));
                 }
-                Some(TYPE_BOOL.clone())
+                TYPE_BOOL.clone()
             }
         }
     }
 }
 
 impl BinaryExpr {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         errors: &mut Vec<Error>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
-        r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        let left: ValueType = self.left.analyze(errors, o, m, r).unwrap();
-        let right: ValueType = self.right.analyze(errors, o, m, r).unwrap();
+    ) -> ValueType {
+        let left: ValueType = self.left.analyze(errors, o, m);
+        let right: ValueType = self.right.analyze(errors, o, m);
 
         let mut error = false;
         let output = match self.operator {
@@ -195,19 +226,19 @@ impl BinaryExpr {
                 if left != *TYPE_INT || right != *TYPE_INT {
                     error = true;
                 }
-                Some(TYPE_INT.clone())
+                TYPE_INT.clone()
             }
             BinaryOp::Or | BinaryOp::And => {
                 if left != *TYPE_BOOL || right != *TYPE_BOOL {
                     error = true;
                 }
-                Some(TYPE_BOOL.clone())
+                TYPE_BOOL.clone()
             }
             BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
                 if left != *TYPE_INT || right != *TYPE_INT {
                     error = true;
                 }
-                Some(TYPE_BOOL.clone())
+                TYPE_BOOL.clone()
             }
             BinaryOp::Is => {
                 let is_basic =
@@ -215,20 +246,20 @@ impl BinaryExpr {
                 if is_basic(&left) || is_basic(&right) {
                     error = true;
                 }
-                Some(TYPE_BOOL.clone())
+                TYPE_BOOL.clone()
             }
             BinaryOp::Add => {
                 if left == *TYPE_INT || right == *TYPE_INT {
                     if left != right {
                         error = true;
                     }
-                    Some(TYPE_INT.clone())
+                    TYPE_INT.clone()
                 } else if left == *TYPE_STR {
                     if left != right {
                         error = true;
-                        Some(TYPE_OBJECT.clone())
+                        TYPE_OBJECT.clone()
                     } else {
-                        Some(TYPE_STR.clone())
+                        TYPE_STR.clone()
                     }
                 } else if let (
                     ValueType::ListValueType(ListValueType {
@@ -240,10 +271,10 @@ impl BinaryExpr {
                 ) = (&left, &right)
                 {
                     let element_type = Box::new(m.join(&left_element, &right_element));
-                    Some(ValueType::ListValueType(ListValueType { element_type }))
+                    ValueType::ListValueType(ListValueType { element_type })
                 } else {
                     error = true;
-                    Some(TYPE_OBJECT.clone())
+                    TYPE_OBJECT.clone()
                 }
             }
             BinaryOp::Eq | BinaryOp::Ne => {
@@ -252,7 +283,7 @@ impl BinaryExpr {
                 } else if left != right {
                     error = true
                 }
-                Some(TYPE_BOOL.clone())
+                TYPE_BOOL.clone()
             }
         };
 
@@ -283,55 +314,52 @@ impl BinaryExpr {
 }
 
 impl IfExpr {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         errors: &mut Vec<Error>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
-        r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        let condition = self.condition.analyze(errors, o, m, r).unwrap();
+    ) -> ValueType {
+        let condition = self.condition.analyze(errors, o, m);
         if condition != *TYPE_BOOL {
             let msg = error_condition(&condition);
             self.base_mut().error_msg = Some(msg);
             errors.push(error_from(self))
         }
-        let then_type = self.then_expr.analyze(errors, o, m, r).unwrap();
-        let else_type = self.else_expr.analyze(errors, o, m, r).unwrap();
-        Some(m.join(&then_type, &else_type))
+        let then_type = self.then_expr.analyze(errors, o, m);
+        let else_type = self.else_expr.analyze(errors, o, m);
+        m.join(&then_type, &else_type)
     }
 }
 
 impl ListExpr {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         errors: &mut Vec<Error>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
-        r: Option<&ValueType>,
-    ) -> Option<ValueType> {
+    ) -> ValueType {
         if self.elements.len() == 0 {
-            return Some(TYPE_EMPTY.clone());
+            return TYPE_EMPTY.clone();
         }
-        let mut element_type = self.elements[0].analyze(errors, o, m, r).unwrap();
+        let mut element_type = self.elements[0].analyze(errors, o, m);
         for element in self.elements.iter_mut().skip(1) {
-            element_type = m.join(&element_type, &element.analyze(errors, o, m, r).unwrap());
+            element_type = m.join(&element_type, &element.analyze(errors, o, m));
         }
 
         let element_type = Box::new(element_type);
-        Some(ValueType::ListValueType(ListValueType { element_type }))
+        ValueType::ListValueType(ListValueType { element_type })
     }
 }
 
 impl IndexExpr {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         errors: &mut Vec<Error>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
-        r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        let left = self.list.analyze(errors, o, m, r).unwrap();
+    ) -> ValueType {
+        let left = self.list.analyze(errors, o, m);
         let element_type = if let ValueType::ListValueType(ListValueType { element_type }) = left {
             *element_type
         } else if left == *TYPE_STR {
@@ -343,69 +371,58 @@ impl IndexExpr {
             TYPE_OBJECT.clone()
         };
 
-        let index = self.index.analyze(errors, o, m, r).unwrap();
+        let index = self.index.analyze(errors, o, m);
         if index != *TYPE_INT && self.base().error_msg.is_none() {
             let msg = error_index_right(&index);
             self.base_mut().error_msg = Some(msg);
             errors.push(error_from(self));
         }
 
-        Some(element_type)
+        element_type
     }
 }
 
 impl MemberExpr {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         errors: &mut Vec<Error>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
-        r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        let class_type = self.object.analyze(errors, o, m, r).unwrap();
-        let class_info =
+    ) -> ValueType {
+        let class_type = self.object.analyze(errors, o, m);
+        let class_name =
             if let ValueType::ClassValueType(ClassValueType { class_name }) = &class_type {
-                m.get(class_name)
+                class_name
             } else {
                 let msg = error_member(&class_type);
                 self.base_mut().error_msg = Some(msg);
                 errors.push(error_from(self));
-                return Some(TYPE_OBJECT.clone());
+                return TYPE_OBJECT.clone();
             };
 
         let name = &self.member.id().name;
-
-        let member = class_info
-            .items
-            .get(name)
-            .cloned()
-            .map(TryInto::try_into)
-            .map(Result::ok)
-            .flatten();
-
-        if member.is_none() {
+        if let Some(member) = m.get_attribute(class_name, name) {
+            member.clone()
+        } else {
             let msg = error_attribute(name, &class_type);
             self.base_mut().error_msg = Some(msg);
             errors.push(error_from(self));
-            return Some(TYPE_OBJECT.clone());
+            TYPE_OBJECT.clone()
         }
-
-        member
     }
 }
 
 impl CallExpr {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         errors: &mut Vec<Error>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
-        r: Option<&ValueType>,
-    ) -> Option<ValueType> {
+    ) -> ValueType {
         let args: Vec<_> = self
             .args
             .iter_mut()
-            .map(|arg| arg.analyze(errors, o, m, r).unwrap())
+            .map(|arg| arg.analyze(errors, o, m))
             .collect();
 
         let id = self.function.id_mut();
@@ -415,7 +432,7 @@ impl CallExpr {
                 let msg = error_function(&id.name);
                 self.base_mut().error_msg = Some(msg);
                 errors.push(error_from(self));
-                return Some(TYPE_OBJECT.clone());
+                return TYPE_OBJECT.clone();
             }
         };
 
@@ -439,45 +456,43 @@ impl CallExpr {
             }
         }
 
-        Some(function.return_type.clone())
+        function.return_type.clone()
     }
 }
 
 impl MethodCallExpr {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         errors: &mut Vec<Error>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
-        r: Option<&ValueType>,
-    ) -> Option<ValueType> {
+    ) -> ValueType {
         let args: Vec<_> = self
             .args
             .iter_mut()
-            .map(|arg| arg.analyze(errors, o, m, r).unwrap())
+            .map(|arg| arg.analyze(errors, o, m))
             .collect();
 
         let member = self.method.member_mut();
-        let class = member.object.analyze(errors, o, m, r).unwrap();
+        let class = member.object.analyze(errors, o, m);
         let class_name = if let ValueType::ClassValueType(ClassValueType { class_name }) = class {
             class_name
         } else {
             let msg = error_member(&class);
             self.base_mut().error_msg = Some(msg);
             errors.push(error_from(self));
-            return Some(TYPE_OBJECT.clone());
+            return TYPE_OBJECT.clone();
         };
 
         let method_name = &member.member.id().name;
 
-        let method = match m.get(&class_name).items.get(method_name) {
-            Some(Type::FuncType(f)) => f,
-            _ => {
-                let msg = error_method(method_name, &class_name);
-                self.base_mut().error_msg = Some(msg);
-                errors.push(error_from(self));
-                return Some(TYPE_OBJECT.clone());
-            }
+        let method = if let Some(method) = m.get_method(&class_name, method_name) {
+            method
+        } else {
+            let msg = error_method(method_name, &class_name);
+            self.base_mut().error_msg = Some(msg);
+            errors.push(error_from(self));
+            return TYPE_OBJECT.clone();
         };
 
         member.inferred_type = Some(FuncTypeWrapper::FuncType(method.clone()));
@@ -497,22 +512,22 @@ impl MethodCallExpr {
             }
         }
 
-        Some(method.return_type.clone())
+        method.return_type.clone()
     }
 }
 
 impl ReturnStmt {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         errors: &mut Vec<Error>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
-    ) -> Option<ValueType> {
+    ) {
         // Reference program: do not analyze the expression on top-level return
         if let Some(return_expected) = r {
             let return_type = if let Some(value) = &mut self.value {
-                value.analyze(errors, o, m, r).unwrap()
+                value.analyze(errors, o, m)
             } else {
                 TYPE_NONE.clone()
             };
@@ -531,77 +546,59 @@ impl ReturnStmt {
             self.base_mut().error_msg = Some(msg);
             errors.push(error_from(self));
         }
-
-        None
-    }
-}
-
-fn analyze(
-    statements: &mut [Stmt],
-    errors: &mut Vec<Error>,
-    o: &mut TypeLocalEnv,
-    m: &ClassEnv,
-    r: Option<&ValueType>,
-) {
-    for statement in statements {
-        statement.analyze(errors, o, m, r);
     }
 }
 
 impl IfStmt {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         errors: &mut Vec<Error>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        let condition = self.condition.analyze(errors, o, m, r).unwrap();
+    ) {
+        let condition = self.condition.analyze(errors, o, m);
         if condition != *TYPE_BOOL {
             let msg = error_condition(&condition);
             self.base_mut().error_msg = Some(msg);
             errors.push(error_from(self));
         }
 
-        analyze(&mut self.then_body, errors, o, m, r);
-        analyze(&mut self.else_body, errors, o, m, r);
-
-        None
+        analyze_stmt(&mut self.then_body, errors, o, m, r);
+        analyze_stmt(&mut self.else_body, errors, o, m, r);
     }
 }
 
 impl WhileStmt {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         errors: &mut Vec<Error>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        let condition = self.condition.analyze(errors, o, m, r).unwrap();
+    ) {
+        let condition = self.condition.analyze(errors, o, m);
         if condition != *TYPE_BOOL {
             let msg = error_condition(&condition);
             self.base_mut().error_msg = Some(msg);
             errors.push(error_from(self));
         }
 
-        analyze(&mut self.body, errors, o, m, r);
-
-        None
+        analyze_stmt(&mut self.body, errors, o, m, r);
     }
 }
 
 impl ForStmt {
-    pub fn analyze_impl(
+    pub fn analyze(
         &mut self,
         errors: &mut Vec<Error>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
-    ) -> Option<ValueType> {
+    ) {
         // Eh, the error handling is a mess in the reference program
 
-        let iterable = self.iterable.analyze(errors, o, m, r).unwrap();
+        let iterable = self.iterable.analyze(errors, o, m);
         let element_type = if iterable == *TYPE_STR {
             Some(&iterable)
         } else if let ValueType::ListValueType(ListValueType { element_type }) = &iterable {
@@ -640,20 +637,47 @@ impl ForStmt {
             }
         }
 
-        analyze(&mut self.body, errors, o, m, r);
+        analyze_stmt(&mut self.body, errors, o, m, r);
+    }
+}
 
-        None
+fn analyze_stmt(
+    statements: &mut [Stmt],
+    errors: &mut Vec<Error>,
+    o: &mut TypeLocalEnv,
+    m: &ClassEnv,
+    r: Option<&ValueType>,
+) {
+    for statement in statements {
+        match statement {
+            Stmt::ExprStmt(s) => s.analyze(errors, o, m, r),
+            Stmt::AssignStmt(s) => s.analyze(errors, o, m, r),
+            Stmt::IfStmt(s) => s.analyze(errors, o, m, r),
+            Stmt::ForStmt(s) => s.analyze(errors, o, m, r),
+            Stmt::WhileStmt(s) => s.analyze(errors, o, m, r),
+            Stmt::ReturnStmt(s) => s.analyze(errors, o, m, r),
+        }
+    }
+}
+
+fn analyze_decl(
+    declarations: &mut [Declaration],
+    errors: &mut Vec<Error>,
+    o: &mut TypeLocalEnv,
+    m: &ClassEnv,
+) {
+    for declaration in declarations {
+        match declaration {
+            Declaration::ClassDef(s) => s.analyze(errors, o, m),
+            Declaration::FuncDef(s) => s.analyze(errors, o, m),
+            Declaration::VarDef(s) => s.analyze(errors, o, m),
+            _ => (),
+        }
     }
 }
 
 impl FuncDef {
-    pub fn analyze_impl(
-        &mut self,
-        errors: &mut Vec<Error>,
-        o: &mut TypeLocalEnv,
-        m: &ClassEnv,
-        r: Option<&ValueType>,
-    ) -> Option<ValueType> {
+    pub fn analyze(&mut self, errors: &mut Vec<Error>, o: &mut TypeLocalEnv, m: &ClassEnv) {
         let frame: HashMap<String, LocalSlot<FuncType, ValueType>> = self
             .declarations
             .iter()
@@ -690,49 +714,23 @@ impl FuncDef {
             .collect();
 
         let mut handle = o.push(frame);
-        for decl in &mut self.declarations {
-            decl.analyze(errors, handle.inner(), m, r);
-        }
-        analyze(
-            &mut self.statements,
-            errors,
-            handle.inner(),
-            m,
-            Some(&ValueType::from_annotation(&self.return_type)),
-        );
+        analyze_decl(&mut self.declarations, errors, handle.inner(), m);
 
-        None
+        let return_type = ValueType::from_annotation(&self.return_type);
+        let r = Some(&return_type);
+        analyze_stmt(&mut self.statements, errors, handle.inner(), m, r);
     }
 }
 
 impl ClassDef {
-    pub fn analyze_impl(
-        &mut self,
-        errors: &mut Vec<Error>,
-        o: &mut TypeLocalEnv,
-        m: &ClassEnv,
-        r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        for decl in &mut self.declarations {
-            decl.analyze(errors, o, m, r);
-        }
-
-        None
+    pub fn analyze(&mut self, errors: &mut Vec<Error>, o: &mut TypeLocalEnv, m: &ClassEnv) {
+        analyze_decl(&mut self.declarations, errors, o, m);
     }
 }
 
 impl Program {
-    pub fn analyze_impl(
-        &mut self,
-        errors: &mut Vec<Error>,
-        o: &mut TypeLocalEnv,
-        m: &ClassEnv,
-        r: Option<&ValueType>,
-    ) -> Option<ValueType> {
-        for decl in &mut self.declarations {
-            decl.analyze(errors, o, m, r);
-        }
-        analyze(&mut self.statements, errors, o, m, r);
-        None
+    pub fn analyze(&mut self, errors: &mut Vec<Error>, o: &mut TypeLocalEnv, m: &ClassEnv) {
+        analyze_decl(&mut self.declarations, errors, o, m);
+        analyze_stmt(&mut self.statements, errors, o, m, None);
     }
 }

@@ -1,4 +1,18 @@
 use crate::node::*;
+use std::collections::HashMap;
+
+#[derive(Clone, PartialEq, Eq)]
+pub enum Type {
+    ValueType(ValueType),
+    FuncType(FuncType),
+}
+
+pub struct ClassInfo {
+    pub super_class: String,
+    pub items: HashMap<String, Type>,
+}
+
+pub struct ClassEnv(pub HashMap<String, ClassInfo>);
 
 impl ClassEnv {
     pub fn is_compatible(&self, sub_class: &ValueType, super_class: &ValueType) -> bool {
@@ -109,8 +123,18 @@ impl ClassEnv {
         }
     }
 
-    pub fn get(&self, class_name: &str) -> &ClassInfo {
-        self.0.get(class_name).unwrap()
+    pub fn get_attribute(&self, class_name: &str, name: &str) -> Option<&ValueType> {
+        match self.0.get(class_name)?.items.get(name)? {
+            Type::ValueType(t) => Some(t),
+            _ => None,
+        }
+    }
+
+    pub fn get_method(&self, class_name: &str, name: &str) -> Option<&FuncType> {
+        match self.0.get(class_name)?.items.get(name)? {
+            Type::FuncType(t) => Some(t),
+            _ => None,
+        }
     }
 
     pub fn contains(&self, class_name: &str) -> bool {

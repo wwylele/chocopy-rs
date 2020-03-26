@@ -4,9 +4,9 @@ mod error;
 
 use crate::local_env::*;
 use crate::node::*;
+use class_env::*;
 use error::*;
 use std::collections::{HashMap, HashSet};
-use std::convert::*;
 
 fn check_var_def(v: &mut VarDef, errors: &mut Vec<Error>, classes: &HashMap<String, ClassInfo>) {
     let tv = v.var.tv_mut();
@@ -296,7 +296,7 @@ pub fn check(mut ast: Ast) -> Ast {
                         if items
                             .insert(
                                 name_str.clone(),
-                                ValueType::from_annotation(&var.var.tv().type_).into(),
+                                Type::ValueType(ValueType::from_annotation(&var.var.tv().type_)),
                             )
                             .is_some()
                         {
@@ -456,7 +456,7 @@ pub fn check(mut ast: Ast) -> Ast {
     if errors.is_empty() {
         let mut env = LocalEnv::new(global_env);
         ast.program_mut()
-            .analyze(&mut errors, &mut env, &ClassEnv(classes), None);
+            .analyze(&mut errors, &mut env, &ClassEnv(classes));
     }
 
     ast.program_mut().errors = ErrorInfo::Errors(Errors {
