@@ -818,16 +818,6 @@ impl TypeAnnotation {
             TypeAnnotation::ListType(l) => l.element_type.core_type_mut(),
         }
     }
-
-    pub fn flatten(&self) -> (&str, u32) {
-        match self {
-            TypeAnnotation::ClassType(c) => (&c.class_name, 0),
-            TypeAnnotation::ListType(l) => {
-                let (name, level) = l.element_type.flatten();
-                (name, level + 1)
-            }
-        }
-    }
 }
 
 #[enum_dispatch(Node)]

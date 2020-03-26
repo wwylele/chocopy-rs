@@ -1698,15 +1698,11 @@ fn gen_function(
             clean_up_list.push(offset);
         }
 
-        let (flatten_name, array_level) = param.tv().type_.flatten();
         params_debug.push(VarDebug {
             offset,
             line: param.base().location.start.row,
             name: name.clone(),
-            var_type: TypeDebug {
-                name: flatten_name.to_owned(),
-                array_level,
-            },
+            var_type: TypeDebug::from_annotation(&param.tv().type_),
         })
     }
 
@@ -1729,15 +1725,11 @@ fn gen_function(
                 clean_up_list.push(offset);
             }
 
-            let (flatten_name, array_level) = v.var.tv().type_.flatten();
             locals_debug.push(VarDebug {
                 offset,
                 line: v.base().location.start.row,
                 name: name.clone(),
-                var_type: TypeDebug {
-                    name: flatten_name.to_owned(),
-                    array_level,
-                },
+                var_type: TypeDebug::from_annotation(&v.var.tv().type_),
             })
         } else if let Declaration::FuncDef(f) = declaration {
             let name = &f.name.id().name;
@@ -1798,13 +1790,6 @@ fn gen_function(
     code.emit_none_literal();
     code.end_proc();
 
-    let (flatten_name, array_level) = function.return_type.flatten();
-
-    let return_type_debug = TypeDebug {
-        name: flatten_name.to_owned(),
-        array_level,
-    };
-
     let mut chunks = vec![code.finalize(ProcedureDebug {
         decl_line: function.statements[0].base().location.start.row,
         artificial: false,
@@ -1814,7 +1799,7 @@ fn gen_function(
             parent.map(str::to_owned)
         },
         lines,
-        return_type: return_type_debug,
+        return_type: TypeDebug::from_annotation(&function.return_type),
         params: params_debug,
         locals: locals_debug,
     })];
@@ -1906,7 +1891,7 @@ fn gen_ctor(
         parent: None,
         lines: vec![],
         return_type: TypeDebug {
-            name: class_name.to_owned(),
+            core_name: class_name.to_owned(),
             array_level: 0,
         },
         params: vec![],
@@ -1946,7 +1931,7 @@ fn gen_dtor(
         parent: None,
         lines: vec![],
         return_type: TypeDebug {
-            name: "<None>".to_owned(),
+            core_name: "<None>".to_owned(),
             array_level: 0,
         },
         params: vec![VarDebug {
@@ -1954,7 +1939,7 @@ fn gen_dtor(
             line: 0,
             name: "self".to_owned(),
             var_type: TypeDebug {
-                name: class_name.to_owned(),
+                core_name: class_name.to_owned(),
                 array_level: 0,
             },
         }],
@@ -2020,15 +2005,11 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
                 }),
             );
 
-            let (flatten_name, array_level) = v.var.tv().type_.flatten();
             globals_debug.push(VarDebug {
                 offset: global_offset,
                 line: v.base().location.start.row,
                 name: name.clone(),
-                var_type: TypeDebug {
-                    name: flatten_name.to_owned(),
-                    array_level,
-                },
+                var_type: TypeDebug::from_annotation(&v.var.tv().type_),
             });
 
             global_offset += size;
@@ -2079,15 +2060,11 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
                     );
                     class_slot.object_size += size;
 
-                    let (type_name, array_level) = v.var.tv().type_.flatten();
                     class_debug.attributes.push(VarDebug {
                         offset: offset as i32,
                         line: v.base().location.start.row,
                         name: name.clone(),
-                        var_type: TypeDebug {
-                            name: type_name.to_owned(),
-                            array_level,
-                        },
+                        var_type: TypeDebug::from_annotation(&v.var.tv().type_),
                     });
                 } else if let Declaration::FuncDef(f) = declaration {
                     let method_name = &f.name.id().name;
@@ -2184,7 +2161,7 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
         parent: None,
         lines,
         return_type: TypeDebug {
-            name: "<None>".to_owned(),
+            core_name: "<None>".to_owned(),
             array_level: 0,
         },
         params: vec![],

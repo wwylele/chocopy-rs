@@ -33,8 +33,24 @@ struct ChunkLink {
 
 #[derive(PartialEq, Eq, Hash, Clone)]
 struct TypeDebug {
-    name: String,
+    core_name: String,
     array_level: u32,
+}
+
+impl TypeDebug {
+    fn from_annotation(type_annotation: &TypeAnnotation) -> TypeDebug {
+        match type_annotation {
+            TypeAnnotation::ClassType(c) => TypeDebug {
+                core_name: c.class_name.clone(),
+                array_level: 0,
+            },
+            TypeAnnotation::ListType(l) => {
+                let mut type_debug = TypeDebug::from_annotation(&l.element_type);
+                type_debug.array_level += 1;
+                type_debug
+            }
+        }
+    }
 }
 
 impl std::fmt::Display for TypeDebug {
@@ -42,7 +58,7 @@ impl std::fmt::Display for TypeDebug {
         for _ in 0..self.array_level {
             write!(f, "[")?;
         }
-        write!(f, "{}", &self.name)?;
+        write!(f, "{}", &self.core_name)?;
         for _ in 0..self.array_level {
             write!(f, "]")?;
         }
@@ -397,19 +413,28 @@ pub fn gen(
     let default_prototype_ptr_id =
         dwarf_add_pointer_type(&mut dwarf, "$prototype*", default_prototype_id);
 
+    let mut array_level_map = HashMap::new();
+    for type_used in code_set.used_types() {
+        if let Some(array_level) = array_level_map.get_mut(&type_used.core_name) {
+            *array_level = std::cmp::max(*array_level, type_used.array_level)
+        } else {
+            array_level_map.insert(&type_used.core_name, type_used.array_level);
+        }
+    }
+
     let mut debug_types = HashMap::new();
-    for type_debug_seed in code_set.used_types() {
-        for array_level in 0..=type_debug_seed.array_level {
+    for (type_name, max_array_level) in array_level_map {
+        for array_level in 0..=max_array_level {
             let type_debug = TypeDebug {
-                name: type_debug_seed.name.clone(),
+                core_name: type_name.clone(),
                 array_level,
             };
             if debug_types.contains_key(&type_debug) {
                 continue;
             }
-            let node_id = if type_debug.array_level == 0 && type_debug.name == "bool" {
+            let node_id = if type_debug.array_level == 0 && type_debug.core_name == "bool" {
                 dwarf_add_base_type(&mut dwarf, "bool", gimli::DW_ATE_boolean, 1)
-            } else if type_debug.array_level == 0 && type_debug.name == "int" {
+            } else if type_debug.array_level == 0 && type_debug.core_name == "int" {
                 dwarf_add_base_type(&mut dwarf, "int", gimli::DW_ATE_signed, 4)
             } else {
                 let type_string = type_debug.to_string();
@@ -457,7 +482,7 @@ pub fn gen(
         let prototype_name = class_name.clone() + ".$prototype";
         let prototype_ptr_name = prototype_name.clone() + "*";
         let tag_id = debug_types[&TypeDebug {
-            name: class_name,
+            core_name: class_name,
             array_level: 0,
         }];
 
