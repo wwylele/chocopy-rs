@@ -1,20 +1,169 @@
+use super::error::*;
 use crate::node::*;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 #[derive(Clone, PartialEq, Eq)]
-pub enum Type {
+enum Type {
     ValueType(ValueType),
     FuncType(FuncType),
 }
 
-pub struct ClassInfo {
-    pub super_class: String,
-    pub items: HashMap<String, Type>,
+struct ClassInfo {
+    super_class: String,
+    items: HashMap<String, Type>,
 }
 
-pub struct ClassEnv(pub HashMap<String, ClassInfo>);
+pub struct ClassEnv(HashMap<String, ClassInfo>);
 
 impl ClassEnv {
+    fn add_basic_type(&mut self, name: &str) {
+        self.0.insert(
+            name.to_owned(),
+            ClassInfo {
+                super_class: "object".to_owned(),
+                items: std::iter::once((
+                    "__init__".to_owned(),
+                    Type::FuncType(FuncType {
+                        parameters: vec![ValueType::ClassValueType(ClassValueType {
+                            class_name: "object".to_owned(),
+                        })],
+                        return_type: TYPE_NONE.clone(),
+                    }),
+                ))
+                .collect(),
+            },
+        );
+    }
+
+    pub fn new() -> ClassEnv {
+        let mut class_env = ClassEnv(HashMap::new());
+        class_env.add_basic_type("object");
+        class_env
+    }
+
+    pub fn add_class(
+        &mut self,
+        class_def: &mut ClassDef,
+        errors: &mut Vec<Error>,
+        id_set: &HashSet<String>,
+    ) {
+        let class_name = &class_def.name.id().name;
+        let super_name = &class_def.super_class.id().name;
+        let super_class = if let Some(super_class) = self.0.get(super_name) {
+            super_class
+        } else {
+            let msg = if let "int" | "str" | "bool" = super_name.as_str() {
+                error_super_special
+            } else if id_set.contains(super_name) {
+                error_super_not_class
+            } else {
+                error_super_undef
+            }(super_name);
+            class_def.super_class.base_mut().error_msg = Some(msg);
+            errors.push(error_from(&class_def.super_class));
+            self.0.get("object").unwrap()
+        };
+
+        // Inherit items
+        let mut items = super_class.items.clone();
+
+        // Check and insert new items
+        let mut id_set = HashSet::new();
+        for item_decl in &mut class_def.declarations {
+            let name_str = item_decl.name_mut().name.clone();
+
+            // Class scope identifier collision check
+            if !id_set.insert(name_str.clone()) {
+                let msg = error_dup(&name_str);
+                let name = item_decl.name_mut();
+                name.base_mut().error_msg = Some(msg);
+                errors.push(error_from(name));
+                continue;
+            }
+
+            match item_decl {
+                Declaration::FuncDef(func) => {
+                    let parameters: Vec<_> = func
+                        .params
+                        .iter()
+                        .map(|t| ValueType::from_annotation(&t.tv().type_))
+                        .collect();
+                    let return_type = ValueType::from_annotation(&func.return_type);
+
+                    let name = item_decl.name_mut();
+
+                    // Self parameter check
+                    if parameters.get(0)
+                        != Some(&ValueType::ClassValueType(ClassValueType {
+                            class_name: class_name.clone(),
+                        }))
+                    {
+                        let msg = error_method_self(&name_str);
+                        name.base_mut().error_msg = Some(msg);
+                        errors.push(error_from(name));
+                    }
+
+                    let item_type = Type::FuncType(FuncType {
+                        parameters,
+                        return_type,
+                    });
+
+                    // Override check
+                    match items.insert(name_str.clone(), item_type.clone()) {
+                        None => (),
+                        Some(Type::FuncType(mut old)) => {
+                            old.parameters[0] = ValueType::ClassValueType(ClassValueType {
+                                class_name: class_name.clone(),
+                            });
+                            if Type::FuncType(old) != item_type {
+                                let msg = error_method_override(&name_str);
+                                name.base_mut().error_msg = Some(msg);
+                                errors.push(error_from(name));
+                            }
+                        }
+                        _ => {
+                            let msg = error_attribute_redefine(&name_str);
+                            name.base_mut().error_msg = Some(msg);
+                            errors.push(error_from(name));
+                        }
+                    }
+                }
+                Declaration::VarDef(var) => {
+                    // Redefinition check
+                    if items
+                        .insert(
+                            name_str.clone(),
+                            Type::ValueType(ValueType::from_annotation(&var.var.tv().type_)),
+                        )
+                        .is_some()
+                    {
+                        let name = item_decl.name_mut();
+                        let msg = error_attribute_redefine(&name_str);
+                        name.base_mut().error_msg = Some(msg);
+                        errors.push(error_from(name));
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+        self.0.insert(
+            class_name.clone(),
+            ClassInfo {
+                super_class: class_def.super_class.id().name.clone(),
+                items,
+            },
+        );
+    }
+
+    pub fn complete_basic_types(&mut self) {
+        self.add_basic_type("str");
+        self.add_basic_type("int");
+        self.add_basic_type("bool");
+        self.add_basic_type("<None>");
+        self.add_basic_type("<Empty>");
+    }
+
     pub fn is_compatible(&self, sub_class: &ValueType, super_class: &ValueType) -> bool {
         if sub_class == super_class {
             return true;

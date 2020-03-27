@@ -8,10 +8,10 @@ use class_env::*;
 use error::*;
 use std::collections::{HashMap, HashSet};
 
-fn check_var_def(v: &mut VarDef, errors: &mut Vec<Error>, classes: &HashMap<String, ClassInfo>) {
+fn check_var_def(v: &mut VarDef, errors: &mut Vec<Error>, classes: &ClassEnv) {
     let tv = v.var.tv_mut();
     let core_type = tv.type_.core_type_mut();
-    if !classes.contains_key(&core_type.class_name) {
+    if !classes.contains(&core_type.class_name) {
         let msg = error_invalid_type(&core_type.class_name);
         core_type.base_mut().error_msg = Some(msg);
         errors.push(error_from(core_type));
@@ -40,7 +40,7 @@ fn always_return(statements: &[Stmt]) -> bool {
 fn check_func(
     f: &mut FuncDef,
     errors: &mut Vec<Error>,
-    classes: &HashMap<String, ClassInfo>,
+    classes: &ClassEnv,
     globals: &HashSet<String>,
     nonlocals: &HashSet<String>,
 ) {
@@ -50,14 +50,14 @@ fn check_func(
     // semantic rule: 1(param), 2(param), 11(param)
     for param in &mut f.params {
         let core_type = param.tv_mut().type_.core_type_mut();
-        if !classes.contains_key(&core_type.class_name) {
+        if !classes.contains(&core_type.class_name) {
             let msg = error_invalid_type(&core_type.class_name);
             core_type.base_mut().error_msg = Some(msg);
             errors.push(error_from(core_type));
         }
 
         let id = param.tv_mut().identifier.id_mut();
-        if classes.contains_key(&id.name) {
+        if classes.contains(&id.name) {
             let msg = error_shadow(&id.name);
             id.base_mut().error_msg = Some(msg);
             errors.push(error_from(id));
@@ -74,7 +74,7 @@ fn check_func(
     // Check return type
     // semantic rule: 11(return)
     let core_type = f.return_type.core_type_mut();
-    if !classes.contains_key(&core_type.class_name) {
+    if !classes.contains(&core_type.class_name) {
         let msg = error_invalid_type(&core_type.class_name);
         core_type.base_mut().error_msg = Some(msg);
         errors.push(error_from(core_type));
@@ -95,14 +95,14 @@ fn check_func(
             Declaration::VarDef(v) => {
                 let var = &mut v.var;
                 let core_type = var.tv_mut().type_.core_type_mut();
-                if !classes.contains_key(&core_type.class_name) {
+                if !classes.contains(&core_type.class_name) {
                     let msg = error_invalid_type(&core_type.class_name);
                     core_type.base_mut().error_msg = Some(msg);
                     errors.push(error_from(core_type));
                 }
 
                 let id = var.tv_mut().identifier.id_mut();
-                if classes.contains_key(&id.name) {
+                if classes.contains(&id.name) {
                     let msg = error_shadow(&id.name);
                     id.base_mut().error_msg = Some(msg);
                     errors.push(error_from(id));
@@ -111,7 +111,7 @@ fn check_func(
             }
             Declaration::FuncDef(f) => {
                 let id = f.name.id_mut();
-                if classes.contains_key(&id.name) {
+                if classes.contains(&id.name) {
                     let msg = error_shadow(&id.name);
                     id.base_mut().error_msg = Some(msg);
                     errors.push(error_from(id));
@@ -175,28 +175,7 @@ pub fn check(mut ast: Ast) -> Ast {
     id_set.insert("input".to_owned());
     id_set.insert("len".to_owned());
 
-    let mut classes: HashMap<String, ClassInfo> = HashMap::new();
-
-    let add_basic_type = |classes: &mut HashMap<String, ClassInfo>, name: &str| {
-        classes.insert(
-            name.to_owned(),
-            ClassInfo {
-                super_class: "object".to_owned(),
-                items: std::iter::once((
-                    "__init__".to_owned(),
-                    Type::FuncType(FuncType {
-                        parameters: vec![ValueType::ClassValueType(ClassValueType {
-                            class_name: "object".to_owned(),
-                        })],
-                        return_type: TYPE_NONE.clone(),
-                    }),
-                ))
-                .collect(),
-            },
-        );
-    };
-
-    add_basic_type(&mut classes, "object");
+    let mut classes = ClassEnv::new();
 
     // Pass A
     // semantic rule: 1(global/class), 4, 5, 6, 7
@@ -211,120 +190,11 @@ pub fn check(mut ast: Ast) -> Ast {
         }
 
         if let Declaration::ClassDef(class_def) = decl {
-            let class_name = &class_def.name.id().name;
-            let super_name = &class_def.super_class.id().name;
-            let super_class = if let Some(super_class) = classes.get(super_name) {
-                super_class
-            } else {
-                let msg = if let "int" | "str" | "bool" = super_name.as_str() {
-                    error_super_special
-                } else if id_set.contains(super_name) {
-                    error_super_not_class
-                } else {
-                    error_super_undef
-                }(super_name);
-                class_def.super_class.base_mut().error_msg = Some(msg);
-                errors.push(error_from(&class_def.super_class));
-                classes.get("object").unwrap()
-            };
-
-            // Inherit items
-            let mut items = super_class.items.clone();
-
-            // Check and insert new items
-            let mut id_set = HashSet::new();
-            for item_decl in &mut class_def.declarations {
-                let name_str = item_decl.name_mut().name.clone();
-
-                // Class scope identifier collision check
-                if !id_set.insert(name_str.clone()) {
-                    let msg = error_dup(&name_str);
-                    let name = item_decl.name_mut();
-                    name.base_mut().error_msg = Some(msg);
-                    errors.push(error_from(name));
-                    continue;
-                }
-
-                match item_decl {
-                    Declaration::FuncDef(func) => {
-                        let parameters: Vec<_> = func
-                            .params
-                            .iter()
-                            .map(|t| ValueType::from_annotation(&t.tv().type_))
-                            .collect();
-                        let return_type = ValueType::from_annotation(&func.return_type);
-
-                        let name = item_decl.name_mut();
-
-                        // Self parameter check
-                        if parameters.get(0)
-                            != Some(&ValueType::ClassValueType(ClassValueType {
-                                class_name: class_name.clone(),
-                            }))
-                        {
-                            let msg = error_method_self(&name_str);
-                            name.base_mut().error_msg = Some(msg);
-                            errors.push(error_from(name));
-                        }
-
-                        let item_type = Type::FuncType(FuncType {
-                            parameters,
-                            return_type,
-                        });
-
-                        // Override check
-                        match items.insert(name_str.clone(), item_type.clone()) {
-                            None => (),
-                            Some(Type::FuncType(mut old)) => {
-                                old.parameters[0] = ValueType::ClassValueType(ClassValueType {
-                                    class_name: class_name.clone(),
-                                });
-                                if Type::FuncType(old) != item_type {
-                                    let msg = error_method_override(&name_str);
-                                    name.base_mut().error_msg = Some(msg);
-                                    errors.push(error_from(name));
-                                }
-                            }
-                            _ => {
-                                let msg = error_attribute_redefine(&name_str);
-                                name.base_mut().error_msg = Some(msg);
-                                errors.push(error_from(name));
-                            }
-                        }
-                    }
-                    Declaration::VarDef(var) => {
-                        // Redefinition check
-                        if items
-                            .insert(
-                                name_str.clone(),
-                                Type::ValueType(ValueType::from_annotation(&var.var.tv().type_)),
-                            )
-                            .is_some()
-                        {
-                            let name = item_decl.name_mut();
-                            let msg = error_attribute_redefine(&name_str);
-                            name.base_mut().error_msg = Some(msg);
-                            errors.push(error_from(name));
-                        }
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            classes.insert(
-                class_name.clone(),
-                ClassInfo {
-                    super_class: class_def.super_class.id().name.clone(),
-                    items,
-                },
-            );
+            classes.add_class(class_def, &mut errors, &id_set);
         }
     }
 
-    add_basic_type(&mut classes, "str");
-    add_basic_type(&mut classes, "int");
-    add_basic_type(&mut classes, "bool");
-    add_basic_type(&mut classes, "<None>");
-    add_basic_type(&mut classes, "<Empty>");
+    classes.complete_basic_types();
 
     // Pass B
     // semantic rules: 11(global/class variable)
@@ -456,8 +326,7 @@ pub fn check(mut ast: Ast) -> Ast {
     // and type checking
     if errors.is_empty() {
         let mut env = LocalEnv::new(global_env);
-        ast.program_mut()
-            .analyze(&mut errors, &mut env, &ClassEnv(classes));
+        ast.program_mut().analyze(&mut errors, &mut env, &classes);
     }
 
     ast.program_mut().errors = ErrorInfo::Errors(Errors {
