@@ -793,24 +793,17 @@ pub fn gen(
         &include_bytes!("../../../target/debug/libchocopy_rs_std.a")[..],
     )?;
 
-    let ld_output = std::process::Command::new("ld")
+    let ld_output = std::process::Command::new("gcc")
         .args(&[
             "-o",
             path,
-            "-l:crt1.o",
-            "-l:crti.o",
-            "-l:crtn.o",
             obj_path.to_str().unwrap(),
             lib_path.to_str().unwrap(),
-            "-lc",
-            "-lpthread",
+            "-pthread",
             "-ldl",
-            "-lunwind",
-            "--dynamic-linker=/lib64/ld-linux-x86-64.so.2",
         ])
         .output()?;
 
-    // println!("ld status: {}", ld_output.status);
     std::io::stdout().write_all(&ld_output.stdout).unwrap();
     std::io::stderr().write_all(&ld_output.stderr).unwrap();
 
