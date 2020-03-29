@@ -343,7 +343,7 @@ mod tests {
     #[test]
     fn sample() {
         let mut passed = true;
-        let test_dirs = ["../chocopy-wars/src/test/data/pa2/sample", "test/pa2"];
+        let test_dirs = ["test/pa2/course", "test/pa2/more"];
         for dir in &test_dirs {
             println!("Testing Directory {}", dir);
             let mut files = std::fs::read_dir(dir)

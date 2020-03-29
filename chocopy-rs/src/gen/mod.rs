@@ -786,12 +786,8 @@ pub fn gen(
         return Ok(());
     }
 
-    let mut lib_path = std::env::temp_dir();
-    lib_path.push("libchocopy_rs_std.a");
-    std::fs::write(
-        &lib_path,
-        &include_bytes!("../../../target/debug/libchocopy_rs_std.a")[..],
-    )?;
+    let mut lib_path = std::env::current_exe()?;
+    lib_path.set_file_name("libchocopy_rs_std.a");
 
     let ld_output = std::process::Command::new("gcc")
         .args(&[
@@ -808,7 +804,6 @@ pub fn gen(
     std::io::stderr().write_all(&ld_output.stderr).unwrap();
 
     std::fs::remove_file(&obj_path)?;
-    std::fs::remove_file(&lib_path)?;
 
     Ok(())
 }

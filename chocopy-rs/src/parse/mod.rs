@@ -69,10 +69,10 @@ mod tests {
         let mut passed = true;
 
         let test_dirs = [
-            "test/pa1",
-            "../chocopy-wars/src/test/data/pa1/sample",
-            "../chocopy-wars/src/test/data/pa1/student_contributed",
-            "../chocopy-wars/src/test/data/pa2/sample",
+            "test/pa1/course",
+            "test/pa1/course_hidden",
+            "test/pa2/course",
+            "test/pa2/more",
         ];
 
         for dir in &test_dirs {
