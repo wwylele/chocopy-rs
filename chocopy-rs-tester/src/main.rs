@@ -3,7 +3,28 @@ use std::io::{BufRead, BufReader, Read, Write};
 fn main() {
     let temp_path = std::env::temp_dir();
 
-    let dir = std::env::args().nth(1).expect("Path required");
+    let args: Vec<_> = std::env::args().collect();
+    let dir = args.get(1).expect("Path required");
+    let python = args.get(2).map(|s| s.as_str()) == Some("--python");
+    let python_command;
+    if python {
+        python_command = Some(args.get(3).map(|s| s.as_str()).unwrap_or("python"));
+        println!(
+            "Testing using python interpreter {}",
+            python_command.unwrap()
+        );
+
+        assert!(std::process::Command::new(python_command.unwrap())
+            .arg("--version")
+            .spawn()
+            .unwrap()
+            .wait()
+            .unwrap()
+            .success());
+    } else {
+        python_command = None;
+        println!("Testing using chocopy compiler");
+    }
 
     let mut compiler_path = std::env::current_exe().unwrap();
     compiler_path.set_file_name("chocopy-rs");
@@ -19,23 +40,25 @@ fn main() {
         .map(|f| f.path())
         .collect::<Vec<_>>();
     files.sort();
-    for file in files {
-        let file_name = file.file_name().unwrap().to_owned();
+    for file_path in files {
+        let file_name = file_path.file_name().unwrap().to_owned();
         println!("Testing {}", file_name.to_str().unwrap());
         let exe_file = format!("chocopy-{}", rand::random::<u32>());
         let mut exe_path = temp_path.clone();
         exe_path.push(exe_file);
 
-        assert!(std::process::Command::new(&compiler_path)
-            .arg(&file)
-            .arg(&exe_path)
-            .spawn()
-            .unwrap()
-            .wait()
-            .unwrap()
-            .success());
+        if !python {
+            assert!(std::process::Command::new(&compiler_path)
+                .arg(&file_path)
+                .arg(&exe_path)
+                .spawn()
+                .unwrap()
+                .wait()
+                .unwrap()
+                .success());
+        }
 
-        let mut file = BufReader::new(std::fs::File::open(&file).unwrap());
+        let mut file = BufReader::new(std::fs::File::open(&file_path).unwrap());
 
         let mut case = 0;
         loop {
@@ -53,11 +76,17 @@ fn main() {
 
             print!("Case {} ---- ", case);
 
-            let process = std::process::Command::new(&exe_path)
-                .stdin(std::process::Stdio::piped())
-                .stdout(std::process::Stdio::piped())
-                .spawn()
-                .unwrap();
+            let process = if !python {
+                std::process::Command::new(&exe_path)
+            } else {
+                let mut p = std::process::Command::new(python_command.unwrap());
+                p.arg(&file_path);
+                p
+            }
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
 
             let mut stdin = process.stdin.unwrap();
             let mut stdout = process.stdout.unwrap();
@@ -101,7 +130,9 @@ fn main() {
             case += 1
         }
 
-        std::fs::remove_file(exe_path).unwrap();
+        if !python {
+            std::fs::remove_file(exe_path).unwrap();
+        }
     }
 
     println!("Passed / Total: {} / {}", passed, total);
