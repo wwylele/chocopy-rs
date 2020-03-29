@@ -18,6 +18,6 @@ jobs:
     - name: Run unit tests
       run: cargo test --verbose
     - name: Verify integration test cases
-      run: cargo run --package chocopy-rs-tester -- chocopy-rs/test/pa3 --python python3
+      run: cargo run --package chocopy-rs-tester -- chocopy-rs/test/pa3 --python python3.8
     - name: Run integration tests
       run: cargo run --package chocopy-rs-tester -- chocopy-rs/test/pa3
