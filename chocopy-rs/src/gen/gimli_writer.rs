@@ -70,6 +70,30 @@ impl Writer for DwarfWriter {
         }
     }
 
+    /// Write an address at the given offset.
+    ///
+    /// If the writer supports relocations, then it must provide its own implementation
+    /// of this method.
+    fn write_address_at(
+        &mut self,
+        offset: usize,
+        address: Address,
+        size: u8,
+    ) -> gimli::write::Result<()> {
+        match address {
+            Address::Symbol { symbol, addend } => {
+                self.relocs.push(DwarfReloc {
+                    offset,
+                    size,
+                    symbol,
+                });
+                self.inner
+                    .write_address_at(offset, Address::Constant(addend as u64), size)
+            }
+            _ => self.inner.write_address_at(offset, address, size),
+        }
+    }
+
     fn write_eh_pointer(
         &mut self,
         address: Address,

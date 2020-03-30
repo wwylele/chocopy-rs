@@ -572,7 +572,7 @@ pub fn gen(
             );
             sub_program.set(
                 gimli::DW_AT_frame_base,
-                gimli::write::AttributeValue::Exprloc(gimli::write::Expression(vec![
+                gimli::write::AttributeValue::Exprloc(gimli::write::Expression::raw(vec![
                     gimli::DW_OP_reg6.0,
                 ])),
             );
@@ -585,7 +585,7 @@ pub fn gen(
             if procedure_debug.parent.is_some() {
                 sub_program.set(
                     gimli::DW_AT_static_link,
-                    gimli::write::AttributeValue::Exprloc(gimli::write::Expression(vec![
+                    gimli::write::AttributeValue::Exprloc(gimli::write::Expression::raw(vec![
                         gimli::DW_OP_fbreg.0,
                         0x78, // -8 in SLEB128
                         gimli::DW_OP_deref.0,
@@ -634,7 +634,9 @@ pub fn gen(
 
                 node.set(
                     gimli::DW_AT_location,
-                    gimli::write::AttributeValue::Exprloc(gimli::write::Expression(offset_expr)),
+                    gimli::write::AttributeValue::Exprloc(gimli::write::Expression::raw(
+                        offset_expr,
+                    )),
                 );
 
                 node.set(
@@ -686,19 +688,22 @@ pub fn gen(
 
     obj.define(GLOBAL_SECTION, vec![0; code_set.global_size])?;
 
-    let global_reloc_hack_magic = 0xDEADB00Fu32;
-
     for global_debug in code_set.globals_debug {
         let node_id = dwarf.unit.add(root_id, gimli::DW_TAG_variable);
         let node = dwarf.unit.get_mut(node_id);
 
-        let mut location = vec![gimli::DW_OP_addr.0];
-        location.extend_from_slice(&global_debug.offset.to_le_bytes());
-        location.extend_from_slice(&global_reloc_hack_magic.to_le_bytes());
+        let mut location = gimli::write::Expression::new();
+        location.op_addr(
+            gimli::write::Address::Symbol {
+                symbol: symbol_pool.len(),
+                addend: global_debug.offset as i64,
+            },
+            8,
+        );
 
         node.set(
             gimli::DW_AT_location,
-            gimli::write::AttributeValue::Exprloc(gimli::write::Expression(location)),
+            gimli::write::AttributeValue::Exprloc(location),
         );
 
         node.set(
@@ -722,6 +727,8 @@ pub fn gen(
         );
     }
 
+    symbol_pool.push(GLOBAL_SECTION.to_owned());
+
     let mut dwarf_sections = gimli::write::Sections::new(DwarfWriter::new());
     dwarf.write(&mut dwarf_sections)?;
     dwarf_sections.for_each(|id, _| -> Result<(), ArtifactError> {
@@ -729,23 +736,7 @@ pub fn gen(
         Ok(())
     })?;
     dwarf_sections.for_each_mut(|id, data| -> Result<(), Box<dyn std::error::Error>> {
-        let (mut data, relocs, self_relocs) = data.take();
-
-        if data.len() >= 4 {
-            for i in 0..data.len() - 3 {
-                if &data[i..i + 4] == &global_reloc_hack_magic.to_le_bytes() {
-                    data[i..i + 4].copy_from_slice(&[0; 4]);
-                    obj.link_with(
-                        Link {
-                            from: &id.name(),
-                            to: GLOBAL_SECTION,
-                            at: (i - 4) as u64,
-                        },
-                        Reloc::Debug { size: 8, addend: 0 },
-                    )?;
-                }
-            }
-        }
+        let (data, relocs, self_relocs) = data.take();
 
         obj.define(&id.name(), data)?;
 
