@@ -264,7 +264,7 @@ pub fn gen(
 
     dwarf.finalize_code_range();
 
-    for chunk in dwarf.finalize()? {
+    for chunk in dwarf.finalize() {
         obj.declare(&chunk.name, Decl::section(SectionKind::Debug))?;
         obj.define(&chunk.name, chunk.code)?;
         for link in chunk.links {

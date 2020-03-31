@@ -466,14 +466,14 @@ impl Dwarf {
         );
     }
 
-    pub fn finalize(mut self) -> std::result::Result<Vec<DebugChunk>, Box<dyn std::error::Error>> {
+    pub fn finalize(mut self) -> Vec<DebugChunk> {
         let mut chunks = vec![];
 
         let mut dwarf_sections = Sections::new(DwarfWriter::new());
-        self.dwarf.write(&mut dwarf_sections)?;
+        self.dwarf.write(&mut dwarf_sections).unwrap();
 
-        dwarf_sections.for_each_mut(
-            |id, data| -> std::result::Result<(), Box<dyn std::error::Error>> {
+        dwarf_sections
+            .for_each_mut(|id, data| -> std::result::Result<(), () /*should be !*/> {
                 let (mut data, relocs, self_relocs) = data.take();
                 let mut links = vec![];
 
@@ -513,9 +513,9 @@ impl Dwarf {
                 });
 
                 Ok(())
-            },
-        )?;
+            })
+            .unwrap();
 
-        Ok(chunks)
+        chunks
     }
 }
