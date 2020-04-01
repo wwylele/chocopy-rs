@@ -190,6 +190,8 @@ impl Dwarf {
                     dwarf_add_base_type(&mut self.dwarf, "bool", DW_ATE_boolean, 1)
                 } else if type_debug.array_level == 0 && type_debug.core_name == "int" {
                     dwarf_add_base_type(&mut self.dwarf, "int", DW_ATE_signed, 4)
+                } else if type_debug.array_level == 0 && type_debug.core_name == "<None>" {
+                    dwarf_add_base_type(&mut self.dwarf, "<None>", DW_ATE_address, 8)
                 } else {
                     let type_string = type_debug.to_string();
                     let is_array = array_level != 0 || type_string == "str";
