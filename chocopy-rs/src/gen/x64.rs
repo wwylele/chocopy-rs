@@ -89,8 +89,8 @@ impl<'a> Emitter<'a> {
             }
             self.emit_pop_rax();
         }
-        // mov rsp,rbp; pop rbp; ret
-        self.emit(&[0x48, 0x89, 0xec, 0x5d, 0xc3])
+        // leave; ret
+        self.emit(&[0xc9, 0xc3])
     }
 
     pub fn prepare_call(&mut self, param_count: usize) {
@@ -99,18 +99,18 @@ impl<'a> Emitter<'a> {
             spill += 1;
         }
         spill *= 8;
-        assert!(spill < 128);
         // sub rsp,{spill}
-        self.emit(&[0x48, 0x83, 0xEC, spill as u8]);
+        self.emit(&[0x48, 0x81, 0xEC]);
+        self.emit(&(spill as u32).to_le_bytes());
         self.rsp_call_restore.push((spill, self.rsp_aligned));
         self.rsp_aligned = true;
     }
 
     pub fn after_call(&mut self) {
         let (spill, rsp_aligned) = self.rsp_call_restore.pop().unwrap();
-        assert!(spill < 128);
         // add rsp,{spill}
-        self.emit(&[0x48, 0x83, 0xC4, spill as u8]);
+        self.emit(&[0x48, 0x81, 0xC4]);
+        self.emit(&(spill as u32).to_le_bytes());
         self.rsp_aligned = rsp_aligned;
     }
 
