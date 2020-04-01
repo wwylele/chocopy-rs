@@ -36,8 +36,8 @@ struct ClassSlot {
 
 struct Emitter<'a> {
     name: String,
-    storage_env: &'a mut StorageEnv,
-    classes: &'a HashMap<String, ClassSlot>,
+    storage_env: Option<&'a mut StorageEnv>,
+    classes: Option<&'a HashMap<String, ClassSlot>>,
     clean_up_list: &'a [i32], // offsets relative to rbp
     level: u32,
     code: Vec<u8>,
@@ -50,8 +50,8 @@ struct Emitter<'a> {
 impl<'a> Emitter<'a> {
     pub fn new(
         name: &str,
-        storage_env: &'a mut StorageEnv,
-        classes: &'a HashMap<String, ClassSlot>,
+        storage_env: Option<&'a mut StorageEnv>,
+        classes: Option<&'a HashMap<String, ClassSlot>>,
         clean_up_list: &'a [i32],
         level: u32,
     ) -> Emitter<'a> {
@@ -819,14 +819,15 @@ impl<'a> Emitter<'a> {
                     assert!(name == "__init__");
                     16
                 } else {
-                    self.classes[&c.class_name].methods[name].offset
+                    self.classes.as_ref().unwrap()[&c.class_name].methods[name].offset
                 }
             } else {
                 panic!()
             };
             self.call_virtual(offset);
         } else {
-            let slot = if let Some(EnvSlot::Func(f)) = self.storage_env.get(name) {
+            let slot = if let Some(EnvSlot::Func(f)) = self.storage_env.as_ref().unwrap().get(name)
+            {
                 f
             } else {
                 panic!()
@@ -940,7 +941,7 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x48, 0x89, 0xC6]);
 
         let slot = if let Some(ValueType::ClassValueType(c)) = &expr.object.inferred_type {
-            &self.classes[&c.class_name].attributes[&expr.member.id().name]
+            &self.classes.as_ref().unwrap()[&c.class_name].attributes[&expr.member.id().name]
         } else {
             panic!()
         };
@@ -1090,12 +1091,13 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn emit_load_var(&mut self, identifier: &Identifier, target_type: &ValueType) {
-        let (offset, level) =
-            if let Some(EnvSlot::Var(v, _)) = self.storage_env.get(&identifier.name) {
-                (v.offset, v.level)
-            } else {
-                panic!()
-            };
+        let (offset, level) = if let Some(EnvSlot::Var(v, _)) =
+            self.storage_env.as_ref().unwrap().get(&identifier.name)
+        {
+            (v.offset, v.level)
+        } else {
+            panic!()
+        };
 
         if level == 0 {
             if target_type == &*TYPE_INT {
@@ -1245,11 +1247,12 @@ impl<'a> Emitter<'a> {
     ) {
         // rax: value to assign
 
-        let (offset, level) = if let Some(EnvSlot::Var(v, _)) = self.storage_env.get(name) {
-            (v.offset, v.level)
-        } else {
-            panic!()
-        };
+        let (offset, level) =
+            if let Some(EnvSlot::Var(v, _)) = self.storage_env.as_ref().unwrap().get(name) {
+                (v.offset, v.level)
+            } else {
+                panic!()
+            };
 
         self.emit_coerce(source_type, target_type);
         if level == 0 {
@@ -1391,7 +1394,8 @@ impl<'a> Emitter<'a> {
 
                     let slot =
                         if let Some(ValueType::ClassValueType(c)) = &expr.object.inferred_type {
-                            &self.classes[&c.class_name].attributes[&expr.member.id().name]
+                            &self.classes.as_ref().unwrap()[&c.class_name].attributes
+                                [&expr.member.id().name]
                         } else {
                             panic!()
                         };
@@ -1589,8 +1593,11 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn emit_global_var_init(&mut self, decl: &VarDef) {
-        let offset = if let Some(EnvSlot::Var(v, _)) =
-            self.storage_env.get(&decl.var.tv().identifier.id().name)
+        let offset = if let Some(EnvSlot::Var(v, _)) = self
+            .storage_env
+            .as_ref()
+            .unwrap()
+            .get(&decl.var.tv().identifier.id().name)
         {
             assert!(v.level == 0);
             v.offset
@@ -1634,8 +1641,11 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn emit_global_var_drop(&mut self, decl: &VarDef) {
-        let offset = if let Some(EnvSlot::Var(v, _)) =
-            self.storage_env.get(&decl.var.tv().identifier.id().name)
+        let offset = if let Some(EnvSlot::Var(v, _)) = self
+            .storage_env
+            .as_ref()
+            .unwrap()
+            .get(&decl.var.tv().identifier.id().name)
         {
             assert!(v.level == 0);
             v.offset
@@ -1745,7 +1755,13 @@ fn gen_function(
 
     let mut handle = storage_env.push(locals);
 
-    let mut code = Emitter::new(&link_name, handle.inner(), classes, &clean_up_list, level);
+    let mut code = Emitter::new(
+        &link_name,
+        Some(handle.inner()),
+        Some(classes),
+        &clean_up_list,
+        level,
+    );
 
     if level != 0 {
         code.emit_push_r10();
@@ -1821,13 +1837,8 @@ fn gen_function(
     chunks
 }
 
-fn gen_ctor(
-    class_name: &str,
-    class_slot: &ClassSlot,
-    storage_env: &mut StorageEnv,
-    classes: &HashMap<String, ClassSlot>,
-) -> Chunk {
-    let mut code = Emitter::new(class_name, storage_env, classes, &[], 0);
+fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
+    let mut code = Emitter::new(class_name, None, None, &[], 0);
 
     code.prepare_call(2);
     // lea rdi,[rip+{}]
@@ -1899,19 +1910,8 @@ fn gen_ctor(
     })
 }
 
-fn gen_dtor(
-    class_name: &str,
-    class_slot: &ClassSlot,
-    storage_env: &mut StorageEnv,
-    classes: &HashMap<String, ClassSlot>,
-) -> Chunk {
-    let mut code = Emitter::new(
-        &(class_name.to_owned() + ".$dtor"),
-        storage_env,
-        classes,
-        &[],
-        0,
-    );
+fn gen_dtor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
+    let mut code = Emitter::new(&(class_name.to_owned() + ".$dtor"), None, None, &[], 0);
     code.emit_push_rdi();
     for (_, attribute) in &class_slot.attributes {
         if attribute.target_type != *TYPE_INT && attribute.target_type != *TYPE_BOOL {
@@ -2110,7 +2110,13 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
 
     let mut storage_env = StorageEnv::new(globals);
 
-    let mut main_code = Emitter::new(BUILTIN_CHOCOPY_MAIN, &mut storage_env, &classes, &[], 0);
+    let mut main_code = Emitter::new(
+        BUILTIN_CHOCOPY_MAIN,
+        Some(&mut storage_env),
+        Some(&classes),
+        &[],
+        0,
+    );
 
     // mov rax,0x12345678
     main_code.emit(&[0x48, 0xC7, 0xC0, 0x78, 0x56, 0x34, 0x12]);
@@ -2189,18 +2195,8 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
     }
 
     for (class_name, class_slot) in &classes {
-        chunks.push(gen_ctor(
-            &class_name,
-            &class_slot,
-            &mut storage_env,
-            &classes,
-        ));
-        chunks.push(gen_dtor(
-            &class_name,
-            &class_slot,
-            &mut storage_env,
-            &classes,
-        ));
+        chunks.push(gen_ctor(&class_name, &class_slot));
+        chunks.push(gen_dtor(&class_name, &class_slot));
 
         let mut prototype = vec![0; class_slot.prototype_size as usize];
         prototype[0..8].copy_from_slice(&(class_slot.object_size as u64).to_le_bytes());
