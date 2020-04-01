@@ -125,6 +125,8 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn call_virtual(&mut self, offset: u32) {
+        // mov rdi,[rsp]
+        self.emit(&[0x48, 0x8B, 0x3C, 0x24]);
         // mov rax,[rdi]
         self.emit(&[0x48, 0x8B, 0x07]);
         // call [rax+{}]
@@ -174,16 +176,6 @@ impl<'a> Emitter<'a> {
         self.rsp_aligned = !self.rsp_aligned;
     }
 
-    pub fn emit_push_r8(&mut self) {
-        self.emit(&[0x41, 0x50]);
-        self.rsp_aligned = !self.rsp_aligned;
-    }
-
-    pub fn emit_push_r9(&mut self) {
-        self.emit(&[0x41, 0x51]);
-        self.rsp_aligned = !self.rsp_aligned;
-    }
-
     pub fn emit_push_r10(&mut self) {
         self.emit(&[0x41, 0x52]);
         self.rsp_aligned = !self.rsp_aligned;
@@ -204,11 +196,6 @@ impl<'a> Emitter<'a> {
         self.rsp_aligned = !self.rsp_aligned;
     }
 
-    pub fn emit_pop_rdx(&mut self) {
-        self.emit(&[0x5a]);
-        self.rsp_aligned = !self.rsp_aligned;
-    }
-
     pub fn emit_pop_rsi(&mut self) {
         self.emit(&[0x5e]);
         self.rsp_aligned = !self.rsp_aligned;
@@ -216,16 +203,6 @@ impl<'a> Emitter<'a> {
 
     pub fn emit_pop_rdi(&mut self) {
         self.emit(&[0x5f]);
-        self.rsp_aligned = !self.rsp_aligned;
-    }
-
-    pub fn emit_pop_r8(&mut self) {
-        self.emit(&[0x41, 0x58]);
-        self.rsp_aligned = !self.rsp_aligned;
-    }
-
-    pub fn emit_pop_r9(&mut self) {
-        self.emit(&[0x41, 0x59]);
         self.rsp_aligned = !self.rsp_aligned;
     }
 
@@ -763,7 +740,7 @@ impl<'a> Emitter<'a> {
         name: &str,
         virtual_call: bool,
     ) {
-        self.prepare_call(args.len().saturating_sub(6));
+        self.prepare_call(args.len());
 
         for (i, arg) in args.iter().enumerate() {
             self.emit_expression(arg);
@@ -776,41 +753,10 @@ impl<'a> Emitter<'a> {
                 self.emit_check_none();
             }
 
-            if i < 6 {
-                self.emit_push_rax();
-            } else {
-                // note that at these point, 6 params has been pushed on to the
-                // stack in reversed order. We want to fill in more params after these 6 params
-                // in the ABI required order.
-                let offset = i * 8;
-                assert!(offset < 128);
-                // mov QWORD PTR [rsp+{offset}],rax
-                self.emit(&[0x48, 0x89, 0x44, 0x24, offset as u8]);
-            }
-        }
-
-        if args.len() >= 6 {
-            self.emit_pop_r9();
-        }
-
-        if args.len() >= 5 {
-            self.emit_pop_r8();
-        }
-
-        if args.len() >= 4 {
-            self.emit_pop_rcx();
-        }
-
-        if args.len() >= 3 {
-            self.emit_pop_rdx();
-        }
-
-        if args.len() >= 2 {
-            self.emit_pop_rsi();
-        }
-
-        if args.len() >= 1 {
-            self.emit_pop_rdi();
+            let offset = i * 8;
+            // mov QWORD PTR [rsp+{offset}],rax
+            self.emit(&[0x48, 0x89, 0x84, 0x24]);
+            self.emit(&(offset as u32).to_le_bytes());
         }
 
         if virtual_call {
@@ -1683,18 +1629,11 @@ fn gen_function(
     let mut locals = HashMap::new();
     let mut clean_up_list = vec![];
 
-    let mut local_offset = if level == 0 { -8 } else { -16 };
-
     let mut params_debug = vec![];
 
     for (i, param) in function.params.iter().enumerate() {
         let offset;
-        if i < 6 {
-            offset = local_offset;
-            local_offset -= 8;
-        } else {
-            offset = (i - 6) as i32 * 8 + 16;
-        }
+        offset = i as i32 * 8 + 16;
         let name = &param.tv().identifier.id().name;
         locals.insert(
             name.clone(),
@@ -1717,6 +1656,8 @@ fn gen_function(
     }
 
     let mut locals_debug = vec![];
+
+    let mut local_offset = if level == 0 { -8 } else { -16 };
 
     for declaration in &function.declarations {
         if let Declaration::VarDef(v) = declaration {
@@ -1765,30 +1706,6 @@ fn gen_function(
 
     if level != 0 {
         code.emit_push_r10();
-    }
-
-    if function.params.len() >= 1 {
-        code.emit_push_rdi();
-    }
-
-    if function.params.len() >= 2 {
-        code.emit_push_rsi();
-    }
-
-    if function.params.len() >= 3 {
-        code.emit_push_rdx();
-    }
-
-    if function.params.len() >= 4 {
-        code.emit_push_rcx();
-    }
-
-    if function.params.len() >= 5 {
-        code.emit_push_r8();
-    }
-
-    if function.params.len() >= 6 {
-        code.emit_push_r9();
     }
 
     for declaration in &function.declarations {
@@ -1889,9 +1806,9 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
     // mov rax,[rsp]
     code.emit(&[0x48, 0x8B, 0x04, 0x24]);
     code.emit_clone();
-    code.prepare_call(0);
-    // mov rdi,rax
-    code.emit(&[0x48, 0x89, 0xC7]);
+    code.prepare_call(1);
+    // mov [rsp],rax
+    code.emit(&[0x48, 0x89, 0x04, 0x24]);
     code.call_virtual(16);
 
     code.emit_pop_rax();
@@ -1912,6 +1829,7 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
 
 fn gen_dtor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
     let mut code = Emitter::new(&(class_name.to_owned() + ".$dtor"), None, None, &[], 0);
+    // Note: This uses C ABI instead of chocopy ABI
     code.emit_push_rdi();
     for (_, attribute) in &class_slot.attributes {
         if attribute.target_type != *TYPE_INT && attribute.target_type != *TYPE_BOOL {
@@ -2003,8 +1921,8 @@ fn gen_str() -> Chunk {
 
 fn gen_object_init() -> Chunk {
     let mut code = Emitter::new("object.__init__", None, None, &[], 0);
-    // mov rax,rdi
-    code.emit(&[0x48, 0x89, 0xF8]);
+    // mov rax,[rsp+16]
+    code.emit(&[0x48, 0x8B, 0x44, 0x24, 0x10]);
     code.emit_drop();
     code.emit_none_literal();
     code.end_proc();
@@ -2018,7 +1936,7 @@ fn gen_object_init() -> Chunk {
             array_level: 0,
         },
         params: vec![VarDebug {
-            offset: -8,
+            offset: 16,
             line: 0,
             name: "self".to_owned(),
             var_type: TypeDebug {
@@ -2032,6 +1950,8 @@ fn gen_object_init() -> Chunk {
 
 fn gen_len() -> Chunk {
     let mut code = Emitter::new("len", None, None, &[], 0);
+    // mov rdi,[rsp+16]
+    code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]);
     code.prepare_call(0);
     code.call(BUILTIN_LEN);
     code.end_proc();
@@ -2045,7 +1965,7 @@ fn gen_len() -> Chunk {
             array_level: 0,
         },
         params: vec![VarDebug {
-            offset: -8,
+            offset: 16,
             line: 0,
             name: "object".to_owned(),
             var_type: TypeDebug {
@@ -2078,6 +1998,8 @@ fn gen_input() -> Chunk {
 
 fn gen_print() -> Chunk {
     let mut code = Emitter::new("print", None, None, &[], 0);
+    // mov rdi,[rsp+16]
+    code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]);
     code.prepare_call(0);
     code.call(BUILTIN_PRINT);
     code.end_proc();
@@ -2091,7 +2013,7 @@ fn gen_print() -> Chunk {
             array_level: 0,
         },
         params: vec![VarDebug {
-            offset: -8,
+            offset: 16,
             line: 0,
             name: "object".to_owned(),
             var_type: TypeDebug {
