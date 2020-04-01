@@ -1818,10 +1818,7 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
         artificial: true,
         parent: None,
         lines: vec![],
-        return_type: TypeDebug {
-            core_name: class_name.to_owned(),
-            array_level: 0,
-        },
+        return_type: TypeDebug::class_type(class_name),
         params: vec![],
         locals: vec![],
     })
@@ -1848,18 +1845,12 @@ fn gen_dtor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
         artificial: true,
         parent: None,
         lines: vec![],
-        return_type: TypeDebug {
-            core_name: "<None>".to_owned(),
-            array_level: 0,
-        },
+        return_type: TypeDebug::class_type("<None>"),
         params: vec![VarDebug {
             offset: -8,
             line: 0,
             name: "self".to_owned(),
-            var_type: TypeDebug {
-                core_name: class_name.to_owned(),
-                array_level: 0,
-            },
+            var_type: TypeDebug::class_type(class_name),
         }],
         locals: vec![],
     })
@@ -1874,10 +1865,7 @@ fn gen_int() -> Chunk {
         artificial: true,
         parent: None,
         lines: vec![],
-        return_type: TypeDebug {
-            core_name: "int".to_owned(),
-            array_level: 0,
-        },
+        return_type: TypeDebug::class_type("int"),
         params: vec![],
         locals: vec![],
     })
@@ -1892,10 +1880,7 @@ fn gen_bool() -> Chunk {
         artificial: true,
         parent: None,
         lines: vec![],
-        return_type: TypeDebug {
-            core_name: "bool".to_owned(),
-            array_level: 0,
-        },
+        return_type: TypeDebug::class_type("bool"),
         params: vec![],
         locals: vec![],
     })
@@ -1910,10 +1895,7 @@ fn gen_str() -> Chunk {
         artificial: true,
         parent: None,
         lines: vec![],
-        return_type: TypeDebug {
-            core_name: "str".to_owned(),
-            array_level: 0,
-        },
+        return_type: TypeDebug::class_type("str"),
         params: vec![],
         locals: vec![],
     })
@@ -1931,18 +1913,12 @@ fn gen_object_init() -> Chunk {
         artificial: true,
         parent: None,
         lines: vec![],
-        return_type: TypeDebug {
-            core_name: "<None>".to_owned(),
-            array_level: 0,
-        },
+        return_type: TypeDebug::class_type("<None>"),
         params: vec![VarDebug {
             offset: 16,
             line: 0,
             name: "self".to_owned(),
-            var_type: TypeDebug {
-                core_name: "object".to_owned(),
-                array_level: 0,
-            },
+            var_type: TypeDebug::class_type("object"),
         }],
         locals: vec![],
     })
@@ -1960,18 +1936,12 @@ fn gen_len() -> Chunk {
         artificial: true,
         parent: None,
         lines: vec![],
-        return_type: TypeDebug {
-            core_name: "int".to_owned(),
-            array_level: 0,
-        },
+        return_type: TypeDebug::class_type("int"),
         params: vec![VarDebug {
             offset: 16,
             line: 0,
             name: "object".to_owned(),
-            var_type: TypeDebug {
-                core_name: "object".to_owned(),
-                array_level: 0,
-            },
+            var_type: TypeDebug::class_type("object"),
         }],
         locals: vec![],
     })
@@ -1986,10 +1956,7 @@ fn gen_input() -> Chunk {
         decl_line: 0,
         artificial: true,
         parent: None,
-        return_type: TypeDebug {
-            core_name: "str".to_owned(),
-            array_level: 0,
-        },
+        return_type: TypeDebug::class_type("str"),
         params: vec![],
         lines: vec![],
         locals: vec![],
@@ -2008,18 +1975,12 @@ fn gen_print() -> Chunk {
         artificial: true,
         parent: None,
         lines: vec![],
-        return_type: TypeDebug {
-            core_name: "<None>".to_owned(),
-            array_level: 0,
-        },
+        return_type: TypeDebug::class_type("<None>"),
         params: vec![VarDebug {
             offset: 16,
             line: 0,
             name: "object".to_owned(),
-            var_type: TypeDebug {
-                core_name: "object".to_owned(),
-                array_level: 0,
-            },
+            var_type: TypeDebug::class_type("object"),
         }],
         locals: vec![],
     })
@@ -2065,14 +2026,8 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
                 (
                     "__init__".to_owned(),
                     MethodDebug {
-                        params: vec![TypeDebug {
-                            core_name: "object".to_owned(),
-                            array_level: 0,
-                        }],
-                        return_type: TypeDebug {
-                            core_name: "<None>".to_owned(),
-                            array_level: 0,
-                        },
+                        params: vec![TypeDebug::class_type("object")],
+                        return_type: TypeDebug::class_type("<None>"),
                     },
                 ),
             ))
@@ -2282,10 +2237,7 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
         artificial: false,
         parent: None,
         lines,
-        return_type: TypeDebug {
-            core_name: "<None>".to_owned(),
-            array_level: 0,
-        },
+        return_type: TypeDebug::class_type("<None>"),
         params: vec![],
         locals: vec![],
     });

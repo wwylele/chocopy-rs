@@ -260,14 +260,8 @@ impl Dwarf {
         }
 
         let object_init_type = self.add_method_type(MethodDebug {
-            params: vec![TypeDebug {
-                core_name: "object".to_owned(),
-                array_level: 0,
-            }],
-            return_type: TypeDebug {
-                core_name: "<None>".to_owned(),
-                array_level: 0,
-            },
+            params: vec![TypeDebug::class_type("object")],
+            return_type: TypeDebug::class_type("<None>"),
         });
 
         dwarf_add_member(
@@ -279,14 +273,8 @@ impl Dwarf {
         );
 
         let dtor_type = self.add_method_type(MethodDebug {
-            return_type: TypeDebug {
-                core_name: "<None>".to_owned(),
-                array_level: 0,
-            },
-            params: vec![TypeDebug {
-                core_name: "object".to_owned(),
-                array_level: 0,
-            }],
+            return_type: TypeDebug::class_type("<None>"),
+            params: vec![TypeDebug::class_type("object")],
         });
 
         dwarf_add_member(
@@ -324,10 +312,7 @@ impl Dwarf {
 
     pub fn add_class(&mut self, class_name: String, class_debug: ClassDebug) {
         let prototype_name = class_name.clone() + ".$prototype";
-        let tag_id = self.debug_types[&TypeDebug {
-            core_name: class_name.clone(),
-            array_level: 0,
-        }];
+        let tag_id = self.debug_types[&TypeDebug::class_type(&class_name)];
 
         let tag_id = if let AttributeValue::ThisUnitEntryRef(id) =
             self.dwarf.unit.get(tag_id).get(DW_AT_type).unwrap()
@@ -351,14 +336,8 @@ impl Dwarf {
         dwarf_add_member(&mut self.dwarf, prototype_id, "$size", self.size_t_id, 0);
 
         let dtor_type = self.add_method_type(MethodDebug {
-            return_type: TypeDebug {
-                core_name: "<None>".to_owned(),
-                array_level: 0,
-            },
-            params: vec![TypeDebug {
-                core_name: class_name,
-                array_level: 0,
-            }],
+            return_type: TypeDebug::class_type("<None>"),
+            params: vec![TypeDebug::class_type(&class_name)],
         });
 
         dwarf_add_member(&mut self.dwarf, prototype_id, "$dtor", dtor_type, 8);

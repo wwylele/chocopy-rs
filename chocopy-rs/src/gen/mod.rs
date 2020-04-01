@@ -39,6 +39,12 @@ struct TypeDebug {
 }
 
 impl TypeDebug {
+    fn class_type(name: &str) -> TypeDebug {
+        TypeDebug {
+            core_name: name.to_owned(),
+            array_level: 0,
+        }
+    }
     fn from_annotation(type_annotation: &TypeAnnotation) -> TypeDebug {
         match type_annotation {
             TypeAnnotation::ClassType(c) => TypeDebug {
