@@ -9,7 +9,7 @@ static ALLOC_COUNTER: AtomicU64 = AtomicU64::new(0);
 pub struct Prototype {
     size: i64,
     dtor: unsafe extern "C" fn(*mut u8),
-    ctor: unsafe extern "C" fn(*mut u8) -> *mut u8,
+    ctor: unsafe extern "C" fn(),
     // followed by other method pointers
 }
 
@@ -95,14 +95,9 @@ unsafe extern "C" fn dtor_list(pointer: *mut u8) {
     }
 }
 
-#[export_name = "object.__init__"]
-pub unsafe extern "C" fn object_init(pointer: *mut u8) -> *mut u8 {
-    let object = pointer as *mut Object;
-    (*object).ref_count -= 1;
-    if (*object).ref_count == 0 {
-        free_obj(pointer);
-    }
-    std::ptr::null_mut()
+extern "C" {
+    #[link_name = "object.__init__"]
+    fn object_init();
 }
 
 #[export_name = "$alloc_obj"]
@@ -212,21 +207,6 @@ pub unsafe extern "C" fn input() -> *mut u8 {
         input.len(),
     );
     pointer
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn int() -> i32 {
-    0
-}
-
-#[export_name = "bool"]
-pub unsafe extern "C" fn bool_() -> bool {
-    false
-}
-
-#[export_name = "str"]
-pub unsafe extern "C" fn str_() -> *mut u8 {
-    alloc_obj(&STR_PROTOTYPE as *const Prototype, 0)
 }
 
 #[cfg(not(test))]

@@ -330,18 +330,18 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x48, 0x31, 0xC0]);
     }
 
-    pub fn emit_int_literal(&mut self, i: &IntegerLiteral) {
+    pub fn emit_int_literal(&mut self, i: i32) {
         // mov eax,{i}
         self.emit(&[0xB8]);
-        self.emit(&i.value.to_le_bytes());
+        self.emit(&i.to_le_bytes());
     }
 
-    pub fn emit_bool_literal(&mut self, b: &BooleanLiteral) {
+    pub fn emit_bool_literal(&mut self, b: bool) {
         // mov al,{}
-        self.emit(&[0xB0, b.value as u8]);
+        self.emit(&[0xB0, b as u8]);
     }
 
-    pub fn emit_string_literal(&mut self, s: &StringLiteral) {
+    pub fn emit_string_literal(&mut self, s: &str) {
         self.prepare_call(2);
         // mov rdi,[rip+{STR_PROTOTYPE}]
         self.emit(&[0x48, 0x8B, 0x3D]);
@@ -352,18 +352,18 @@ impl<'a> Emitter<'a> {
         self.emit(&[0; 4]);
         // mov rsi,{len}
         self.emit(&[0x48, 0xc7, 0xc6]);
-        self.emit(&(s.value.len() as u32).to_le_bytes());
+        self.emit(&(s.len() as u32).to_le_bytes());
         self.call(BUILTIN_ALLOC_OBJ);
-        if s.value.len() != 0 {
+        if s.len() != 0 {
             // lea rdi,[rax+24]
             self.emit(&[0x48, 0x8D, 0x78, 0x18]);
             // lea rsi,[rip+{STR}]
             self.emit(&[0x48, 0x8d, 0x35]);
-            self.strings.push((self.pos(), s.value.clone()));
+            self.strings.push((self.pos(), s.to_owned()));
             self.emit(&[0; 4]);
             // mov rcx,{len}
             self.emit(&[0x48, 0xc7, 0xc1]);
-            self.emit(&(s.value.len() as u32).to_le_bytes());
+            self.emit(&(s.len() as u32).to_le_bytes());
             // mov dl,[rsi]
             self.emit(&[0x8A, 0x16]);
             // mov [rdi],dl
@@ -1157,13 +1157,13 @@ impl<'a> Emitter<'a> {
                 self.emit_none_literal();
             }
             ExprContent::IntegerLiteral(i) => {
-                self.emit_int_literal(i);
+                self.emit_int_literal(i.value);
             }
             ExprContent::BooleanLiteral(b) => {
-                self.emit_bool_literal(b);
+                self.emit_bool_literal(b.value);
             }
             ExprContent::StringLiteral(s) => {
-                self.emit_string_literal(s);
+                self.emit_string_literal(&s.value);
             }
             ExprContent::UnaryExpr(expr) => {
                 self.emit_expression(&expr.operand);
@@ -1577,13 +1577,13 @@ impl<'a> Emitter<'a> {
                 self.emit_none_literal();
             }
             LiteralContent::IntegerLiteral(i) => {
-                self.emit_int_literal(i);
+                self.emit_int_literal(i.value);
             }
             LiteralContent::BooleanLiteral(b) => {
-                self.emit_bool_literal(b);
+                self.emit_bool_literal(b.value);
             }
             LiteralContent::StringLiteral(s) => {
-                self.emit_string_literal(s);
+                self.emit_string_literal(&s.value);
             }
         }
 
@@ -1610,13 +1610,13 @@ impl<'a> Emitter<'a> {
                 self.emit_none_literal();
             }
             LiteralContent::IntegerLiteral(i) => {
-                self.emit_int_literal(i);
+                self.emit_int_literal(i.value);
             }
             LiteralContent::BooleanLiteral(b) => {
-                self.emit_bool_literal(b);
+                self.emit_bool_literal(b.value);
             }
             LiteralContent::StringLiteral(s) => {
-                self.emit_string_literal(s);
+                self.emit_string_literal(&s.value);
             }
         }
 
@@ -1859,13 +1859,13 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
                 code.emit_none_literal();
             }
             LiteralContent::IntegerLiteral(i) => {
-                code.emit_int_literal(i);
+                code.emit_int_literal(i.value);
             }
             LiteralContent::BooleanLiteral(b) => {
-                code.emit_bool_literal(b);
+                code.emit_bool_literal(b.value);
             }
             LiteralContent::StringLiteral(s) => {
-                code.emit_string_literal(s);
+                code.emit_string_literal(&s.value);
             }
         }
 
@@ -1940,6 +1940,89 @@ fn gen_dtor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
             name: "self".to_owned(),
             var_type: TypeDebug {
                 core_name: class_name.to_owned(),
+                array_level: 0,
+            },
+        }],
+        locals: vec![],
+    })
+}
+
+fn gen_int() -> Chunk {
+    let mut code = Emitter::new("int", None, None, &[], 0);
+    code.emit_int_literal(0);
+    code.end_proc();
+    code.finalize(ProcedureDebug {
+        decl_line: 0,
+        artificial: true,
+        parent: None,
+        lines: vec![],
+        return_type: TypeDebug {
+            core_name: "int".to_owned(),
+            array_level: 0,
+        },
+        params: vec![],
+        locals: vec![],
+    })
+}
+
+fn gen_bool() -> Chunk {
+    let mut code = Emitter::new("bool", None, None, &[], 0);
+    code.emit_bool_literal(false);
+    code.end_proc();
+    code.finalize(ProcedureDebug {
+        decl_line: 0,
+        artificial: true,
+        parent: None,
+        lines: vec![],
+        return_type: TypeDebug {
+            core_name: "bool".to_owned(),
+            array_level: 0,
+        },
+        params: vec![],
+        locals: vec![],
+    })
+}
+
+fn gen_str() -> Chunk {
+    let mut code = Emitter::new("str", None, None, &[], 0);
+    code.emit_string_literal("");
+    code.end_proc();
+    code.finalize(ProcedureDebug {
+        decl_line: 0,
+        artificial: true,
+        parent: None,
+        lines: vec![],
+        return_type: TypeDebug {
+            core_name: "str".to_owned(),
+            array_level: 0,
+        },
+        params: vec![],
+        locals: vec![],
+    })
+}
+
+fn gen_object_init() -> Chunk {
+    let mut code = Emitter::new("object.__init__", None, None, &[], 0);
+    // mov rax,rdi
+    code.emit(&[0x48, 0x89, 0xF8]);
+    code.emit_drop();
+    code.emit_none_literal();
+    code.end_proc();
+    code.finalize(ProcedureDebug {
+        decl_line: 0,
+        artificial: true,
+        parent: None,
+        lines: vec![],
+        return_type: TypeDebug {
+            core_name: "<None>".to_owned(),
+            array_level: 0,
+        },
+        params: vec![VarDebug {
+            offset: -8,
+            line: 0,
+            name: "self".to_owned(),
+            var_type: TypeDebug {
+                core_name: "object".to_owned(),
                 array_level: 0,
             },
         }],
@@ -2215,6 +2298,11 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
             extra: ChunkExtra::Data,
         });
     }
+
+    chunks.push(gen_int());
+    chunks.push(gen_bool());
+    chunks.push(gen_str());
+    chunks.push(gen_object_init());
 
     CodeSet {
         chunks,

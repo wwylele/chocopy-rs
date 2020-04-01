@@ -204,10 +204,6 @@ pub fn gen(
         ("len", Decl::function_import().into()),
         ("print", Decl::function_import().into()),
         ("input", Decl::function_import().into()),
-        ("object.__init__", Decl::function_import().into()),
-        ("str", Decl::function_import().into()),
-        ("int", Decl::function_import().into()),
-        ("bool", Decl::function_import().into()),
         // global
         (GLOBAL_SECTION, Decl::data().writable().into()),
     ];
@@ -240,7 +236,7 @@ pub fn gen(
 
     for chunk in &code_set.chunks {
         if let ChunkExtra::Procedure(_) = chunk.extra {
-            if chunk.name == BUILTIN_CHOCOPY_MAIN {
+            if chunk.name == BUILTIN_CHOCOPY_MAIN || chunk.name == "object.__init__" {
                 obj.declare(&chunk.name, Decl::function().global())?;
             } else {
                 obj.declare(&chunk.name, Decl::function().local())?
