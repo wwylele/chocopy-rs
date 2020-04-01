@@ -2060,7 +2060,23 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
         ClassDebug {
             size: 0,
             attributes: vec![],
-            methods: vec![("__init__".to_owned(), 16)],
+            methods: std::iter::once((
+                16,
+                (
+                    "__init__".to_owned(),
+                    MethodDebug {
+                        params: vec![TypeDebug {
+                            core_name: "object".to_owned(),
+                            array_level: 0,
+                        }],
+                        return_type: TypeDebug {
+                            core_name: "<None>".to_owned(),
+                            array_level: 0,
+                        },
+                    },
+                ),
+            ))
+            .collect(),
         },
     );
     for declaration in &ast.program().declarations {
@@ -2149,6 +2165,14 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
                     let link_name = class_name.clone() + "." + method_name;
                     if let Some(method) = class_slot.methods.get_mut(method_name) {
                         method.link_name = link_name;
+
+                        let self_type = TypeDebug::from_annotation(&f.params[0].tv().type_);
+                        class_debug
+                            .methods
+                            .get_mut(&method.offset)
+                            .unwrap()
+                            .1
+                            .params[0] = self_type;
                     } else {
                         let offset = class_slot.prototype_size;
                         class_slot
@@ -2156,9 +2180,23 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
                             .insert(method_name.clone(), MethodSlot { offset, link_name });
                         class_slot.prototype_size += 8;
 
-                        class_debug
-                            .methods
-                            .push((method_name.clone(), offset as i32));
+                        let params = f
+                            .params
+                            .iter()
+                            .map(|tv| TypeDebug::from_annotation(&tv.tv().type_))
+                            .collect();
+                        let return_type = TypeDebug::from_annotation(&f.return_type);
+
+                        class_debug.methods.insert(
+                            offset,
+                            (
+                                method_name.clone(),
+                                MethodDebug {
+                                    params,
+                                    return_type,
+                                },
+                            ),
+                        );
                     }
                 }
             }

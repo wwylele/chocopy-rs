@@ -122,11 +122,17 @@ struct DebugChunk {
     links: Vec<DebugChunkLink>,
 }
 
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct MethodDebug {
+    params: Vec<TypeDebug>,
+    return_type: TypeDebug,
+}
+
 #[derive(Clone)]
 struct ClassDebug {
     size: u32,
     attributes: Vec<VarDebug>,
-    methods: Vec<(String, i32)>,
+    methods: HashMap<u32, (String, MethodDebug)>,
 }
 
 impl ClassDebug {
