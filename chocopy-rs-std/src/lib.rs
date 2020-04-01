@@ -136,7 +136,7 @@ pub unsafe extern "C" fn free_obj(pointer: *mut u8) {
     ALLOC_COUNTER.fetch_sub(1, Ordering::SeqCst);
 }
 
-#[no_mangle]
+#[export_name = "$len"]
 pub unsafe extern "C" fn len(pointer: *mut u8) -> i32 {
     if pointer.is_null() {
         invalid_arg();
@@ -158,7 +158,7 @@ pub unsafe extern "C" fn len(pointer: *mut u8) -> i32 {
     len
 }
 
-#[no_mangle]
+#[export_name = "$print"]
 pub unsafe extern "C" fn print(pointer: *mut u8) -> *mut u8 {
     if pointer.is_null() {
         invalid_arg();
@@ -195,7 +195,7 @@ pub unsafe extern "C" fn print(pointer: *mut u8) -> *mut u8 {
     std::ptr::null_mut()
 }
 
-#[no_mangle]
+#[export_name = "$input"]
 pub unsafe extern "C" fn input() -> *mut u8 {
     let mut input = String::new();
     std::io::stdin().read_line(&mut input).unwrap();

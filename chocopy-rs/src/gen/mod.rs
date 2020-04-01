@@ -17,13 +17,19 @@ const STR_PROTOTYPE: &'static str = "str.$proto";
 const BOOL_LIST_PROTOTYPE: &'static str = "[bool].$proto";
 const INT_LIST_PROTOTYPE: &'static str = "[int].$proto";
 const OBJECT_LIST_PROTOTYPE: &'static str = "[object].$proto";
+
 const BUILTIN_ALLOC_OBJ: &'static str = "$alloc_obj";
 const BUILTIN_FREE_OBJ: &'static str = "$free_obj";
 const BUILTIN_BROKEN_STACK: &'static str = "$broken_stack";
 const BUILTIN_DIV_ZERO: &'static str = "$div_zero";
 const BUILTIN_OUT_OF_BOUND: &'static str = "$out_of_bound";
 const BUILTIN_NONE_OP: &'static str = "$none_op";
+const BUILTIN_LEN: &'static str = "$len";
+const BUILTIN_INPUT: &'static str = "$input";
+const BUILTIN_PRINT: &'static str = "$print";
+
 const BUILTIN_CHOCOPY_MAIN: &'static str = "$chocopy_main";
+
 const GLOBAL_SECTION: &'static str = "$global";
 
 #[derive(PartialEq, Eq, Hash, Clone)]
@@ -193,17 +199,16 @@ pub fn gen(
         (BOOL_LIST_PROTOTYPE, Decl::data_import().into()),
         (INT_LIST_PROTOTYPE, Decl::data_import().into()),
         (OBJECT_LIST_PROTOTYPE, Decl::data_import().into()),
-        // hidden built-in functions
+        // library functions
         (BUILTIN_ALLOC_OBJ, Decl::function_import().into()),
         (BUILTIN_FREE_OBJ, Decl::function_import().into()),
         (BUILTIN_BROKEN_STACK, Decl::function_import().into()),
         (BUILTIN_DIV_ZERO, Decl::function_import().into()),
         (BUILTIN_OUT_OF_BOUND, Decl::function_import().into()),
         (BUILTIN_NONE_OP, Decl::function_import().into()),
-        // built-in functions
-        ("len", Decl::function_import().into()),
-        ("print", Decl::function_import().into()),
-        ("input", Decl::function_import().into()),
+        (BUILTIN_LEN, Decl::function_import().into()),
+        (BUILTIN_PRINT, Decl::function_import().into()),
+        (BUILTIN_INPUT, Decl::function_import().into()),
         // global
         (GLOBAL_SECTION, Decl::data().writable().into()),
     ];

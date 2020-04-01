@@ -93,8 +93,8 @@ impl<'a> Emitter<'a> {
         self.emit(&[0xc9, 0xc3])
     }
 
-    pub fn prepare_call(&mut self, param_count: usize) {
-        let mut spill = param_count.saturating_sub(6);
+    pub fn prepare_call(&mut self, stack_reserve: usize) {
+        let mut spill = stack_reserve;
         if self.rsp_aligned != (spill % 2 == 0) {
             spill += 1;
         }
@@ -254,7 +254,7 @@ impl<'a> Emitter<'a> {
 
     pub fn emit_box_int(&mut self) {
         self.emit_push_rax();
-        self.prepare_call(2);
+        self.prepare_call(0);
         // mov rdi,[rip+{INT_PROTOTYPE}]
         self.emit(&[0x48, 0x8B, 0x3D]);
         self.links.push(ChunkLink {
@@ -272,7 +272,7 @@ impl<'a> Emitter<'a> {
 
     pub fn emit_box_bool(&mut self) {
         self.emit_push_rax();
-        self.prepare_call(2);
+        self.prepare_call(0);
         // mov rdi,[rip+{BOOL_PROTOTYPE}]
         self.emit(&[0x48, 0x8B, 0x3D]);
         self.links.push(ChunkLink {
@@ -303,7 +303,7 @@ impl<'a> Emitter<'a> {
             let pos = self.pos();
             self.emit(&[0; 4]);
 
-            self.prepare_call(1);
+            self.prepare_call(0);
             // mov rdi,rax
             self.emit(&[0x48, 0x89, 0xc7]);
             self.call(BUILTIN_FREE_OBJ);
@@ -342,7 +342,7 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn emit_string_literal(&mut self, s: &str) {
-        self.prepare_call(2);
+        self.prepare_call(0);
         // mov rdi,[rip+{STR_PROTOTYPE}]
         self.emit(&[0x48, 0x8B, 0x3D]);
         self.links.push(ChunkLink {
@@ -389,7 +389,7 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x48, 0x03, 0x70, 0x10]);
         self.emit_push_rax();
 
-        self.prepare_call(2);
+        self.prepare_call(0);
         // mov rdi,[rip+{STR_PROTOTYPE}]
         self.emit(&[0x48, 0x8B, 0x3D]);
         self.links.push(ChunkLink {
@@ -536,7 +536,7 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x48, 0x03, 0x70, 0x10]);
         self.emit_push_rax();
 
-        self.prepare_call(2);
+        self.prepare_call(0);
         // mov rdi,[rip+{_PROTOTYPE}]
         self.emit(&[0x48, 0x8B, 0x3D]);
         self.links.push(ChunkLink {
@@ -763,7 +763,7 @@ impl<'a> Emitter<'a> {
         name: &str,
         virtual_call: bool,
     ) {
-        self.prepare_call(args.len());
+        self.prepare_call(args.len().saturating_sub(6));
 
         for (i, arg) in args.iter().enumerate() {
             self.emit_expression(arg);
@@ -856,7 +856,7 @@ impl<'a> Emitter<'a> {
         // cdqe
         self.emit(&[0x48, 0x98]);
         self.emit_push_rax();
-        self.prepare_call(2);
+        self.prepare_call(0);
         // mov rdi,[rip+{STR_PROTOTYPE}]
         self.emit(&[0x48, 0x8B, 0x3D]);
         self.links.push(ChunkLink {
@@ -1024,7 +1024,7 @@ impl<'a> Emitter<'a> {
 
     pub fn emit_list_expr(&mut self, expr: &ListExpr, target_type: &ValueType) {
         if target_type == &*TYPE_EMPTY {
-            self.prepare_call(2);
+            self.prepare_call(0);
             // mov rdi,[rip+{_PROTOTYPE}]
             self.emit(&[0x48, 0x8B, 0x3D]);
             self.links.push(ChunkLink {
@@ -1053,7 +1053,7 @@ impl<'a> Emitter<'a> {
             OBJECT_LIST_PROTOTYPE
         };
 
-        self.prepare_call(2);
+        self.prepare_call(0);
         // mov rdi,[rip+{_PROTOTYPE}]
         self.emit(&[0x48, 0x8B, 0x3D]);
         self.links.push(ChunkLink {
@@ -1465,7 +1465,7 @@ impl<'a> Emitter<'a> {
         //// Compute the element
         let iterable_type = stmt.iterable.inferred_type.as_ref().unwrap();
         let source_type = if iterable_type == &*TYPE_STR {
-            self.prepare_call(2);
+            self.prepare_call(0);
             // mov rdi,[rip+{STR_PROTOTYPE}]
             self.emit(&[0x48, 0x8B, 0x3D]);
             self.links.push(ChunkLink {
@@ -1840,7 +1840,7 @@ fn gen_function(
 fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
     let mut code = Emitter::new(class_name, None, None, &[], 0);
 
-    code.prepare_call(2);
+    code.prepare_call(0);
     // lea rdi,[rip+{}]
     code.emit(&[0x48, 0x8D, 0x3D]);
     code.links.push(ChunkLink {
@@ -1889,7 +1889,7 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
     // mov rax,[rsp]
     code.emit(&[0x48, 0x8B, 0x04, 0x24]);
     code.emit_clone();
-    code.prepare_call(1);
+    code.prepare_call(0);
     // mov rdi,rax
     code.emit(&[0x48, 0x89, 0xC7]);
     code.call_virtual(16);
@@ -2021,6 +2021,79 @@ fn gen_object_init() -> Chunk {
             offset: -8,
             line: 0,
             name: "self".to_owned(),
+            var_type: TypeDebug {
+                core_name: "object".to_owned(),
+                array_level: 0,
+            },
+        }],
+        locals: vec![],
+    })
+}
+
+fn gen_len() -> Chunk {
+    let mut code = Emitter::new("len", None, None, &[], 0);
+    code.prepare_call(0);
+    code.call(BUILTIN_LEN);
+    code.end_proc();
+    code.finalize(ProcedureDebug {
+        decl_line: 0,
+        artificial: true,
+        parent: None,
+        lines: vec![],
+        return_type: TypeDebug {
+            core_name: "int".to_owned(),
+            array_level: 0,
+        },
+        params: vec![VarDebug {
+            offset: -8,
+            line: 0,
+            name: "object".to_owned(),
+            var_type: TypeDebug {
+                core_name: "object".to_owned(),
+                array_level: 0,
+            },
+        }],
+        locals: vec![],
+    })
+}
+
+fn gen_input() -> Chunk {
+    let mut code = Emitter::new("input", None, None, &[], 0);
+    code.prepare_call(0);
+    code.call(BUILTIN_INPUT);
+    code.end_proc();
+    code.finalize(ProcedureDebug {
+        decl_line: 0,
+        artificial: true,
+        parent: None,
+        return_type: TypeDebug {
+            core_name: "str".to_owned(),
+            array_level: 0,
+        },
+        params: vec![],
+        lines: vec![],
+        locals: vec![],
+    })
+}
+
+fn gen_print() -> Chunk {
+    let mut code = Emitter::new("print", None, None, &[], 0);
+    code.prepare_call(0);
+    code.call(BUILTIN_PRINT);
+    code.end_proc();
+    code.finalize(ProcedureDebug {
+        decl_line: 0,
+        artificial: true,
+        parent: None,
+        lines: vec![],
+        return_type: TypeDebug {
+            core_name: "<None>".to_owned(),
+            array_level: 0,
+        },
+        params: vec![VarDebug {
+            offset: -8,
+            line: 0,
+            name: "object".to_owned(),
             var_type: TypeDebug {
                 core_name: "object".to_owned(),
                 array_level: 0,
@@ -2303,6 +2376,9 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
     chunks.push(gen_bool());
     chunks.push(gen_str());
     chunks.push(gen_object_init());
+    chunks.push(gen_len());
+    chunks.push(gen_input());
+    chunks.push(gen_print());
 
     CodeSet {
         chunks,
