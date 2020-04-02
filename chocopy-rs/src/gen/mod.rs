@@ -306,7 +306,7 @@ pub fn gen(
             section_map.insert(&chunk.name, (section, offset));
         } else {
             let (section, offset) = obj.add_subsection(
-                object::write::StandardSection::Data,
+                object::write::StandardSection::ReadOnlyData,
                 chunk.name.as_bytes(),
                 &chunk.code,
                 8,
