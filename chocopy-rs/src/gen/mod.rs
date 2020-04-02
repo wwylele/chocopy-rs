@@ -4,11 +4,9 @@ mod x64;
 
 use crate::local_env::*;
 use crate::node::*;
-use faerie::*;
 use std::collections::HashMap;
 use std::convert::*;
 use std::io::Write;
-use std::str::FromStr;
 use target_lexicon::*;
 
 const BOOL_PROTOTYPE: &'static str = "bool.$proto";
@@ -182,48 +180,15 @@ pub fn gen(
     path: &str,
     no_link: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (obj_name, obj_path) = if no_link {
+    let obj_path = if no_link {
         let obj_path = std::path::Path::new(path);
-        (
-            obj_path
-                .file_name()
-                .map(std::ffi::OsStr::to_str)
-                .flatten()
-                .unwrap_or("a.o")
-                .to_owned(),
-            obj_path.to_owned(),
-        )
+        obj_path.to_owned()
     } else {
         let mut obj_path = std::env::temp_dir();
         let obj_name = format!("chocopy-{}.o", rand::random::<u32>());
         obj_path.push(obj_name.clone());
-        (obj_name, obj_path)
+        obj_path
     };
-
-    let mut obj = ArtifactBuilder::new(triple!("x86_64-pc-linux-gnu-elf"))
-        .name(obj_name.clone())
-        .finish();
-
-    let declarations = vec![
-        (BOOL_PROTOTYPE, Decl::data_import().into()),
-        (INT_PROTOTYPE, Decl::data_import().into()),
-        (STR_PROTOTYPE, Decl::data_import().into()),
-        (BOOL_LIST_PROTOTYPE, Decl::data_import().into()),
-        (INT_LIST_PROTOTYPE, Decl::data_import().into()),
-        (OBJECT_LIST_PROTOTYPE, Decl::data_import().into()),
-        // library functions
-        (BUILTIN_ALLOC_OBJ, Decl::function_import().into()),
-        (BUILTIN_FREE_OBJ, Decl::function_import().into()),
-        (BUILTIN_BROKEN_STACK, Decl::function_import().into()),
-        (BUILTIN_DIV_ZERO, Decl::function_import().into()),
-        (BUILTIN_OUT_OF_BOUND, Decl::function_import().into()),
-        (BUILTIN_NONE_OP, Decl::function_import().into()),
-        (BUILTIN_LEN, Decl::function_import().into()),
-        (BUILTIN_PRINT, Decl::function_import().into()),
-        (BUILTIN_INPUT, Decl::function_import().into()),
-        // global
-        (GLOBAL_SECTION, Decl::data().writable().into()),
-    ];
 
     let current_dir_buf = std::env::current_dir();
     let current_dir = current_dir_buf
@@ -235,7 +200,50 @@ pub fn gen(
 
     let mut dwarf = dwarf::Dwarf::new(source_path, current_dir);
 
-    obj.declarations(declarations.into_iter())?;
+    let mut obj = object::write::Object::new(BinaryFormat::Elf, Architecture::X86_64);
+
+    let import_prototype = |obj: &mut object::write::Object, name: &str| {
+        obj.add_symbol(object::write::Symbol {
+            name: name.into(),
+            value: 0,
+            size: 0,
+            kind: object::SymbolKind::Data,
+            scope: object::SymbolScope::Linkage,
+            weak: false,
+            section: object::write::SymbolSection::Undefined,
+            flags: object::SymbolFlags::None,
+        })
+    };
+
+    import_prototype(&mut obj, BOOL_PROTOTYPE);
+    import_prototype(&mut obj, INT_PROTOTYPE);
+    import_prototype(&mut obj, STR_PROTOTYPE);
+    import_prototype(&mut obj, BOOL_LIST_PROTOTYPE);
+    import_prototype(&mut obj, INT_LIST_PROTOTYPE);
+    import_prototype(&mut obj, OBJECT_LIST_PROTOTYPE);
+
+    let import_function = |obj: &mut object::write::Object, name: &str| {
+        obj.add_symbol(object::write::Symbol {
+            name: name.into(),
+            value: 0,
+            size: 0,
+            kind: object::SymbolKind::Text,
+            scope: object::SymbolScope::Linkage,
+            weak: false,
+            section: object::write::SymbolSection::Undefined,
+            flags: object::SymbolFlags::None,
+        })
+    };
+
+    import_function(&mut obj, BUILTIN_ALLOC_OBJ);
+    import_function(&mut obj, BUILTIN_FREE_OBJ);
+    import_function(&mut obj, BUILTIN_BROKEN_STACK);
+    import_function(&mut obj, BUILTIN_DIV_ZERO);
+    import_function(&mut obj, BUILTIN_OUT_OF_BOUND);
+    import_function(&mut obj, BUILTIN_NONE_OP);
+    import_function(&mut obj, BUILTIN_LEN);
+    import_function(&mut obj, BUILTIN_PRINT);
+    import_function(&mut obj, BUILTIN_INPUT);
 
     let code_set = x64::gen_code_set(ast);
 
@@ -245,58 +253,176 @@ pub fn gen(
         dwarf.add_class(class_name, classes_debug);
     }
 
-    obj.define(GLOBAL_SECTION, vec![0; code_set.global_size])?;
+    let (global_section, global_section_offset) = obj.add_subsection(
+        object::write::StandardSection::Data,
+        GLOBAL_SECTION.as_bytes(),
+        &vec![0; code_set.global_size],
+        8,
+    );
+
+    obj.add_symbol(object::write::Symbol {
+        name: GLOBAL_SECTION.into(),
+        value: global_section_offset,
+        size: code_set.global_size as u64,
+        kind: object::SymbolKind::Data,
+        scope: object::SymbolScope::Compilation,
+        weak: false,
+        section: object::write::SymbolSection::Section(global_section),
+        flags: object::SymbolFlags::None,
+    });
 
     for global_debug in code_set.globals_debug {
         dwarf.add_global(global_debug);
     }
 
+    let mut section_map = HashMap::new();
+
     for chunk in &code_set.chunks {
+        dwarf.add_chunk(&chunk);
         if let ChunkExtra::Procedure(_) = chunk.extra {
-            if chunk.name == BUILTIN_CHOCOPY_MAIN || chunk.name == "object.__init__" {
-                obj.declare(&chunk.name, Decl::function().global())?;
+            let scope = if chunk.name == BUILTIN_CHOCOPY_MAIN || chunk.name == "object.__init__" {
+                object::SymbolScope::Linkage
             } else {
-                obj.declare(&chunk.name, Decl::function().local())?
-            }
+                object::SymbolScope::Compilation
+            };
+
+            let (section, offset) = obj.add_subsection(
+                object::write::StandardSection::Text,
+                chunk.name.as_bytes(),
+                &chunk.code,
+                1,
+            );
+
+            obj.add_symbol(object::write::Symbol {
+                name: chunk.name.as_bytes().into(),
+                value: offset,
+                size: chunk.code.len() as u64,
+                kind: object::SymbolKind::Text,
+                scope,
+                weak: false,
+                section: object::write::SymbolSection::Section(section),
+                flags: object::SymbolFlags::None,
+            });
+            section_map.insert(&chunk.name, (section, offset));
         } else {
-            obj.declare(&chunk.name, Decl::data())?;
+            let (section, offset) = obj.add_subsection(
+                object::write::StandardSection::Data,
+                chunk.name.as_bytes(),
+                &chunk.code,
+                8,
+            );
+
+            obj.add_symbol(object::write::Symbol {
+                name: chunk.name.as_bytes().into(),
+                value: offset,
+                size: chunk.code.len() as u64,
+                kind: object::SymbolKind::Data,
+                scope: object::SymbolScope::Compilation,
+                weak: false,
+                section: object::write::SymbolSection::Section(section),
+                flags: object::SymbolFlags::None,
+            });
+
+            section_map.insert(&chunk.name, (section, offset));
         }
     }
 
-    for chunk in code_set.chunks {
-        dwarf.add_chunk(&chunk);
-        obj.define(&chunk.name, chunk.code)?;
-        for link in chunk.links {
-            obj.link(Link {
-                from: &chunk.name,
-                to: &link.to,
-                at: link.pos as u64,
-            })?;
+    for chunk in &code_set.chunks {
+        let (from, from_offset) = section_map[&chunk.name];
+        let from_text = if let ChunkExtra::Procedure(_) = chunk.extra {
+            true
+        } else {
+            false
+        };
+        for link in &chunk.links {
+            let to = obj.symbol_id(link.to.as_bytes()).unwrap();
+            let to_symbol = obj.symbol(to);
+
+            let (size, kind, encoding, addend) = if from_text {
+                if to_symbol.kind == object::SymbolKind::Data {
+                    if to_symbol.section == object::write::SymbolSection::Undefined {
+                        (
+                            32,
+                            object::RelocationKind::GotRelative,
+                            object::RelocationEncoding::X86RipRelative,
+                            -4,
+                        )
+                    } else {
+                        (
+                            32,
+                            object::RelocationKind::Relative,
+                            object::RelocationEncoding::X86RipRelative,
+                            -4,
+                        )
+                    }
+                } else if to_symbol.kind == object::SymbolKind::Text {
+                    (
+                        32,
+                        object::RelocationKind::PltRelative,
+                        object::RelocationEncoding::X86RipRelative,
+                        -4,
+                    )
+                } else {
+                    panic!()
+                }
+            } else {
+                (
+                    64,
+                    object::RelocationKind::Absolute,
+                    object::RelocationEncoding::Generic,
+                    0,
+                )
+            };
+
+            obj.add_relocation(
+                from,
+                object::write::Relocation {
+                    offset: from_offset + link.pos as u64,
+                    size,
+                    kind,
+                    encoding,
+                    symbol: to,
+                    addend,
+                },
+            )?;
         }
     }
 
     dwarf.finalize_code_range();
 
-    for chunk in dwarf.finalize() {
-        obj.declare(&chunk.name, Decl::section(SectionKind::Debug))?;
-        obj.define(&chunk.name, chunk.code)?;
+    let debug_chunks = dwarf.finalize();
+    let mut debug_section_map = HashMap::new();
+    for chunk in &debug_chunks {
+        let section = obj.add_section(
+            "".into(),
+            chunk.name.as_bytes().into(),
+            object::SectionKind::Debug,
+        );
+        obj.append_section_data(section, &chunk.code, 8);
+        debug_section_map.insert(chunk.name.clone(), section);
+    }
+
+    for chunk in debug_chunks {
         for link in chunk.links {
-            obj.link_with(
-                Link {
-                    from: &chunk.name,
-                    to: &link.to,
-                    at: link.pos as u64,
-                },
-                Reloc::Debug {
-                    size: link.size,
+            let to = obj
+                .symbol_id(link.to.as_bytes())
+                .unwrap_or_else(|| obj.section_symbol(debug_section_map[&link.to]));
+            obj.add_relocation(
+                debug_section_map[&chunk.name],
+                object::write::Relocation {
+                    offset: link.pos as u64,
+                    size: link.size * 8,
+                    kind: object::RelocationKind::Absolute,
+                    encoding: object::RelocationEncoding::Generic,
+                    symbol: to,
                     addend: 0,
                 },
             )?;
         }
     }
 
-    let obj_file = std::fs::File::create(&obj_path)?;
-    obj.write(obj_file)?;
+    let mut obj_file = std::fs::File::create(&obj_path)?;
+    obj_file.write_all(&obj.write()?)?;
 
     if no_link {
         return Ok(());
