@@ -47,6 +47,15 @@ struct Emitter<'a> {
     strings: Vec<(usize, String)>,
 }
 
+impl Platform {
+    fn stack_reserve(&self) -> usize {
+        match self {
+            Platform::Windows => 4,
+            Platform::Linux => 0,
+        }
+    }
+}
+
 impl<'a> Emitter<'a> {
     pub fn new(
         name: &str,
@@ -216,6 +225,28 @@ impl<'a> Emitter<'a> {
         self.rsp_aligned = !self.rsp_aligned;
     }
 
+    pub fn call_builtin_alloc(&mut self, prototype: &'static str) {
+        match PLATFORM {
+            Platform::Windows => {
+                // mov rdx,rsi
+                self.emit(&[0x48, 0x89, 0xF2]);
+                // lea rcx,[rip+{_PROTOTYPE}]
+                self.emit(&[0x48, 0x8D, 0x0D]);
+            }
+            Platform::Linux => {
+                // mov rdi,[rip+{_PROTOTYPE}]
+                self.emit(&[0x48, 0x8B, 0x3D]);
+            }
+        }
+        self.links.push(ChunkLink {
+            pos: self.pos(),
+            to: prototype.to_owned(),
+        });
+        self.emit(&[0; 4]);
+        self.prepare_call(PLATFORM.stack_reserve());
+        self.call(BUILTIN_ALLOC_OBJ);
+    }
+
     pub fn emit_check_none(&mut self) {
         // test rax,rax
         self.emit(&[0x48, 0x85, 0xC0]);
@@ -223,7 +254,7 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x0F, 0x85]);
         let pos = self.pos();
         self.emit(&[0; 4]);
-        self.prepare_call(0);
+        self.prepare_call(PLATFORM.stack_reserve());
         self.call(BUILTIN_NONE_OP);
         let delta = (self.pos() - pos - 4) as u32;
         self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
@@ -231,17 +262,9 @@ impl<'a> Emitter<'a> {
 
     pub fn emit_box_int(&mut self) {
         self.emit_push_rax();
-        self.prepare_call(0);
-        // mov rdi,[rip+{INT_PROTOTYPE}]
-        self.emit(&[0x48, 0x8B, 0x3D]);
-        self.links.push(ChunkLink {
-            pos: self.pos(),
-            to: INT_PROTOTYPE.to_owned(),
-        });
-        self.emit(&[0; 4]);
         // xor rsi,rsi
         self.emit(&[0x48, 0x31, 0xF6]);
-        self.call(BUILTIN_ALLOC_OBJ);
+        self.call_builtin_alloc(INT_PROTOTYPE);
         self.emit_pop_r11();
         // mov DWORD PTR [rax+0x10],r11d
         self.emit(&[0x44, 0x89, 0x58, 0x10]);
@@ -249,17 +272,9 @@ impl<'a> Emitter<'a> {
 
     pub fn emit_box_bool(&mut self) {
         self.emit_push_rax();
-        self.prepare_call(0);
-        // mov rdi,[rip+{BOOL_PROTOTYPE}]
-        self.emit(&[0x48, 0x8B, 0x3D]);
-        self.links.push(ChunkLink {
-            pos: self.pos(),
-            to: BOOL_PROTOTYPE.to_owned(),
-        });
-        self.emit(&[0; 4]);
         // xor rsi,rsi
         self.emit(&[0x48, 0x31, 0xF6]);
-        self.call(BUILTIN_ALLOC_OBJ);
+        self.call_builtin_alloc(BOOL_PROTOTYPE);
         self.emit_pop_r11();
         // mov BYTE PTR [rax+0x10],r11b
         self.emit(&[0x44, 0x88, 0x58, 0x10]);
@@ -280,9 +295,11 @@ impl<'a> Emitter<'a> {
             let pos = self.pos();
             self.emit(&[0; 4]);
 
-            self.prepare_call(0);
-            // mov rdi,rax
-            self.emit(&[0x48, 0x89, 0xc7]);
+            self.prepare_call(PLATFORM.stack_reserve());
+            match PLATFORM {
+                Platform::Windows => self.emit(&[0x48, 0x89, 0xc1]), // mov rcx,rax
+                Platform::Linux => self.emit(&[0x48, 0x89, 0xc7]),   // mov rdi,rax
+            }
             self.call(BUILTIN_FREE_OBJ);
 
             let delta = (self.pos() - pos - 4) as u32;
@@ -319,18 +336,10 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn emit_string_literal(&mut self, s: &str) {
-        self.prepare_call(0);
-        // mov rdi,[rip+{STR_PROTOTYPE}]
-        self.emit(&[0x48, 0x8B, 0x3D]);
-        self.links.push(ChunkLink {
-            pos: self.pos(),
-            to: STR_PROTOTYPE.to_owned(),
-        });
-        self.emit(&[0; 4]);
         // mov rsi,{len}
         self.emit(&[0x48, 0xc7, 0xc6]);
         self.emit(&(s.len() as u32).to_le_bytes());
-        self.call(BUILTIN_ALLOC_OBJ);
+        self.call_builtin_alloc(STR_PROTOTYPE);
         if s.len() != 0 {
             // lea rdi,[rax+24]
             self.emit(&[0x48, 0x8D, 0x78, 0x18]);
@@ -365,16 +374,7 @@ impl<'a> Emitter<'a> {
         // add rsi,QWORD PTR [rax+0x10]
         self.emit(&[0x48, 0x03, 0x70, 0x10]);
         self.emit_push_rax();
-
-        self.prepare_call(0);
-        // mov rdi,[rip+{STR_PROTOTYPE}]
-        self.emit(&[0x48, 0x8B, 0x3D]);
-        self.links.push(ChunkLink {
-            pos: self.pos(),
-            to: STR_PROTOTYPE.to_owned(),
-        });
-        self.emit(&[0; 4]);
-        self.call(BUILTIN_ALLOC_OBJ);
+        self.call_builtin_alloc(STR_PROTOTYPE);
 
         self.emit_pop_r11(); // right
         self.emit_pop_r10(); // left
@@ -512,16 +512,7 @@ impl<'a> Emitter<'a> {
         // add rsi,QWORD PTR [rax+0x10]
         self.emit(&[0x48, 0x03, 0x70, 0x10]);
         self.emit_push_rax();
-
-        self.prepare_call(0);
-        // mov rdi,[rip+{_PROTOTYPE}]
-        self.emit(&[0x48, 0x8B, 0x3D]);
-        self.links.push(ChunkLink {
-            pos: self.pos(),
-            to: prototype.to_owned(),
-        });
-        self.emit(&[0; 4]);
-        self.call(BUILTIN_ALLOC_OBJ);
+        self.call_builtin_alloc(prototype);
         self.emit_push_rax();
         // add rax,24
         self.emit(&[0x48, 0x83, 0xC0, 0x18]);
@@ -665,7 +656,7 @@ impl<'a> Emitter<'a> {
                     self.emit(&[0x0F, 0x85]);
                     let pos = self.pos();
                     self.emit(&[0; 4]);
-                    self.prepare_call(0);
+                    self.prepare_call(PLATFORM.stack_reserve());
                     self.call(BUILTIN_DIV_ZERO);
                     let delta = (self.pos() - pos - 4) as u32;
                     self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
@@ -802,17 +793,9 @@ impl<'a> Emitter<'a> {
         // cdqe
         self.emit(&[0x48, 0x98]);
         self.emit_push_rax();
-        self.prepare_call(0);
-        // mov rdi,[rip+{STR_PROTOTYPE}]
-        self.emit(&[0x48, 0x8B, 0x3D]);
-        self.links.push(ChunkLink {
-            pos: self.pos(),
-            to: STR_PROTOTYPE.to_owned(),
-        });
-        self.emit(&[0; 4]);
         // mov rsi,1
         self.emit(&[0x48, 0xc7, 0xc6, 0x01, 0x00, 0x00, 0x00]);
-        self.call(BUILTIN_ALLOC_OBJ);
+        self.call_builtin_alloc(STR_PROTOTYPE);
         self.emit_pop_rsi();
         self.emit_pop_r11();
         // cmp rsi,[r11+16]
@@ -821,7 +804,7 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x0F, 0x82]);
         let pos = self.pos();
         self.emit(&[0; 4]);
-        self.prepare_call(0);
+        self.prepare_call(PLATFORM.stack_reserve());
         self.call(BUILTIN_OUT_OF_BOUND);
         let delta = (self.pos() - pos - 4) as u32;
         self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
@@ -856,7 +839,7 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x0F, 0x82]);
         let pos = self.pos();
         self.emit(&[0; 4]);
-        self.prepare_call(0);
+        self.prepare_call(PLATFORM.stack_reserve());
         self.call(BUILTIN_OUT_OF_BOUND);
         let delta = (self.pos() - pos - 4) as u32;
         self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
@@ -970,18 +953,10 @@ impl<'a> Emitter<'a> {
 
     pub fn emit_list_expr(&mut self, expr: &ListExpr, target_type: &ValueType) {
         if target_type == &*TYPE_EMPTY {
-            self.prepare_call(0);
-            // mov rdi,[rip+{_PROTOTYPE}]
-            self.emit(&[0x48, 0x8B, 0x3D]);
-            self.links.push(ChunkLink {
-                pos: self.pos(),
-                to: OBJECT_LIST_PROTOTYPE.to_owned(),
-            });
-            self.emit(&[0; 4]);
             // mov rsi,{len}
             self.emit(&[0x48, 0xc7, 0xc6]);
             self.emit(&(expr.elements.len() as u32).to_le_bytes());
-            self.call(BUILTIN_ALLOC_OBJ);
+            self.call_builtin_alloc(OBJECT_LIST_PROTOTYPE);
             return;
         }
 
@@ -999,18 +974,10 @@ impl<'a> Emitter<'a> {
             OBJECT_LIST_PROTOTYPE
         };
 
-        self.prepare_call(0);
-        // mov rdi,[rip+{_PROTOTYPE}]
-        self.emit(&[0x48, 0x8B, 0x3D]);
-        self.links.push(ChunkLink {
-            pos: self.pos(),
-            to: prototype.to_owned(),
-        });
-        self.emit(&[0; 4]);
         // mov rsi,{len}
         self.emit(&[0x48, 0xc7, 0xc6]);
         self.emit(&(expr.elements.len() as u32).to_le_bytes());
-        self.call(BUILTIN_ALLOC_OBJ);
+        self.call_builtin_alloc(prototype);
         self.emit_push_rax();
 
         for (i, element) in expr.elements.iter().enumerate() {
@@ -1289,7 +1256,7 @@ impl<'a> Emitter<'a> {
                     self.emit(&[0x0F, 0x82]);
                     let pos = self.pos();
                     self.emit(&[0; 4]);
-                    self.prepare_call(0);
+                    self.prepare_call(PLATFORM.stack_reserve());
                     self.call(BUILTIN_OUT_OF_BOUND);
                     let delta = (self.pos() - pos - 4) as u32;
                     self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
@@ -1411,17 +1378,9 @@ impl<'a> Emitter<'a> {
         //// Compute the element
         let iterable_type = stmt.iterable.inferred_type.as_ref().unwrap();
         let source_type = if iterable_type == &*TYPE_STR {
-            self.prepare_call(0);
-            // mov rdi,[rip+{STR_PROTOTYPE}]
-            self.emit(&[0x48, 0x8B, 0x3D]);
-            self.links.push(ChunkLink {
-                pos: self.pos(),
-                to: STR_PROTOTYPE.to_owned(),
-            });
-            self.emit(&[0; 4]);
             // mov rsi,1
             self.emit(&[0x48, 0xc7, 0xc6, 0x01, 0x00, 0x00, 0x00]);
-            self.call(BUILTIN_ALLOC_OBJ);
+            self.call_builtin_alloc(STR_PROTOTYPE);
             // mov rsi,[rsp]
             self.emit(&[0x48, 0x8B, 0x34, 0x24]);
             // mov r11,[rsp+8]
@@ -1757,16 +1716,27 @@ fn gen_function(
 fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
     let mut code = Emitter::new(class_name, None, None, &[], 0);
 
-    code.prepare_call(0);
-    // lea rdi,[rip+{}]
-    code.emit(&[0x48, 0x8D, 0x3D]);
+    code.prepare_call(PLATFORM.stack_reserve());
+    match PLATFORM {
+        Platform::Windows => {
+            // xor rdx,rdx
+            code.emit(&[0x48, 0x31, 0xD2]);
+            // lea rcx,[rip+{}]
+            code.emit(&[0x48, 0x8D, 0x0D]);
+        }
+        Platform::Linux => {
+            // xor rsi,rsi
+            code.emit(&[0x48, 0x31, 0xF6]);
+            // lea rdi,[rip+{}]
+            code.emit(&[0x48, 0x8D, 0x3D]);
+        }
+    }
     code.links.push(ChunkLink {
         pos: code.pos(),
         to: class_name.to_owned() + ".$proto",
     });
     code.emit(&[0; 4]);
-    // xor rsi,rsi
-    code.emit(&[0x48, 0x31, 0xF6]);
+
     code.call(BUILTIN_ALLOC_OBJ);
     code.emit_push_rax();
 
@@ -1827,18 +1797,33 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
 fn gen_dtor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
     let mut code = Emitter::new(&(class_name.to_owned() + ".$dtor"), None, None, &[], 0);
     // Note: This uses C ABI instead of chocopy ABI
-    code.emit_push_rdi();
+    match PLATFORM {
+        Platform::Windows => {
+            code.emit_push_rcx();
+            code.emit_push_rsi();
+            code.emit_push_rdi();
+        }
+        Platform::Linux => {
+            code.emit_push_rdi();
+        }
+    }
     for (_, attribute) in &class_slot.attributes {
         if attribute.target_type != *TYPE_INT && attribute.target_type != *TYPE_BOOL {
-            // mov rax,[rsp]
-            code.emit(&[0x48, 0x8B, 0x04, 0x24]);
+            // mov rax,[rbp-8]
+            code.emit(&[0x48, 0x8B, 0x45, 0xF8]);
             // mov rax,[rax+{}]
             code.emit(&[0x48, 0x8B, 0x80]);
             code.emit(&attribute.offset.to_le_bytes());
             code.emit_drop();
         }
     }
-    code.emit_pop_rax();
+    match PLATFORM {
+        Platform::Windows => {
+            code.emit_pop_rdi();
+            code.emit_pop_rsi();
+        }
+        Platform::Linux => (),
+    }
     code.end_proc();
     code.finalize(ProcedureDebug {
         decl_line: 0,
@@ -1926,9 +1911,11 @@ fn gen_object_init() -> Chunk {
 
 fn gen_len() -> Chunk {
     let mut code = Emitter::new("len", None, None, &[], 0);
-    // mov rdi,[rsp+16]
-    code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]);
-    code.prepare_call(0);
+    match PLATFORM {
+        Platform::Windows => code.emit(&[0x48, 0x8B, 0x4C, 0x24, 0x10]), //  mov rcx,[rsp+16]
+        Platform::Linux => code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]),   // mov rdi,[rsp+16]
+    }
+    code.prepare_call(PLATFORM.stack_reserve());
     code.call(BUILTIN_LEN);
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -1949,7 +1936,7 @@ fn gen_len() -> Chunk {
 
 fn gen_input() -> Chunk {
     let mut code = Emitter::new("input", None, None, &[], 0);
-    code.prepare_call(0);
+    code.prepare_call(PLATFORM.stack_reserve());
     code.call(BUILTIN_INPUT);
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -1965,9 +1952,11 @@ fn gen_input() -> Chunk {
 
 fn gen_print() -> Chunk {
     let mut code = Emitter::new("print", None, None, &[], 0);
-    // mov rdi,[rsp+16]
-    code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]);
-    code.prepare_call(0);
+    match PLATFORM {
+        Platform::Windows => code.emit(&[0x48, 0x8B, 0x4C, 0x24, 0x10]), //  mov rcx,[rsp+16]
+        Platform::Linux => code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]),   // mov rdi,[rsp+16]
+    }
+    code.prepare_call(PLATFORM.stack_reserve());
     code.call(BUILTIN_PRINT);
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -2193,6 +2182,11 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
     main_code.emit(&[0x48, 0xC7, 0xC0, 0x78, 0x56, 0x34, 0x12]);
     main_code.emit_push_rax();
 
+    if PLATFORM == Platform::Windows {
+        main_code.emit_push_rdi();
+        main_code.emit_push_rsi();
+    }
+
     for declaration in &ast.program().declarations {
         if let Declaration::VarDef(v) = declaration {
             main_code.emit_global_var_init(v);
@@ -2211,6 +2205,10 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
         }
     }
 
+    if PLATFORM == Platform::Windows {
+        main_code.emit_pop_rsi();
+        main_code.emit_pop_rdi();
+    }
     main_code.emit_pop_rax();
     // cmp rax,0x12345678
     main_code.emit(&[0x48, 0x3D, 0x78, 0x56, 0x34, 0x12]);
@@ -2220,7 +2218,7 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
     let pos = main_code.pos();
     main_code.emit(&[0; 4]);
 
-    main_code.prepare_call(0);
+    main_code.prepare_call(PLATFORM.stack_reserve());
     main_code.call(BUILTIN_BROKEN_STACK);
 
     let delta = (main_code.pos() - pos - 4) as u32;

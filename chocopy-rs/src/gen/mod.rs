@@ -30,6 +30,19 @@ const BUILTIN_CHOCOPY_MAIN: &'static str = "$chocopy_main";
 
 const GLOBAL_SECTION: &'static str = "$global";
 
+#[allow(unused)]
+#[derive(PartialEq, Eq)]
+enum Platform {
+    Windows,
+    Linux,
+}
+
+#[cfg(target_os = "windows")]
+const PLATFORM: Platform = Platform::Windows;
+
+#[cfg(target_os = "linux")]
+const PLATFORM: Platform = Platform::Linux;
+
 #[derive(PartialEq, Eq, Hash, Clone)]
 struct TypeDebug {
     core_name: String,
@@ -200,7 +213,11 @@ pub fn gen(
 
     let mut dwarf = dwarf::Dwarf::new(source_path, current_dir);
 
-    let mut obj = object::write::Object::new(BinaryFormat::Elf, Architecture::X86_64);
+    let binary_format = match PLATFORM {
+        Platform::Windows => BinaryFormat::Coff,
+        Platform::Linux => BinaryFormat::Elf,
+    };
+    let mut obj = object::write::Object::new(binary_format, Architecture::X86_64);
 
     let import_prototype = |obj: &mut object::write::Object, name: &str| {
         obj.add_symbol(object::write::Symbol {
@@ -210,7 +227,7 @@ pub fn gen(
             kind: object::SymbolKind::Data,
             scope: object::SymbolScope::Linkage,
             weak: false,
-            section: object::write::SymbolSection::Undefined,
+            section: object::write::SymbolSection::Common,
             flags: object::SymbolFlags::None,
         })
     };
@@ -230,7 +247,7 @@ pub fn gen(
             kind: object::SymbolKind::Text,
             scope: object::SymbolScope::Linkage,
             weak: false,
-            section: object::write::SymbolSection::Undefined,
+            section: object::write::SymbolSection::Common,
             flags: object::SymbolFlags::None,
         })
     };
@@ -390,60 +407,105 @@ pub fn gen(
 
     dwarf.finalize_code_range();
 
-    let debug_chunks = dwarf.finalize();
-    let mut debug_section_map = HashMap::new();
-    for chunk in &debug_chunks {
-        let section = obj.add_section(
-            "".into(),
-            chunk.name.as_bytes().into(),
-            object::SectionKind::Debug,
-        );
-        obj.append_section_data(section, &chunk.code, 8);
-        debug_section_map.insert(chunk.name.clone(), section);
-    }
+    if PLATFORM == Platform::Linux {
+        let debug_chunks = dwarf.finalize();
+        let mut debug_section_map = HashMap::new();
+        for chunk in &debug_chunks {
+            let section = obj.add_section(
+                "".into(),
+                chunk.name.as_bytes().into(),
+                object::SectionKind::Debug,
+            );
+            obj.append_section_data(section, &chunk.code, 8);
+            debug_section_map.insert(chunk.name.clone(), section);
+        }
 
-    for chunk in debug_chunks {
-        for link in chunk.links {
-            let to = obj
-                .symbol_id(link.to.as_bytes())
-                .unwrap_or_else(|| obj.section_symbol(debug_section_map[&link.to]));
-            obj.add_relocation(
-                debug_section_map[&chunk.name],
-                object::write::Relocation {
-                    offset: link.pos as u64,
-                    size: link.size * 8,
-                    kind: object::RelocationKind::Absolute,
-                    encoding: object::RelocationEncoding::Generic,
-                    symbol: to,
-                    addend: 0,
-                },
-            )?;
+        for chunk in debug_chunks {
+            for link in chunk.links {
+                let to = obj
+                    .symbol_id(link.to.as_bytes())
+                    .unwrap_or_else(|| obj.section_symbol(debug_section_map[&link.to]));
+                obj.add_relocation(
+                    debug_section_map[&chunk.name],
+                    object::write::Relocation {
+                        offset: link.pos as u64,
+                        size: link.size * 8,
+                        kind: object::RelocationKind::Absolute,
+                        encoding: object::RelocationEncoding::Generic,
+                        symbol: to,
+                        addend: 0,
+                    },
+                )?;
+            }
         }
     }
 
     let mut obj_file = std::fs::File::create(&obj_path)?;
     obj_file.write_all(&obj.write()?)?;
+    std::mem::drop(obj_file);
 
     if no_link {
         return Ok(());
     }
 
+    let lib_file = match PLATFORM {
+        Platform::Windows => "chocopy_rs_std.lib",
+        Platform::Linux => "libchocopy_rs_std.a",
+    };
+
     let mut lib_path = std::env::current_exe()?;
-    lib_path.set_file_name("libchocopy_rs_std.a");
+    lib_path.set_file_name(lib_file);
 
-    let ld_output = std::process::Command::new("gcc")
-        .args(&[
-            "-o",
-            path,
-            obj_path.to_str().unwrap(),
-            lib_path.to_str().unwrap(),
-            "-pthread",
-            "-ldl",
-        ])
-        .output()?;
+    let ld_output = match PLATFORM {
+        Platform::Windows => {
+            let linker =
+                cc::windows_registry::find_tool("x86_64-pc-windows-msvc", "link.exe").unwrap();
+            let mut vcvarsall = linker.path();
+            vcvarsall = vcvarsall.parent().unwrap();
+            vcvarsall = vcvarsall.parent().unwrap();
+            vcvarsall = vcvarsall.parent().unwrap();
+            vcvarsall = vcvarsall.parent().unwrap();
+            vcvarsall = vcvarsall.parent().unwrap();
+            vcvarsall = vcvarsall.parent().unwrap();
+            vcvarsall = vcvarsall.parent().unwrap();
+            let vccarsall = vcvarsall
+                .join("Auxiliary")
+                .join("Build")
+                .join("vcvarsall.bat");
 
-    std::io::stdout().write_all(&ld_output.stdout).unwrap();
-    std::io::stderr().write_all(&ld_output.stderr).unwrap();
+            let batch_content = format!("call \"{}\" amd64\nlink \"{}\" \"{}\" /OUT:\"{}\" kernel32.lib advapi32.lib ws2_32.lib userenv.lib vcruntime.lib ucrt.lib msvcrt.lib /ENTRY:$chocopy_main /SUBSYSTEM:CONSOLE",
+                vccarsall.as_os_str().to_str().unwrap(),
+                obj_path.as_os_str().to_str().unwrap(),
+                lib_path.as_os_str().to_str().unwrap(),
+                path
+                );
+
+            let bat_name = format!("chocopy-temp-{}.bat", rand::random::<u32>());
+
+            std::fs::write(&bat_name, batch_content)?;
+
+            let ld_output = std::process::Command::new("cmd")
+                .args(&["/c", &bat_name])
+                .output()?;
+            std::fs::remove_file(&bat_name)?;
+            ld_output
+        }
+        Platform::Linux => std::process::Command::new("gcc")
+            .args(&[
+                "-o",
+                path,
+                obj_path.to_str().unwrap(),
+                lib_path.to_str().unwrap(),
+                "-pthread",
+                "-ldl",
+            ])
+            .output()?,
+    };
+
+    if !ld_output.status.success() {
+        std::io::stdout().write_all(&ld_output.stdout).unwrap();
+        std::io::stderr().write_all(&ld_output.stderr).unwrap();
+    }
 
     std::fs::remove_file(&obj_path)?;
 

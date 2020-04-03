@@ -199,7 +199,15 @@ pub unsafe extern "C" fn print(pointer: *mut u8) -> *mut u8 {
 pub unsafe extern "C" fn input() -> *mut u8 {
     let mut input = String::new();
     std::io::stdin().read_line(&mut input).unwrap();
-    let len = (input.len() - 1) as u64; // remove the trailing line break
+    let input = input.as_bytes();
+    let mut len = input.len();
+    while len > 0 {
+        if input[len - 1] != b'\n' && input[len - 1] != b'\r' {
+            break;
+        }
+        len -= 1;
+    }
+    let len = len as u64;
     let pointer = alloc_obj(&STR_PROTOTYPE as *const Prototype, len);
     std::ptr::copy_nonoverlapping(
         input.as_ptr(),
@@ -209,7 +217,7 @@ pub unsafe extern "C" fn input() -> *mut u8 {
     pointer
 }
 
-#[cfg(not(test))]
+#[allow(dead_code)]
 fn memory_leak() -> ! {
     println!("--- Memory leak detected! ---");
     exit(-1)
@@ -250,13 +258,13 @@ fn out_of_memory() -> ! {
 }
 
 extern "C" {
-    #[cfg(not(test))]
+    #[cfg(all(target_os = "linux", not(test)))]
     #[link_name = "$chocopy_main"]
     fn chocopy_main();
 }
 
 #[no_mangle]
-#[cfg(not(test))]
+#[cfg(all(target_os = "linux", not(test)))]
 pub unsafe extern "C" fn main() {
     chocopy_main();
     if ALLOC_COUNTER.load(Ordering::SeqCst) != 0 {

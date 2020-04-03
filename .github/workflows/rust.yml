@@ -9,14 +9,16 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
-
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
     - uses: actions/checkout@v2
     - name: Build
       run: cargo build --verbose
     - name: Run unit tests
-      run: cargo test --verbose
+      run: cargo test --package chocopy-rs --verbose
     - uses: actions/setup-python@v1
       with:
         python-version: '3.8'
