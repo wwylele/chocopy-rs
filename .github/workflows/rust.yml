@@ -24,5 +24,6 @@ jobs:
         python-version: '3.8'
     - name: Verify integration test cases
       run: cargo run --package chocopy-rs-tester -- chocopy-rs/test/pa3 --python
+      if: runner.os == 'Linux'
     - name: Run integration tests
       run: cargo run --package chocopy-rs-tester -- chocopy-rs/test/pa3
