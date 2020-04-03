@@ -225,7 +225,7 @@ impl<'a> Emitter<'a> {
         self.rsp_aligned = !self.rsp_aligned;
     }
 
-    pub fn call_builtin_alloc(&mut self, prototype: &'static str) {
+    pub fn call_builtin_alloc(&mut self, prototype: &str) {
         match PLATFORM {
             Platform::Windows => {
                 // mov rdx,rsi
@@ -234,8 +234,8 @@ impl<'a> Emitter<'a> {
                 self.emit(&[0x48, 0x8D, 0x0D]);
             }
             Platform::Linux => {
-                // mov rdi,[rip+{_PROTOTYPE}]
-                self.emit(&[0x48, 0x8B, 0x3D]);
+                // lea rdi,[rip+{_PROTOTYPE}]
+                self.emit(&[0x48, 0x8D, 0x3D]);
             }
         }
         self.links.push(ChunkLink {

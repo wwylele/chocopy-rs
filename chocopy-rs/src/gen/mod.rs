@@ -357,21 +357,12 @@ pub fn gen(
 
             let (size, kind, encoding, addend) = if from_text {
                 if to_symbol.kind == object::SymbolKind::Data {
-                    if to_symbol.section == object::write::SymbolSection::Undefined {
-                        (
-                            32,
-                            object::RelocationKind::GotRelative,
-                            object::RelocationEncoding::X86RipRelative,
-                            -4,
-                        )
-                    } else {
-                        (
-                            32,
-                            object::RelocationKind::Relative,
-                            object::RelocationEncoding::X86RipRelative,
-                            -4,
-                        )
-                    }
+                    (
+                        32,
+                        object::RelocationKind::Relative,
+                        object::RelocationEncoding::X86RipRelative,
+                        -4,
+                    )
                 } else if to_symbol.kind == object::SymbolKind::Text {
                     (
                         32,
