@@ -69,10 +69,10 @@ mod tests {
         let mut passed = true;
 
         let test_dirs = [
-            "test/pa1/course",
-            "test/pa1/course_hidden",
-            "test/pa2/course",
-            "test/pa2/more",
+            "test/original/pa1",
+            "test/original/pa1/hidden",
+            "test/original/pa2",
+            "test/pa2",
         ];
 
         for dir in &test_dirs {
