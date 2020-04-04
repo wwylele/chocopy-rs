@@ -398,36 +398,34 @@ pub fn gen(
 
     dwarf.finalize_code_range();
 
-    if PLATFORM == Platform::Linux {
-        let debug_chunks = dwarf.finalize();
-        let mut debug_section_map = HashMap::new();
-        for chunk in &debug_chunks {
-            let section = obj.add_section(
-                "".into(),
-                chunk.name.as_bytes().into(),
-                object::SectionKind::Debug,
-            );
-            obj.append_section_data(section, &chunk.code, 8);
-            debug_section_map.insert(chunk.name.clone(), section);
-        }
+    let debug_chunks = dwarf.finalize();
+    let mut debug_section_map = HashMap::new();
+    for chunk in &debug_chunks {
+        let section = obj.add_section(
+            "".into(),
+            chunk.name.as_bytes().into(),
+            object::SectionKind::Debug,
+        );
+        obj.append_section_data(section, &chunk.code, 8);
+        debug_section_map.insert(chunk.name.clone(), section);
+    }
 
-        for chunk in debug_chunks {
-            for link in chunk.links {
-                let to = obj
-                    .symbol_id(link.to.as_bytes())
-                    .unwrap_or_else(|| obj.section_symbol(debug_section_map[&link.to]));
-                obj.add_relocation(
-                    debug_section_map[&chunk.name],
-                    object::write::Relocation {
-                        offset: link.pos as u64,
-                        size: link.size * 8,
-                        kind: object::RelocationKind::Absolute,
-                        encoding: object::RelocationEncoding::Generic,
-                        symbol: to,
-                        addend: 0,
-                    },
-                )?;
-            }
+    for chunk in debug_chunks {
+        for link in chunk.links {
+            let to = obj
+                .symbol_id(link.to.as_bytes())
+                .unwrap_or_else(|| obj.section_symbol(debug_section_map[&link.to]));
+            obj.add_relocation(
+                debug_section_map[&chunk.name],
+                object::write::Relocation {
+                    offset: link.pos as u64,
+                    size: link.size * 8,
+                    kind: object::RelocationKind::Absolute,
+                    encoding: object::RelocationEncoding::Generic,
+                    symbol: to,
+                    addend: 0,
+                },
+            )?;
         }
     }
 
