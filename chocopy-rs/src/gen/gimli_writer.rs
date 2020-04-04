@@ -9,17 +9,9 @@ pub struct DwarfReloc {
 }
 
 #[derive(Clone)]
-pub struct DwarfSelfReloc {
-    pub offset: usize,
-    pub size: u8,
-    pub section: &'static str,
-}
-
-#[derive(Clone)]
 pub struct DwarfWriter {
     inner: EndianVec<LittleEndian>,
     relocs: Vec<DwarfReloc>,
-    self_relocs: Vec<DwarfSelfReloc>,
 }
 
 impl DwarfWriter {
@@ -27,15 +19,13 @@ impl DwarfWriter {
         DwarfWriter {
             inner: EndianVec::new(gimli::LittleEndian),
             relocs: vec![],
-            self_relocs: vec![],
         }
     }
 
-    pub fn take(&mut self) -> (Vec<u8>, Vec<DwarfReloc>, Vec<DwarfSelfReloc>) {
+    pub fn take(&mut self) -> (Vec<u8>, Vec<DwarfReloc>) {
         (
             self.inner.take(),
             std::mem::replace(&mut self.relocs, vec![]),
-            std::mem::replace(&mut self.self_relocs, vec![]),
         )
     }
 }
