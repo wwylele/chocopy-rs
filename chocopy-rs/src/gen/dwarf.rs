@@ -537,7 +537,7 @@ impl Dwarf {
 
         dwarf_sections
             .for_each_mut(|id, data| -> std::result::Result<(), () /*should be !*/> {
-                let (mut data, relocs, self_relocs) = data.take();
+                let (mut data, relocs) = data.take();
                 let mut links = vec![];
 
                 if data.len() >= 4 {
@@ -558,14 +558,6 @@ impl Dwarf {
                         pos: reloc.offset,
                         to: self.symbol_pool[reloc.symbol].to_owned(),
                         size: reloc.size,
-                    });
-                }
-
-                for self_reloc in self_relocs {
-                    links.push(DebugChunkLink {
-                        pos: self_reloc.offset,
-                        to: self_reloc.section.to_owned(),
-                        size: self_reloc.size,
                     });
                 }
 

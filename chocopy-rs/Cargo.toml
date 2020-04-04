@@ -16,3 +16,4 @@ enum_dispatch = "0.2"
 getopts = "0.2"
 gimli = "0.20"
 object = { version = "0.18", features = ["write"] }
+cc = "1.0"

@@ -95,10 +95,14 @@ unsafe extern "C" fn dtor_list(pointer: *mut u8) {
     }
 }
 
+#[cfg(not(test))]
 extern "C" {
     #[link_name = "object.__init__"]
     fn object_init();
 }
+
+#[cfg(test)]
+extern "C" fn object_init() {}
 
 #[export_name = "$alloc_obj"]
 pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mut u8 {
@@ -199,7 +203,15 @@ pub unsafe extern "C" fn print(pointer: *mut u8) -> *mut u8 {
 pub unsafe extern "C" fn input() -> *mut u8 {
     let mut input = String::new();
     std::io::stdin().read_line(&mut input).unwrap();
-    let len = (input.len() - 1) as u64; // remove the trailing line break
+    let input = input.as_bytes();
+    let mut len = input.len();
+    while len > 0 {
+        if input[len - 1] != b'\n' && input[len - 1] != b'\r' {
+            break;
+        }
+        len -= 1;
+    }
+    let len = len as u64;
     let pointer = alloc_obj(&STR_PROTOTYPE as *const Prototype, len);
     std::ptr::copy_nonoverlapping(
         input.as_ptr(),
@@ -257,9 +269,10 @@ extern "C" {
 
 #[no_mangle]
 #[cfg(not(test))]
-pub unsafe extern "C" fn main() {
+pub unsafe extern "C" fn main() -> i32 {
     chocopy_main();
     if ALLOC_COUNTER.load(Ordering::SeqCst) != 0 {
         memory_leak();
     }
+    0
 }

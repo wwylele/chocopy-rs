@@ -1,5 +1,13 @@
 use std::io::{BufRead, BufReader, Read, Write};
 
+fn fixup_newline(s: &mut String) {
+    if s.ends_with("\r\n") {
+        s.pop();
+        s.pop();
+        s.push('\n');
+    }
+}
+
 fn main() {
     let temp_path = std::env::temp_dir();
 
@@ -67,6 +75,7 @@ fn main() {
                 if file.read_line(&mut line).unwrap() == 0 {
                     break false;
                 }
+                fixup_newline(&mut line);
                 if line == "#!\n" {
                     break true;
                 }
@@ -76,7 +85,7 @@ fn main() {
 
             print!("Case {} ---- ", case);
 
-            let process = if !python {
+            let mut process = if !python {
                 std::process::Command::new(&exe_path)
             } else {
                 let mut p = std::process::Command::new(python_command.unwrap());
@@ -88,12 +97,13 @@ fn main() {
             .spawn()
             .unwrap();
 
-            let mut stdin = process.stdin.unwrap();
-            let mut stdout = process.stdout.unwrap();
+            let stdin = process.stdin.as_mut().unwrap();
+            let stdout = process.stdout.as_mut().unwrap();
 
             loop {
                 let mut line = "".to_owned();
                 file.read_line(&mut line).unwrap();
+                fixup_newline(&mut line);
                 if line == "#<->#\n" {
                     break;
                 }
@@ -110,6 +120,7 @@ fn main() {
             loop {
                 let mut line = "".to_owned();
                 file.read_line(&mut line).unwrap();
+                fixup_newline(&mut line);
                 if line == "#<->#\n" {
                     break;
                 }
@@ -127,7 +138,9 @@ fn main() {
                 println!("\x1b[31mError\x1b[0m");
             }
             total += 1;
-            case += 1
+            case += 1;
+
+            process.wait().unwrap();
         }
 
         if !python {
