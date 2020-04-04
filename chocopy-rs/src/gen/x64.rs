@@ -1975,6 +1975,176 @@ fn gen_print() -> Chunk {
     })
 }
 
+fn gen_main(
+    ast: &Ast,
+    storage_env: &mut StorageEnv,
+    classes: &HashMap<String, ClassSlot>,
+) -> Chunk {
+    let mut main_code = Emitter::new(
+        BUILTIN_CHOCOPY_MAIN,
+        Some(storage_env),
+        Some(classes),
+        &[],
+        0,
+    );
+
+    // mov rax,0x12345678
+    main_code.emit(&[0x48, 0xC7, 0xC0, 0x78, 0x56, 0x34, 0x12]);
+    main_code.emit_push_rax();
+
+    if PLATFORM == Platform::Windows {
+        main_code.emit_push_rdi();
+        main_code.emit_push_rsi();
+    }
+
+    for declaration in &ast.program().declarations {
+        if let Declaration::VarDef(v) = declaration {
+            main_code.emit_global_var_init(v);
+        }
+    }
+
+    let mut lines = vec![];
+
+    for statement in &ast.program().statements {
+        main_code.emit_statement(statement, &mut lines);
+    }
+
+    for declaration in &ast.program().declarations {
+        if let Declaration::VarDef(v) = declaration {
+            main_code.emit_global_var_drop(v);
+        }
+    }
+
+    if PLATFORM == Platform::Windows {
+        main_code.emit_pop_rsi();
+        main_code.emit_pop_rdi();
+    }
+    main_code.emit_pop_rax();
+    // cmp rax,0x12345678
+    main_code.emit(&[0x48, 0x3D, 0x78, 0x56, 0x34, 0x12]);
+
+    // je
+    main_code.emit(&[0x0f, 0x84]);
+    let pos = main_code.pos();
+    main_code.emit(&[0; 4]);
+
+    main_code.prepare_call(PLATFORM.stack_reserve());
+    main_code.call(BUILTIN_BROKEN_STACK);
+
+    let delta = (main_code.pos() - pos - 4) as u32;
+    main_code.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
+
+    main_code.end_proc();
+
+    main_code.finalize(ProcedureDebug {
+        decl_line: ast
+            .program()
+            .statements
+            .get(0)
+            .map_or(1, |s| s.base().location.start.row),
+        artificial: false,
+        parent: None,
+        lines,
+        return_type: TypeDebug::class_type("<None>"),
+        params: vec![],
+        locals: vec![],
+    })
+}
+
+fn add_class(
+    globals: &mut HashMap<String, LocalSlot<FuncSlot, VarSlot>>,
+    classes: &mut HashMap<String, ClassSlot>,
+    classes_debug: &mut HashMap<String, ClassDebug>,
+    c: &ClassDef,
+) {
+    let class_name = &c.name.id().name;
+    let super_name = &c.super_class.id().name;
+    let mut class_slot = classes.get(super_name).unwrap().clone();
+    let mut class_debug = classes_debug.get(super_name).unwrap().clone();
+    class_slot.methods.get_mut("$dtor").unwrap().link_name = class_name.clone() + ".$dtor";
+    globals.insert(
+        class_name.clone(),
+        LocalSlot::Func(FuncSlot {
+            link_name: class_name.clone(),
+            level: 0,
+        }),
+    );
+    for declaration in &c.declarations {
+        if let Declaration::VarDef(v) = declaration {
+            let source_type = v.value.inferred_type.clone().unwrap();
+            let target_type = ValueType::from_annotation(&v.var.tv().type_);
+            let size = if target_type == *TYPE_INT {
+                4
+            } else if target_type == *TYPE_BOOL {
+                1
+            } else {
+                8
+            };
+            class_slot.object_size += (size - class_slot.object_size % size) % size;
+            let offset = class_slot.object_size + 16;
+            let name = &v.var.tv().identifier.id().name;
+            class_slot.attributes.insert(
+                name.clone(),
+                AttributeSlot {
+                    offset,
+                    source_type,
+                    target_type,
+                    init: v.value.content.clone(),
+                },
+            );
+            class_slot.object_size += size;
+
+            class_debug.attributes.push(VarDebug {
+                offset: offset as i32,
+                line: v.base().location.start.row,
+                name: name.clone(),
+                var_type: TypeDebug::from_annotation(&v.var.tv().type_),
+            });
+        } else if let Declaration::FuncDef(f) = declaration {
+            let method_name = &f.name.id().name;
+            let link_name = class_name.clone() + "." + method_name;
+            if let Some(method) = class_slot.methods.get_mut(method_name) {
+                method.link_name = link_name;
+
+                let self_type = TypeDebug::from_annotation(&f.params[0].tv().type_);
+                class_debug
+                    .methods
+                    .get_mut(&method.offset)
+                    .unwrap()
+                    .1
+                    .params[0] = self_type;
+            } else {
+                let offset = class_slot.prototype_size;
+                class_slot
+                    .methods
+                    .insert(method_name.clone(), MethodSlot { offset, link_name });
+                class_slot.prototype_size += 8;
+
+                let params = f
+                    .params
+                    .iter()
+                    .map(|tv| TypeDebug::from_annotation(&tv.tv().type_))
+                    .collect();
+                let return_type = TypeDebug::from_annotation(&f.return_type);
+
+                class_debug.methods.insert(
+                    offset,
+                    (
+                        method_name.clone(),
+                        MethodDebug {
+                            params,
+                            return_type,
+                        },
+                    ),
+                );
+            }
+        }
+    }
+    class_debug.size = class_slot.object_size;
+    classes.insert(class_name.clone(), class_slot);
+    classes_debug.insert(class_name.clone(), class_debug);
+}
+
 pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
     let mut globals = HashMap::new();
     let mut classes = HashMap::new();
@@ -2061,92 +2231,7 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
                 }),
             );
         } else if let Declaration::ClassDef(c) = declaration {
-            let class_name = &c.name.id().name;
-            let super_name = &c.super_class.id().name;
-            let mut class_slot = classes.get(super_name).unwrap().clone();
-            let mut class_debug = classes_debug.get(super_name).unwrap().clone();
-            class_slot.methods.get_mut("$dtor").unwrap().link_name = class_name.clone() + ".$dtor";
-            globals.insert(
-                class_name.clone(),
-                LocalSlot::Func(FuncSlot {
-                    link_name: class_name.clone(),
-                    level: 0,
-                }),
-            );
-            for declaration in &c.declarations {
-                if let Declaration::VarDef(v) = declaration {
-                    let source_type = v.value.inferred_type.clone().unwrap();
-                    let target_type = ValueType::from_annotation(&v.var.tv().type_);
-                    let size = if target_type == *TYPE_INT {
-                        4
-                    } else if target_type == *TYPE_BOOL {
-                        1
-                    } else {
-                        8
-                    };
-                    class_slot.object_size += (size - class_slot.object_size % size) % size;
-                    let offset = class_slot.object_size + 16;
-                    let name = &v.var.tv().identifier.id().name;
-                    class_slot.attributes.insert(
-                        name.clone(),
-                        AttributeSlot {
-                            offset,
-                            source_type,
-                            target_type,
-                            init: v.value.content.clone(),
-                        },
-                    );
-                    class_slot.object_size += size;
-
-                    class_debug.attributes.push(VarDebug {
-                        offset: offset as i32,
-                        line: v.base().location.start.row,
-                        name: name.clone(),
-                        var_type: TypeDebug::from_annotation(&v.var.tv().type_),
-                    });
-                } else if let Declaration::FuncDef(f) = declaration {
-                    let method_name = &f.name.id().name;
-                    let link_name = class_name.clone() + "." + method_name;
-                    if let Some(method) = class_slot.methods.get_mut(method_name) {
-                        method.link_name = link_name;
-
-                        let self_type = TypeDebug::from_annotation(&f.params[0].tv().type_);
-                        class_debug
-                            .methods
-                            .get_mut(&method.offset)
-                            .unwrap()
-                            .1
-                            .params[0] = self_type;
-                    } else {
-                        let offset = class_slot.prototype_size;
-                        class_slot
-                            .methods
-                            .insert(method_name.clone(), MethodSlot { offset, link_name });
-                        class_slot.prototype_size += 8;
-
-                        let params = f
-                            .params
-                            .iter()
-                            .map(|tv| TypeDebug::from_annotation(&tv.tv().type_))
-                            .collect();
-                        let return_type = TypeDebug::from_annotation(&f.return_type);
-
-                        class_debug.methods.insert(
-                            offset,
-                            (
-                                method_name.clone(),
-                                MethodDebug {
-                                    params,
-                                    return_type,
-                                },
-                            ),
-                        );
-                    }
-                }
-            }
-            class_debug.size = class_slot.object_size;
-            classes.insert(class_name.clone(), class_slot);
-            classes_debug.insert(class_name.clone(), class_debug);
+            add_class(&mut globals, &mut classes, &mut classes_debug, c)
         }
     }
 
@@ -2170,77 +2255,7 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
 
     let mut storage_env = StorageEnv::new(globals);
 
-    let mut main_code = Emitter::new(
-        BUILTIN_CHOCOPY_MAIN,
-        Some(&mut storage_env),
-        Some(&classes),
-        &[],
-        0,
-    );
-
-    // mov rax,0x12345678
-    main_code.emit(&[0x48, 0xC7, 0xC0, 0x78, 0x56, 0x34, 0x12]);
-    main_code.emit_push_rax();
-
-    if PLATFORM == Platform::Windows {
-        main_code.emit_push_rdi();
-        main_code.emit_push_rsi();
-    }
-
-    for declaration in &ast.program().declarations {
-        if let Declaration::VarDef(v) = declaration {
-            main_code.emit_global_var_init(v);
-        }
-    }
-
-    let mut lines = vec![];
-
-    for statement in &ast.program().statements {
-        main_code.emit_statement(statement, &mut lines);
-    }
-
-    for declaration in &ast.program().declarations {
-        if let Declaration::VarDef(v) = declaration {
-            main_code.emit_global_var_drop(v);
-        }
-    }
-
-    if PLATFORM == Platform::Windows {
-        main_code.emit_pop_rsi();
-        main_code.emit_pop_rdi();
-    }
-    main_code.emit_pop_rax();
-    // cmp rax,0x12345678
-    main_code.emit(&[0x48, 0x3D, 0x78, 0x56, 0x34, 0x12]);
-
-    // je
-    main_code.emit(&[0x0f, 0x84]);
-    let pos = main_code.pos();
-    main_code.emit(&[0; 4]);
-
-    main_code.prepare_call(PLATFORM.stack_reserve());
-    main_code.call(BUILTIN_BROKEN_STACK);
-
-    let delta = (main_code.pos() - pos - 4) as u32;
-    main_code.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
-
-    main_code.end_proc();
-
-    let main_procedure = main_code.finalize(ProcedureDebug {
-        decl_line: ast
-            .program()
-            .statements
-            .get(0)
-            .map_or(1, |s| s.base().location.start.row),
-        artificial: false,
-        parent: None,
-        lines,
-        return_type: TypeDebug::class_type("<None>"),
-        params: vec![],
-        locals: vec![],
-    });
-
-    let mut chunks = vec![main_procedure];
+    let mut chunks = vec![gen_main(&ast, &mut storage_env, &classes)];
 
     for declaration in &ast.program().declarations {
         if let Declaration::FuncDef(f) = declaration {

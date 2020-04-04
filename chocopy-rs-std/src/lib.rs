@@ -95,10 +95,14 @@ unsafe extern "C" fn dtor_list(pointer: *mut u8) {
     }
 }
 
+#[cfg(not(test))]
 extern "C" {
     #[link_name = "object.__init__"]
     fn object_init();
 }
+
+#[cfg(test)]
+extern "C" fn object_init() {}
 
 #[export_name = "$alloc_obj"]
 pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mut u8 {
@@ -217,7 +221,7 @@ pub unsafe extern "C" fn input() -> *mut u8 {
     pointer
 }
 
-#[allow(dead_code)]
+#[cfg(not(test))]
 fn memory_leak() -> ! {
     println!("--- Memory leak detected! ---");
     exit(-1)
@@ -258,16 +262,17 @@ fn out_of_memory() -> ! {
 }
 
 extern "C" {
-    #[cfg(all(target_os = "linux", not(test)))]
+    #[cfg(not(test))]
     #[link_name = "$chocopy_main"]
     fn chocopy_main();
 }
 
 #[no_mangle]
-#[cfg(all(target_os = "linux", not(test)))]
-pub unsafe extern "C" fn main() {
+#[cfg(not(test))]
+pub unsafe extern "C" fn main() -> i32 {
     chocopy_main();
     if ALLOC_COUNTER.load(Ordering::SeqCst) != 0 {
         memory_leak();
     }
+    0
 }

@@ -187,6 +187,20 @@ impl CodeSet {
     }
 }
 
+#[derive(Debug)]
+struct ToolChainError;
+
+impl std::fmt::Display for ToolChainError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Failed to find MSVC tools. Please install Visual Studio or Visual C++ Build Tools"
+        )
+    }
+}
+
+impl std::error::Error for ToolChainError {}
+
 pub fn gen(
     source_path: &str,
     ast: Ast,
@@ -431,7 +445,7 @@ pub fn gen(
 
     let mut obj_file = std::fs::File::create(&obj_path)?;
     obj_file.write_all(&obj.write()?)?;
-    std::mem::drop(obj_file);
+    drop(obj_file);
 
     if no_link {
         return Ok(());
@@ -447,27 +461,37 @@ pub fn gen(
 
     let ld_output = match PLATFORM {
         Platform::Windows => {
-            let linker =
-                cc::windows_registry::find_tool("x86_64-pc-windows-msvc", "link.exe").unwrap();
-            let mut vcvarsall = linker.path();
-            vcvarsall = vcvarsall.parent().unwrap();
-            vcvarsall = vcvarsall.parent().unwrap();
-            vcvarsall = vcvarsall.parent().unwrap();
-            vcvarsall = vcvarsall.parent().unwrap();
-            vcvarsall = vcvarsall.parent().unwrap();
-            vcvarsall = vcvarsall.parent().unwrap();
-            vcvarsall = vcvarsall.parent().unwrap();
-            let vccarsall = vcvarsall
-                .join("Auxiliary")
-                .join("Build")
-                .join("vcvarsall.bat");
+            let vcvarsall = (|| -> Option<std::path::PathBuf> {
+                let linker = cc::windows_registry::find_tool("x86_64-pc-windows-msvc", "link.exe")?;
+                let mut vcvarsall = linker.path();
+                vcvarsall = vcvarsall.parent()?;
+                vcvarsall = vcvarsall.parent()?;
+                vcvarsall = vcvarsall.parent()?;
+                vcvarsall = vcvarsall.parent()?;
+                vcvarsall = vcvarsall.parent()?;
+                vcvarsall = vcvarsall.parent()?;
+                vcvarsall = vcvarsall.parent()?;
+                Some(
+                    vcvarsall
+                        .join("Auxiliary")
+                        .join("Build")
+                        .join("vcvarsall.bat"),
+                )
+            })()
+            .ok_or(ToolChainError)?;
 
-            let batch_content = format!("call \"{}\" amd64\nlink \"{}\" \"{}\" /OUT:\"{}\" kernel32.lib advapi32.lib ws2_32.lib userenv.lib vcruntime.lib ucrt.lib msvcrt.lib /ENTRY:$chocopy_main /SUBSYSTEM:CONSOLE",
-                vccarsall.as_os_str().to_str().unwrap(),
+            let batch_content = format!(
+                "@echo off
+call \"{}\" amd64
+link /NOLOGO /NXCOMPAT /OPT:REF,NOICF \
+\"{}\" \"{}\" /OUT:\"{}\" \
+kernel32.lib advapi32.lib ws2_32.lib userenv.lib vcruntime.lib ucrt.lib msvcrt.lib \
+/SUBSYSTEM:CONSOLE",
+                vcvarsall.as_os_str().to_str().unwrap(),
                 obj_path.as_os_str().to_str().unwrap(),
                 lib_path.as_os_str().to_str().unwrap(),
                 path
-                );
+            );
 
             let bat_name = format!("chocopy-temp-{}.bat", rand::random::<u32>());
 
@@ -492,6 +516,7 @@ pub fn gen(
     };
 
     if !ld_output.status.success() {
+        println!("Error from linker:");
         std::io::stdout().write_all(&ld_output.stdout).unwrap();
         std::io::stderr().write_all(&ld_output.stderr).unwrap();
     }
