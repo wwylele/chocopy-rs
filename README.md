@@ -12,3 +12,4 @@ So this was a course project for me. But I also want to try something else, so h
 
 This project is licensed under [MIT License](LICENSE). Test case files under [`chocopy-rs/test/original`](chocopy-rs/test/original) are from the original course project, with their own copyright notice in the directory.
 
+See [DESIGN.md](DESIGN.md) for some design detail.
