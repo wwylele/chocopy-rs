@@ -69,4 +69,61 @@ impl Writer for DwarfWriter {
             _ => self.inner.write_address(address, size),
         }
     }
+
+    fn write_eh_pointer(
+        &mut self,
+        address: Address,
+        eh_pe: constants::DwEhPe,
+        size: u8,
+    ) -> gimli::write::Result<()> {
+        match address {
+            Address::Symbol { symbol, addend } => {
+                self.relocs.push(DwarfReloc {
+                    offset: self.inner.len(),
+                    size,
+                    symbol,
+                });
+                self.inner
+                    .write_eh_pointer(Address::Constant(addend as u64), eh_pe, size)
+            }
+            _ => self.inner.write_eh_pointer(address, eh_pe, size),
+        }
+    }
+
+    /// Write an offset that is relative to the start of the given section.
+    ///
+    /// If the writer supports relocations, then it must provide its own implementation
+    /// of this method.
+    fn write_offset(
+        &mut self,
+        val: usize,
+        section: SectionId,
+        size: u8,
+    ) -> gimli::write::Result<()> {
+        self.self_relocs.push(DwarfSelfReloc {
+            offset: self.inner.len(),
+            size,
+            section: section.name(),
+        });
+        self.inner.write_offset(val, section, size)
+    }
+
+    /// Write an offset that is relative to the start of the given section.
+    ///
+    /// If the writer supports relocations, then it must provide its own implementation
+    /// of this method.
+    fn write_offset_at(
+        &mut self,
+        offset: usize,
+        val: usize,
+        section: SectionId,
+        size: u8,
+    ) -> gimli::write::Result<()> {
+        self.self_relocs.push(DwarfSelfReloc {
+            offset,
+            size,
+            section: section.name(),
+        });
+        self.inner.write_offset_at(offset, val, section, size)
+    }
 }
