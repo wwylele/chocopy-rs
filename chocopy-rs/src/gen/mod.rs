@@ -241,7 +241,7 @@ pub fn gen(
             kind: object::SymbolKind::Data,
             scope: object::SymbolScope::Linkage,
             weak: false,
-            section: object::write::SymbolSection::Common,
+            section: object::write::SymbolSection::Undefined,
             flags: object::SymbolFlags::None,
         })
     };
@@ -261,7 +261,7 @@ pub fn gen(
             kind: object::SymbolKind::Text,
             scope: object::SymbolScope::Linkage,
             weak: false,
-            section: object::write::SymbolSection::Common,
+            section: object::write::SymbolSection::Undefined,
             flags: object::SymbolFlags::None,
         })
     };
