@@ -402,7 +402,7 @@ impl MemberExpr {
                 return TYPE_OBJECT.clone();
             };
 
-        let name = &self.member.id().name;
+        let name = &self.member.name;
         if let Some(member) = m.get_attribute(class_name, name) {
             member.clone()
         } else {
@@ -485,7 +485,7 @@ impl MethodCallExpr {
             return TYPE_OBJECT.clone();
         };
 
-        let method_name = &member.member.id().name;
+        let method_name = &member.member.name;
 
         let method = if let Some(method) = m.get_method(&class_name, method_name) {
             method
@@ -683,7 +683,7 @@ impl FuncDef {
             .iter()
             .map(|decl| match decl {
                 Declaration::FuncDef(f) => (
-                    f.name.id().name.clone(),
+                    f.name.name.clone(),
                     LocalSlot::Func(FuncType {
                         parameters: f
                             .params
@@ -694,16 +694,16 @@ impl FuncDef {
                     }),
                 ),
                 Declaration::VarDef(v) => (
-                    v.var.identifier.id().name.clone(),
+                    v.var.identifier.name.clone(),
                     LocalSlot::Var(ValueType::from_annotation(&v.var.type_)),
                 ),
-                Declaration::GlobalDecl(v) => (v.variable.id().name.clone(), LocalSlot::Global),
-                Declaration::NonLocalDecl(v) => (v.variable.id().name.clone(), LocalSlot::NonLocal),
+                Declaration::GlobalDecl(v) => (v.variable.name.clone(), LocalSlot::Global),
+                Declaration::NonLocalDecl(v) => (v.variable.name.clone(), LocalSlot::NonLocal),
                 _ => panic!(),
             })
             .chain(self.params.iter().map(|param| {
                 (
-                    param.identifier.id().name.clone(),
+                    param.identifier.name.clone(),
                     LocalSlot::Var(ValueType::from_annotation(&param.type_)),
                 )
             }))

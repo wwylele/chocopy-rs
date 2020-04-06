@@ -55,7 +55,7 @@ fn check_func(
             errors.push(error_from(core_type));
         }
 
-        let id = param.identifier.id_mut();
+        let id = &mut param.identifier;
         if classes.contains(&id.name) {
             let msg = error_shadow(&id.name);
             id.base_mut().error_msg = Some(msg);
@@ -100,7 +100,7 @@ fn check_func(
                     errors.push(error_from(core_type));
                 }
 
-                let id = var.identifier.id_mut();
+                let id = &mut var.identifier;
                 if classes.contains(&id.name) {
                     let msg = error_shadow(&id.name);
                     id.base_mut().error_msg = Some(msg);
@@ -109,7 +109,7 @@ fn check_func(
                 locals.insert(id.name.clone());
             }
             Declaration::FuncDef(f) => {
-                let id = f.name.id_mut();
+                let id = &mut f.name;
                 if classes.contains(&id.name) {
                     let msg = error_shadow(&id.name);
                     id.base_mut().error_msg = Some(msg);
@@ -118,7 +118,7 @@ fn check_func(
                 nonlocal_remove.insert(id.name.clone());
             }
             Declaration::NonLocalDecl(v) => {
-                let id = v.variable.id_mut();
+                let id = &mut v.variable;
                 if !nonlocals.contains(&id.name) {
                     let msg = error_nonlocal(&id.name);
                     id.base_mut().error_msg = Some(msg);
@@ -126,7 +126,7 @@ fn check_func(
                 }
             }
             Declaration::GlobalDecl(v) => {
-                let id = v.variable.id_mut();
+                let id = &mut v.variable;
                 if !globals.contains(&id.name) {
                     let msg = error_global(&id.name);
                     id.base_mut().error_msg = Some(msg);
@@ -142,7 +142,7 @@ fn check_func(
     if let TypeAnnotation::ClassType(c) = &f.return_type {
         if let "int" | "str" | "bool" = c.class_name.as_str() {
             if !always_return(&f.statements) {
-                let msg = error_return(&f.name.id().name);
+                let msg = error_return(&f.name.name);
                 f.name.base_mut().error_msg = Some(msg);
                 errors.push(error_from(&f.name));
             }
@@ -202,7 +202,7 @@ pub fn check(mut ast: Ast) -> Ast {
     for decl in &mut ast.program_mut().declarations {
         if let Declaration::VarDef(v) = decl {
             check_var_def(v, &mut errors, &classes);
-            let name = &v.var.identifier.id().name;
+            let name = &v.var.identifier.name;
             globals.insert(name.clone());
         } else if let Declaration::ClassDef(c) = decl {
             for decl in &mut c.declarations {
@@ -283,7 +283,7 @@ pub fn check(mut ast: Ast) -> Ast {
         if let Declaration::FuncDef(f) = decl {
             check_func(f, &mut errors, &classes, &globals, &HashSet::new());
             global_env.insert(
-                f.name.id().name.clone(),
+                f.name.name.clone(),
                 LocalSlot::Func(FuncType {
                     parameters: f
                         .params
@@ -299,7 +299,7 @@ pub fn check(mut ast: Ast) -> Ast {
                     check_func(f, &mut errors, &classes, &globals, &HashSet::new())
                 }
             }
-            let name = &c.name.id().name;
+            let name = &c.name.name;
             global_env.insert(
                 name.clone(),
                 LocalSlot::Func(FuncType {
@@ -310,7 +310,7 @@ pub fn check(mut ast: Ast) -> Ast {
                 }),
             );
         } else if let Declaration::VarDef(v) = decl {
-            let name = &v.var.identifier.id().name;
+            let name = &v.var.identifier.name;
             global_env.insert(
                 name.clone(),
                 LocalSlot::Var(ValueType::from_annotation(&v.var.type_)),

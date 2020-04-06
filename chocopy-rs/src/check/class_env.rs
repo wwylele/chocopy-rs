@@ -48,8 +48,8 @@ impl ClassEnv {
         errors: &mut Vec<CompilerError>,
         id_set: &HashSet<String>,
     ) {
-        let class_name = &class_def.name.id().name;
-        let super_name = &class_def.super_class.id().name;
+        let class_name = &class_def.name.name;
+        let super_name = &class_def.super_class.name;
         let super_class = if let Some(super_class) = self.0.get(super_name) {
             super_class
         } else {
@@ -150,7 +150,7 @@ impl ClassEnv {
         self.0.insert(
             class_name.clone(),
             ClassInfo {
-                super_class: class_def.super_class.id().name.clone(),
+                super_class: class_def.super_class.name.clone(),
                 items,
             },
         );

@@ -870,7 +870,7 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x48, 0x89, 0xC6]);
 
         let slot = if let Some(ValueType::ClassValueType(c)) = &expr.object.inferred_type {
-            &self.classes.as_ref().unwrap()[&c.class_name].attributes[&expr.member.id().name]
+            &self.classes.as_ref().unwrap()[&c.class_name].attributes[&expr.member.name]
         } else {
             panic!()
         };
@@ -1109,7 +1109,7 @@ impl<'a> Emitter<'a> {
                 let args: Vec<Expr> = std::iter::once(method.object.clone())
                     .chain(expr.args.iter().cloned())
                     .collect();
-                self.emit_call_expr(&args, &method.inferred_type, &method.member.id().name, true);
+                self.emit_call_expr(&args, &method.inferred_type, &method.member.name, true);
             }
             ExprContent::IndexExpr(expr) => {
                 if expr.list.inferred_type.as_ref().unwrap() == &*TYPE_STR {
@@ -1305,13 +1305,13 @@ impl<'a> Emitter<'a> {
                     self.emit_check_none();
                     self.emit_push_rax();
 
-                    let slot =
-                        if let Some(ValueType::ClassValueType(c)) = &expr.object.inferred_type {
-                            &self.classes.as_ref().unwrap()[&c.class_name].attributes
-                                [&expr.member.id().name]
-                        } else {
-                            panic!()
-                        };
+                    let slot = if let Some(ValueType::ClassValueType(c)) =
+                        &expr.object.inferred_type
+                    {
+                        &self.classes.as_ref().unwrap()[&c.class_name].attributes[&expr.member.name]
+                    } else {
+                        panic!()
+                    };
 
                     if slot.target_type != *TYPE_INT && slot.target_type != *TYPE_BOOL {
                         // mov rax,[rax+{}]
@@ -1502,7 +1502,7 @@ impl<'a> Emitter<'a> {
             .storage_env
             .as_ref()
             .unwrap()
-            .get(&decl.var.identifier.id().name)
+            .get(&decl.var.identifier.name)
         {
             assert!(v.level == 0);
             v.offset
@@ -1550,7 +1550,7 @@ impl<'a> Emitter<'a> {
             .storage_env
             .as_ref()
             .unwrap()
-            .get(&decl.var.identifier.id().name)
+            .get(&decl.var.identifier.name)
         {
             assert!(v.level == 0);
             v.offset
@@ -1580,9 +1580,9 @@ fn gen_function(
     parent: Option<&str>,
 ) -> Vec<Chunk> {
     let link_name = if let Some(parent) = parent {
-        parent.to_owned() + "." + &function.name.id().name
+        parent.to_owned() + "." + &function.name.name
     } else {
-        function.name.id().name.clone()
+        function.name.name.clone()
     };
 
     let mut locals = HashMap::new();
@@ -1593,7 +1593,7 @@ fn gen_function(
     for (i, param) in function.params.iter().enumerate() {
         let offset;
         offset = i as i32 * 8 + 16;
-        let name = &param.identifier.id().name;
+        let name = &param.identifier.name;
         locals.insert(
             name.clone(),
             LocalSlot::Var(VarSlot {
@@ -1620,7 +1620,7 @@ fn gen_function(
 
     for declaration in &function.declarations {
         if let Declaration::VarDef(v) = declaration {
-            let name = &v.var.identifier.id().name;
+            let name = &v.var.identifier.name;
             let offset = local_offset;
             local_offset -= 8;
             locals.insert(
@@ -1642,7 +1642,7 @@ fn gen_function(
                 var_type: TypeDebug::from_annotation(&v.var.type_),
             })
         } else if let Declaration::FuncDef(f) = declaration {
-            let name = &f.name.id().name;
+            let name = &f.name.name;
             locals.insert(
                 name.clone(),
                 LocalSlot::Func(FuncSlot {
@@ -2057,8 +2057,8 @@ fn add_class(
     classes_debug: &mut HashMap<String, ClassDebug>,
     c: &ClassDef,
 ) {
-    let class_name = &c.name.id().name;
-    let super_name = &c.super_class.id().name;
+    let class_name = &c.name.name;
+    let super_name = &c.super_class.name;
     let mut class_slot = classes.get(super_name).unwrap().clone();
     let mut class_debug = classes_debug.get(super_name).unwrap().clone();
     class_slot.methods.get_mut("$dtor").unwrap().link_name = class_name.clone() + ".$dtor";
@@ -2082,7 +2082,7 @@ fn add_class(
             };
             class_slot.object_size += (size - class_slot.object_size % size) % size;
             let offset = class_slot.object_size + 16;
-            let name = &v.var.identifier.id().name;
+            let name = &v.var.identifier.name;
             class_slot.attributes.insert(
                 name.clone(),
                 AttributeSlot {
@@ -2101,7 +2101,7 @@ fn add_class(
                 var_type: TypeDebug::from_annotation(&v.var.type_),
             });
         } else if let Declaration::FuncDef(f) = declaration {
-            let method_name = &f.name.id().name;
+            let method_name = &f.name.name;
             let link_name = class_name.clone() + "." + method_name;
             if let Some(method) = class_slot.methods.get_mut(method_name) {
                 method.link_name = link_name;
@@ -2195,7 +2195,7 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
     );
     for declaration in &ast.program().declarations {
         if let Declaration::VarDef(v) = declaration {
-            let name = &v.var.identifier.id().name;
+            let name = &v.var.identifier.name;
             let target_type = ValueType::from_annotation(&v.var.type_);
             let size = if target_type == *TYPE_INT {
                 4
@@ -2222,7 +2222,7 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
 
             global_offset += size;
         } else if let Declaration::FuncDef(f) = declaration {
-            let name = &f.name.id().name;
+            let name = &f.name.name;
             globals.insert(
                 name.clone(),
                 LocalSlot::Func(FuncSlot {
@@ -2268,7 +2268,7 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
                         &mut storage_env,
                         &classes,
                         0,
-                        Some(&c.name.id().name),
+                        Some(&c.name.name),
                     ));
                 }
             }

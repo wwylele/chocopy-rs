@@ -155,9 +155,9 @@ impl_node!(CallExpr);
 pub struct ClassDef {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub name: Id,
+    pub name: UntypedIdentifier,
     #[serde(rename = "superClass")]
-    pub super_class: Id,
+    pub super_class: UntypedIdentifier,
     pub declarations: Vec<Declaration>,
 }
 
@@ -215,7 +215,7 @@ pub enum Declaration {
 }
 
 impl Declaration {
-    pub fn name_mut(&mut self) -> &mut Identifier {
+    pub fn name_mut(&mut self) -> &mut UntypedIdentifier {
         match self {
             Declaration::ClassDef(ClassDef { name, .. }) => name,
             Declaration::FuncDef(FuncDef { name, .. }) => name,
@@ -226,7 +226,6 @@ impl Declaration {
                 ..
             }) => identifier,
         }
-        .id_mut()
     }
 }
 
@@ -339,7 +338,7 @@ impl_node!(ForStmt);
 pub struct FuncDef {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub name: Id,
+    pub name: UntypedIdentifier,
     pub params: Vec<TypedVar>,
     #[serde(rename = "returnType")]
     pub return_type: TypeAnnotation,
@@ -374,29 +373,10 @@ impl_node!(FuncIdentifier);
 pub struct GlobalDecl {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub variable: Id,
+    pub variable: UntypedIdentifier,
 }
 
 impl_node!(GlobalDecl);
-
-#[enum_dispatch(Node)]
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub enum Id {
-    Identifier(Identifier),
-}
-
-impl Id {
-    pub fn id(&self) -> &Identifier {
-        let Id::Identifier(id) = self;
-        id
-    }
-
-    pub fn id_mut(&mut self) -> &mut Identifier {
-        let Id::Identifier(id) = self;
-        id
-    }
-}
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
@@ -407,6 +387,16 @@ pub struct Identifier {
 }
 
 impl_node!(Identifier);
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[serde(tag = "kind", rename = "Identifier")]
+pub struct UntypedIdentifier {
+    #[serde(flatten)]
+    pub base: NodeBase,
+    pub name: String,
+}
+
+impl_node!(UntypedIdentifier);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
@@ -545,7 +535,7 @@ pub struct MemberExpr {
     #[serde(flatten)]
     pub base: NodeBase,
     pub object: Expr,
-    pub member: Id,
+    pub member: UntypedIdentifier,
 }
 
 impl_node!(MemberExpr);
@@ -558,7 +548,7 @@ pub struct TypedMemberExpr {
     #[serde(flatten)]
     pub base: NodeBase,
     pub object: Expr,
-    pub member: Id,
+    pub member: UntypedIdentifier,
 }
 
 impl_node!(TypedMemberExpr);
@@ -588,7 +578,7 @@ impl_node!(NoneLiteral);
 pub struct NonLocalDecl {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub variable: Id,
+    pub variable: UntypedIdentifier,
 }
 
 impl_node!(NonLocalDecl);
@@ -671,7 +661,7 @@ impl_node!(TypedIdentifier);
 pub struct TypedVar {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub identifier: Id,
+    pub identifier: UntypedIdentifier,
     #[serde(rename = "type")]
     pub type_: TypeAnnotation,
 }
@@ -784,10 +774,10 @@ mod tests {
                 base: NodeBase::new(0, 0, 0, 0),
                 var: TypedVar {
                     base: NodeBase::new(0, 0, 0, 0),
-                    identifier: Id::Identifier(Identifier {
+                    identifier: UntypedIdentifier {
                         base: NodeBase::new(0, 0, 0, 0),
                         name: "a".to_owned(),
-                    }),
+                    },
                     type_: TypeAnnotation::ClassType(ClassType {
                         base: NodeBase::new(0, 0, 0, 0),
                         class_name: "a".to_owned(),
