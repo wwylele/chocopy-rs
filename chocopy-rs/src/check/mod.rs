@@ -366,18 +366,8 @@ mod tests {
                 let ast = serde_json::from_str::<Ast>(&ast_string).unwrap();
                 let mut typed = serde_json::from_str::<Ast>(&typed_string).unwrap();
                 let mut result = check(ast);
-                result
-                    .program_mut()
-                    .errors
-                    .errors_mut()
-                    .errors
-                    .sort_by_key(|e| e.base().location);
-                typed
-                    .program_mut()
-                    .errors
-                    .errors_mut()
-                    .errors
-                    .sort_by_key(|e| e.base().location);
+                result.program_mut().errors.sort();
+                typed.program_mut().errors.sort();
                 if result == typed {
                     println!("\x1b[32mOK\x1b[0m");
                 } else {

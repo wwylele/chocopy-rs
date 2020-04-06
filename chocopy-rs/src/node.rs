@@ -260,9 +260,9 @@ impl ErrorInfo {
         errors
     }
 
-    pub fn errors_mut(&mut self) -> &mut Errors {
+    pub fn sort(&mut self) {
         let ErrorInfo::Errors(errors) = self;
-        errors
+        errors.errors.sort_by_key(|error| error.base().location);
     }
 }
 

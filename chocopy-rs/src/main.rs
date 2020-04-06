@@ -101,7 +101,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     };
 
-    let ast = parse::process(input)?;
+    let mut ast = parse::process(input)?;
+    ast.program_mut().errors.sort();
 
     if matches.opt_present("ast") {
         println!("{}", serde_json::to_string_pretty(&ast).unwrap());
@@ -112,7 +113,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let ast = check::check(ast);
+    let mut ast = check::check(ast);
+    ast.program_mut().errors.sort();
 
     if matches.opt_present("typed") {
         println!("{}", serde_json::to_string_pretty(&ast).unwrap());
