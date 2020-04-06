@@ -727,7 +727,7 @@ impl<'a> Emitter<'a> {
     pub fn emit_call_expr(
         &mut self,
         args: &[Expr],
-        func_type: &Option<FuncTypeWrapper>,
+        func_type: &Option<FuncType>,
         name: &str,
         virtual_call: bool,
     ) {
@@ -736,7 +736,7 @@ impl<'a> Emitter<'a> {
         for (i, arg) in args.iter().enumerate() {
             self.emit_expression(arg);
 
-            let param_type = &func_type.as_ref().unwrap().func_type().parameters[i];
+            let param_type = &func_type.as_ref().unwrap().parameters[i];
 
             self.emit_coerce(arg.inferred_type.as_ref().unwrap(), param_type);
 

@@ -350,24 +350,11 @@ pub struct FuncDef {
 impl_node!(FuncDef);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields)]
+#[serde(tag = "kind")]
 pub struct FuncType {
     pub parameters: Vec<ValueType>,
     #[serde(rename = "returnType")]
     pub return_type: ValueType,
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub enum FuncTypeWrapper {
-    FuncType(FuncType),
-}
-
-impl FuncTypeWrapper {
-    pub fn func_type(&self) -> &FuncType {
-        let FuncTypeWrapper::FuncType(func_type) = self;
-        func_type
-    }
 }
 
 #[enum_dispatch(Node)]
@@ -392,7 +379,7 @@ impl FuncId {
 #[serde(deny_unknown_fields)]
 pub struct FuncIdentifier {
     #[serde(rename = "inferredType", skip_serializing_if = "Option::is_none")]
-    pub inferred_type: Option<FuncTypeWrapper>,
+    pub inferred_type: Option<FuncType>,
     #[serde(flatten)]
     pub base: NodeBase,
     pub name: String,
@@ -585,7 +572,7 @@ impl_node!(MemberExpr);
 #[serde(rename = "MemberExpr", tag = "kind")]
 pub struct TypedMemberExpr {
     #[serde(rename = "inferredType", skip_serializing_if = "Option::is_none")]
-    pub inferred_type: Option<FuncTypeWrapper>,
+    pub inferred_type: Option<FuncType>,
     #[serde(flatten)]
     pub base: NodeBase,
     pub object: Expr,

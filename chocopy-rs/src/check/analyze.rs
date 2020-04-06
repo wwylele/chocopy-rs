@@ -440,7 +440,7 @@ impl CallExpr {
 
         // Reference program: don't attach type to constructor
         if !m.contains(&id.name) {
-            id.inferred_type = Some(FuncTypeWrapper::FuncType(function.clone()));
+            id.inferred_type = Some(function.clone());
         }
 
         if function.parameters.len() != args.len() {
@@ -497,7 +497,7 @@ impl MethodCallExpr {
             return TYPE_OBJECT.clone();
         };
 
-        member.inferred_type = Some(FuncTypeWrapper::FuncType(method.clone()));
+        member.inferred_type = Some(method.clone());
 
         if method.parameters.len() - 1 != args.len() {
             let msg = error_call_count(method.parameters.len() - 1, args.len());
