@@ -9,8 +9,7 @@ use error::*;
 use std::collections::{HashMap, HashSet};
 
 fn check_var_def(v: &mut VarDef, errors: &mut Vec<Error>, classes: &ClassEnv) {
-    let tv = v.var.tv_mut();
-    let core_type = tv.type_.core_type_mut();
+    let core_type = v.var.type_.core_type_mut();
     if !classes.contains(&core_type.class_name) {
         let msg = error_invalid_type(&core_type.class_name);
         core_type.base_mut().error_msg = Some(msg);
@@ -49,14 +48,14 @@ fn check_func(
     // Check parameter type, collision and shadowing
     // semantic rule: 1(param), 2(param), 11(param)
     for param in &mut f.params {
-        let core_type = param.tv_mut().type_.core_type_mut();
+        let core_type = param.type_.core_type_mut();
         if !classes.contains(&core_type.class_name) {
             let msg = error_invalid_type(&core_type.class_name);
             core_type.base_mut().error_msg = Some(msg);
             errors.push(error_from(core_type));
         }
 
-        let id = param.tv_mut().identifier.id_mut();
+        let id = param.identifier.id_mut();
         if classes.contains(&id.name) {
             let msg = error_shadow(&id.name);
             id.base_mut().error_msg = Some(msg);
@@ -94,14 +93,14 @@ fn check_func(
         match decl {
             Declaration::VarDef(v) => {
                 let var = &mut v.var;
-                let core_type = var.tv_mut().type_.core_type_mut();
+                let core_type = var.type_.core_type_mut();
                 if !classes.contains(&core_type.class_name) {
                     let msg = error_invalid_type(&core_type.class_name);
                     core_type.base_mut().error_msg = Some(msg);
                     errors.push(error_from(core_type));
                 }
 
-                let id = var.tv_mut().identifier.id_mut();
+                let id = var.identifier.id_mut();
                 if classes.contains(&id.name) {
                     let msg = error_shadow(&id.name);
                     id.base_mut().error_msg = Some(msg);
@@ -203,8 +202,7 @@ pub fn check(mut ast: Ast) -> Ast {
     for decl in &mut ast.program_mut().declarations {
         if let Declaration::VarDef(v) = decl {
             check_var_def(v, &mut errors, &classes);
-            let tv = v.var.tv();
-            let name = &tv.identifier.id().name;
+            let name = &v.var.identifier.id().name;
             globals.insert(name.clone());
         } else if let Declaration::ClassDef(c) = decl {
             for decl in &mut c.declarations {
@@ -290,7 +288,7 @@ pub fn check(mut ast: Ast) -> Ast {
                     parameters: f
                         .params
                         .iter()
-                        .map(|tv| ValueType::from_annotation(&tv.tv().type_))
+                        .map(|tv| ValueType::from_annotation(&tv.type_))
                         .collect(),
                     return_type: ValueType::from_annotation(&f.return_type),
                 }),
@@ -312,11 +310,10 @@ pub fn check(mut ast: Ast) -> Ast {
                 }),
             );
         } else if let Declaration::VarDef(v) = decl {
-            let tv = v.var.tv();
-            let name = &tv.identifier.id().name;
+            let name = &v.var.identifier.id().name;
             global_env.insert(
                 name.clone(),
-                LocalSlot::Var(ValueType::from_annotation(&tv.type_)),
+                LocalSlot::Var(ValueType::from_annotation(&v.var.type_)),
             );
         }
     }

@@ -118,7 +118,7 @@ impl AssignStmt {
 impl VarDef {
     pub fn analyze(&mut self, errors: &mut Vec<Error>, o: &mut TypeLocalEnv, m: &ClassEnv) {
         let right = self.value.analyze(errors, o, m);
-        let left = ValueType::from_annotation(&self.var.tv().type_);
+        let left = ValueType::from_annotation(&self.var.type_);
         if !m.is_compatible(&right, &left) {
             let msg = error_assign(&left, &right);
             self.base_mut().error_msg = Some(msg);
@@ -690,27 +690,23 @@ impl FuncDef {
                         parameters: f
                             .params
                             .iter()
-                            .map(|tv| ValueType::from_annotation(&tv.tv().type_))
+                            .map(|tv| ValueType::from_annotation(&tv.type_))
                             .collect(),
                         return_type: ValueType::from_annotation(&f.return_type),
                     }),
                 ),
-                Declaration::VarDef(v) => {
-                    let tv = v.var.tv();
-                    (
-                        tv.identifier.id().name.clone(),
-                        LocalSlot::Var(ValueType::from_annotation(&tv.type_)),
-                    )
-                }
+                Declaration::VarDef(v) => (
+                    v.var.identifier.id().name.clone(),
+                    LocalSlot::Var(ValueType::from_annotation(&v.var.type_)),
+                ),
                 Declaration::GlobalDecl(v) => (v.variable.id().name.clone(), LocalSlot::Global),
                 Declaration::NonLocalDecl(v) => (v.variable.id().name.clone(), LocalSlot::NonLocal),
                 _ => panic!(),
             })
             .chain(self.params.iter().map(|param| {
-                let tv = param.tv();
                 (
-                    tv.identifier.id().name.clone(),
-                    LocalSlot::Var(ValueType::from_annotation(&tv.type_)),
+                    param.identifier.id().name.clone(),
+                    LocalSlot::Var(ValueType::from_annotation(&param.type_)),
                 )
             }))
             .collect();

@@ -1492,7 +1492,7 @@ impl<'a> Emitter<'a> {
             }
         }
 
-        let target_type = ValueType::from_annotation(&decl.var.tv().type_);
+        let target_type = ValueType::from_annotation(&decl.var.type_);
         self.emit_coerce(decl.value.inferred_type.as_ref().unwrap(), &target_type);
         self.emit_push_rax();
     }
@@ -1502,7 +1502,7 @@ impl<'a> Emitter<'a> {
             .storage_env
             .as_ref()
             .unwrap()
-            .get(&decl.var.tv().identifier.id().name)
+            .get(&decl.var.identifier.id().name)
         {
             assert!(v.level == 0);
             v.offset
@@ -1525,7 +1525,7 @@ impl<'a> Emitter<'a> {
             }
         }
 
-        let target_type = ValueType::from_annotation(&decl.var.tv().type_);
+        let target_type = ValueType::from_annotation(&decl.var.type_);
         self.emit_coerce(decl.value.inferred_type.as_ref().unwrap(), &target_type);
 
         if target_type == *TYPE_INT {
@@ -1550,7 +1550,7 @@ impl<'a> Emitter<'a> {
             .storage_env
             .as_ref()
             .unwrap()
-            .get(&decl.var.tv().identifier.id().name)
+            .get(&decl.var.identifier.id().name)
         {
             assert!(v.level == 0);
             v.offset
@@ -1558,7 +1558,7 @@ impl<'a> Emitter<'a> {
             panic!()
         };
 
-        let target_type = ValueType::from_annotation(&decl.var.tv().type_);
+        let target_type = ValueType::from_annotation(&decl.var.type_);
         if target_type != *TYPE_INT && target_type != *TYPE_BOOL {
             // mov rax,[rip+{}]
             self.emit(&[0x48, 0x8B, 0x05]);
@@ -1593,7 +1593,7 @@ fn gen_function(
     for (i, param) in function.params.iter().enumerate() {
         let offset;
         offset = i as i32 * 8 + 16;
-        let name = &param.tv().identifier.id().name;
+        let name = &param.identifier.id().name;
         locals.insert(
             name.clone(),
             LocalSlot::Var(VarSlot {
@@ -1601,7 +1601,7 @@ fn gen_function(
                 level: level + 1,
             }),
         );
-        let param_type = ValueType::from_annotation(&param.tv().type_);
+        let param_type = ValueType::from_annotation(&param.type_);
         if param_type != *TYPE_INT && param_type != *TYPE_BOOL {
             clean_up_list.push(offset);
         }
@@ -1610,7 +1610,7 @@ fn gen_function(
             offset,
             line: param.base().location.start.row,
             name: name.clone(),
-            var_type: TypeDebug::from_annotation(&param.tv().type_),
+            var_type: TypeDebug::from_annotation(&param.type_),
         })
     }
 
@@ -1620,7 +1620,7 @@ fn gen_function(
 
     for declaration in &function.declarations {
         if let Declaration::VarDef(v) = declaration {
-            let name = &v.var.tv().identifier.id().name;
+            let name = &v.var.identifier.id().name;
             let offset = local_offset;
             local_offset -= 8;
             locals.insert(
@@ -1630,7 +1630,7 @@ fn gen_function(
                     level: level + 1,
                 }),
             );
-            let local_type = ValueType::from_annotation(&v.var.tv().type_);
+            let local_type = ValueType::from_annotation(&v.var.type_);
             if local_type != *TYPE_INT && local_type != *TYPE_BOOL {
                 clean_up_list.push(offset);
             }
@@ -1639,7 +1639,7 @@ fn gen_function(
                 offset,
                 line: v.base().location.start.row,
                 name: name.clone(),
-                var_type: TypeDebug::from_annotation(&v.var.tv().type_),
+                var_type: TypeDebug::from_annotation(&v.var.type_),
             })
         } else if let Declaration::FuncDef(f) = declaration {
             let name = &f.name.id().name;
@@ -2072,7 +2072,7 @@ fn add_class(
     for declaration in &c.declarations {
         if let Declaration::VarDef(v) = declaration {
             let source_type = v.value.inferred_type.clone().unwrap();
-            let target_type = ValueType::from_annotation(&v.var.tv().type_);
+            let target_type = ValueType::from_annotation(&v.var.type_);
             let size = if target_type == *TYPE_INT {
                 4
             } else if target_type == *TYPE_BOOL {
@@ -2082,7 +2082,7 @@ fn add_class(
             };
             class_slot.object_size += (size - class_slot.object_size % size) % size;
             let offset = class_slot.object_size + 16;
-            let name = &v.var.tv().identifier.id().name;
+            let name = &v.var.identifier.id().name;
             class_slot.attributes.insert(
                 name.clone(),
                 AttributeSlot {
@@ -2098,7 +2098,7 @@ fn add_class(
                 offset: offset as i32,
                 line: v.base().location.start.row,
                 name: name.clone(),
-                var_type: TypeDebug::from_annotation(&v.var.tv().type_),
+                var_type: TypeDebug::from_annotation(&v.var.type_),
             });
         } else if let Declaration::FuncDef(f) = declaration {
             let method_name = &f.name.id().name;
@@ -2106,7 +2106,7 @@ fn add_class(
             if let Some(method) = class_slot.methods.get_mut(method_name) {
                 method.link_name = link_name;
 
-                let self_type = TypeDebug::from_annotation(&f.params[0].tv().type_);
+                let self_type = TypeDebug::from_annotation(&f.params[0].type_);
                 class_debug
                     .methods
                     .get_mut(&method.offset)
@@ -2123,7 +2123,7 @@ fn add_class(
                 let params = f
                     .params
                     .iter()
-                    .map(|tv| TypeDebug::from_annotation(&tv.tv().type_))
+                    .map(|tv| TypeDebug::from_annotation(&tv.type_))
                     .collect();
                 let return_type = TypeDebug::from_annotation(&f.return_type);
 
@@ -2195,8 +2195,8 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
     );
     for declaration in &ast.program().declarations {
         if let Declaration::VarDef(v) = declaration {
-            let name = &v.var.tv().identifier.id().name;
-            let target_type = ValueType::from_annotation(&v.var.tv().type_);
+            let name = &v.var.identifier.id().name;
+            let target_type = ValueType::from_annotation(&v.var.type_);
             let size = if target_type == *TYPE_INT {
                 4
             } else if target_type == *TYPE_BOOL {
@@ -2217,7 +2217,7 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
                 offset: global_offset,
                 line: v.base().location.start.row,
                 name: name.clone(),
-                var_type: TypeDebug::from_annotation(&v.var.tv().type_),
+                var_type: TypeDebug::from_annotation(&v.var.type_),
             });
 
             global_offset += size;

@@ -87,7 +87,7 @@ impl ClassEnv {
                     let parameters: Vec<_> = func
                         .params
                         .iter()
-                        .map(|t| ValueType::from_annotation(&t.tv().type_))
+                        .map(|t| ValueType::from_annotation(&t.type_))
                         .collect();
                     let return_type = ValueType::from_annotation(&func.return_type);
 
@@ -134,7 +134,7 @@ impl ClassEnv {
                     if items
                         .insert(
                             name_str.clone(),
-                            Type::ValueType(ValueType::from_annotation(&var.var.tv().type_)),
+                            Type::ValueType(ValueType::from_annotation(&var.var.type_)),
                         )
                         .is_some()
                     {

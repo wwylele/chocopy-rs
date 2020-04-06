@@ -222,7 +222,7 @@ impl Declaration {
             Declaration::GlobalDecl(GlobalDecl { variable, .. }) => variable,
             Declaration::NonLocalDecl(NonLocalDecl { variable, .. }) => variable,
             Declaration::VarDef(VarDef {
-                var: Tv::TypedVar(TypedVar { identifier, .. }),
+                var: TypedVar { identifier, .. },
                 ..
             }) => identifier,
         }
@@ -360,7 +360,7 @@ pub struct FuncDef {
     #[serde(flatten)]
     pub base: NodeBase,
     pub name: Id,
-    pub params: Vec<Tv>,
+    pub params: Vec<TypedVar>,
     #[serde(rename = "returnType")]
     pub return_type: TypeAnnotation,
     pub declarations: Vec<Declaration>,
@@ -691,25 +691,6 @@ impl_node!(StringLiteral);
 #[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind", deny_unknown_fields)]
-pub enum Tv {
-    TypedVar(TypedVar),
-}
-
-impl Tv {
-    pub fn tv(&self) -> &TypedVar {
-        let Tv::TypedVar(tv) = self;
-        tv
-    }
-
-    pub fn tv_mut(&mut self) -> &mut TypedVar {
-        let Tv::TypedVar(tv) = self;
-        tv
-    }
-}
-
-#[enum_dispatch(Node)]
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(tag = "kind", deny_unknown_fields)]
 pub enum TypeAnnotation {
     ClassType(ClassType),
     ListType(Box<ListType>),
@@ -755,7 +736,7 @@ pub struct TypedIdentifier {
 impl_node!(TypedIdentifier);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields)]
+#[serde(tag = "kind")]
 pub struct TypedVar {
     #[serde(flatten)]
     pub base: NodeBase,
@@ -820,7 +801,7 @@ impl ValueType {
 pub struct VarDef {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub var: Tv,
+    pub var: TypedVar,
     pub value: Literal,
 }
 
@@ -870,7 +851,7 @@ mod tests {
             base: NodeBase::new(1, 1, 1, 10),
             declarations: vec![Declaration::VarDef(VarDef {
                 base: NodeBase::new(0, 0, 0, 0),
-                var: Tv::TypedVar(TypedVar {
+                var: TypedVar {
                     base: NodeBase::new(0, 0, 0, 0),
                     identifier: Id::Identifier(Identifier {
                         base: NodeBase::new(0, 0, 0, 0),
@@ -880,7 +861,7 @@ mod tests {
                         base: NodeBase::new(0, 0, 0, 0),
                         class_name: "a".to_owned(),
                     }),
-                }),
+                },
                 value: Literal::BooleanLiteral(BooleanLiteral {
                     base: NodeBase::new(0, 0, 0, 0),
                     value: true,

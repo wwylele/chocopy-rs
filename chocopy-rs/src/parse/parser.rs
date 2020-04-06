@@ -1131,7 +1131,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     } else {
                         return (None, errors);
                     };
-                    params.push(Tv::TypedVar(typed_var));
+                    params.push(typed_var);
 
                     let token = self.take().await;
                     match token.token {
@@ -1269,7 +1269,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         (
             Some(VarDef {
                 base: NodeBase::from_positions(start, end),
-                var: Tv::TypedVar(typed_var),
+                var: typed_var,
                 value,
             }),
             errors,
