@@ -1413,8 +1413,8 @@ impl<'a> Emitter<'a> {
         };
 
         //// Assign the element
-        let target_type = stmt.identifier.id().inferred_type.as_ref().unwrap();
-        self.emit_assign_identifier(&stmt.identifier.id().name, source_type, target_type);
+        let target_type = stmt.identifier.inferred_type.as_ref().unwrap();
+        self.emit_assign_identifier(&stmt.identifier.name, source_type, target_type);
 
         //// Execute the loop body
         for stmt in &stmt.body {

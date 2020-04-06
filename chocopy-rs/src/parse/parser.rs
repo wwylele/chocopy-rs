@@ -685,11 +685,11 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
         let token = self.take().await;
         let identifier = if let Token::Identifier(name) = token.token {
-            TypedId::Identifier(TypedIdentifier {
+            TypedIdentifier {
                 inferred_type: None,
                 base: NodeBase::from_location(token.location),
                 name,
-            })
+            }
         } else {
             errors.push(CompilerError::unexpected(token));
             return (None, errors);

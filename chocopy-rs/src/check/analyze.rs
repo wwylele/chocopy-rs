@@ -612,19 +612,18 @@ impl ForStmt {
         };
 
         if let Some(element_type) = element_type {
-            let id = self.identifier.id_mut();
-            let variable = match o.get(&id.name) {
+            let variable = match o.get(&self.identifier.name) {
                 None | Some(EnvSlot::Func(_)) => None,
                 Some(EnvSlot::Var(t, assignable)) => Some((t.clone(), assignable)),
             };
 
             if let Some((variable, Assignable(assignable))) = variable {
                 if m.is_compatible(element_type, &variable) {
-                    id.inferred_type = Some(variable); // yes, we attach the type here
+                    self.identifier.inferred_type = Some(variable); // yes, we attach the type here
                     if !assignable {
-                        let msg = error_nonlocal_assign(&id.name);
-                        id.base_mut().error_msg = Some(msg); // and this error is attached to the identifier
-                        errors.push(error_from(id));
+                        let msg = error_nonlocal_assign(&self.identifier.name);
+                        self.identifier.base_mut().error_msg = Some(msg); // and this error is attached to the identifier
+                        errors.push(error_from(&mut self.identifier));
                     }
                 } else {
                     let msg = error_assign(&variable, element_type);
@@ -632,7 +631,7 @@ impl ForStmt {
                     errors.push(error_from(self));
                 }
             } else {
-                let msg = error_variable(&id.name);
+                let msg = error_variable(&self.identifier.name);
                 self.base_mut().error_msg = Some(msg);
                 errors.push(error_from(self));
             }

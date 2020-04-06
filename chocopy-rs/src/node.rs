@@ -327,7 +327,7 @@ impl_node!(ExprStmt);
 pub struct ForStmt {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub identifier: TypedId,
+    pub identifier: TypedIdentifier,
     pub iterable: Expr,
     pub body: Vec<Stmt>,
 }
@@ -654,26 +654,8 @@ impl TypeAnnotation {
     }
 }
 
-#[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub enum TypedId {
-    Identifier(TypedIdentifier),
-}
-
-impl TypedId {
-    pub fn id(&self) -> &TypedIdentifier {
-        let TypedId::Identifier(id) = self;
-        id
-    }
-    pub fn id_mut(&mut self) -> &mut TypedIdentifier {
-        let TypedId::Identifier(id) = self;
-        id
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields)]
+#[serde(tag = "kind", rename = "Identifier")]
 pub struct TypedIdentifier {
     #[serde(rename = "inferredType", skip_serializing_if = "Option::is_none")]
     pub inferred_type: Option<ValueType>,
