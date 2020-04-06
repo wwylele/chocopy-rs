@@ -475,7 +475,7 @@ impl MethodCallExpr {
             .map(|arg| arg.analyze(errors, o, m))
             .collect();
 
-        let member = self.method.member_mut();
+        let member = &mut self.method;
         let class = member.object.analyze(errors, o, m);
         let class_name = if let ValueType::ClassValueType(ClassValueType { class_name }) = class {
             class_name

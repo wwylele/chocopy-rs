@@ -1105,7 +1105,7 @@ impl<'a> Emitter<'a> {
                 );
             }
             ExprContent::MethodCallExpr(expr) => {
-                let method = expr.method.member();
+                let method = &expr.method;
                 let args: Vec<Expr> = std::iter::once(method.object.clone())
                     .chain(expr.args.iter().cloned())
                     .collect();

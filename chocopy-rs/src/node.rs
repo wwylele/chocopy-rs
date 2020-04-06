@@ -602,7 +602,7 @@ pub struct MemberExpr {
 impl_node!(MemberExpr);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields)]
+#[serde(rename = "MemberExpr", tag = "kind")]
 pub struct TypedMemberExpr {
     #[serde(rename = "inferredType", skip_serializing_if = "Option::is_none")]
     pub inferred_type: Option<FuncTypeWrapper>,
@@ -614,30 +614,12 @@ pub struct TypedMemberExpr {
 
 impl_node!(TypedMemberExpr);
 
-#[enum_dispatch(Node)]
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub enum Method {
-    MemberExpr(TypedMemberExpr),
-}
-
-impl Method {
-    pub fn member(&self) -> &TypedMemberExpr {
-        let Method::MemberExpr(member) = self;
-        member
-    }
-    pub fn member_mut(&mut self) -> &mut TypedMemberExpr {
-        let Method::MemberExpr(member) = self;
-        member
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct MethodCallExpr {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub method: Method,
+    pub method: TypedMemberExpr,
     pub args: Vec<Expr>,
 }
 

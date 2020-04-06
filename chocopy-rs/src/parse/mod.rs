@@ -72,6 +72,7 @@ mod tests {
             "test/original/pa1",
             "test/original/pa1/hidden",
             "test/original/pa2",
+            "test/pa1",
             "test/pa2",
         ];
 
