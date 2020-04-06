@@ -21,24 +21,6 @@ fn check_error(file: &str, ast: &Ast) -> bool {
     if errors.is_empty() {
         true
     } else {
-        let mut errors: Vec<_> = errors
-            .iter()
-            .map(|e| {
-                let Error::CompilerError(c) = e;
-                c
-            })
-            .collect();
-        errors.sort_by_key(|e| {
-            let CompilerError {
-                base:
-                    NodeBase {
-                        location: Location { start, .. },
-                        ..
-                    },
-                ..
-            } = e;
-            (start.row, start.col)
-        });
         let file = File::open(file).unwrap();
         let mut lines = BufReader::new(file)
             .lines()

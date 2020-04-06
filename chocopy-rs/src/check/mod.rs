@@ -8,7 +8,7 @@ use class_env::*;
 use error::*;
 use std::collections::{HashMap, HashSet};
 
-fn check_var_def(v: &mut VarDef, errors: &mut Vec<Error>, classes: &ClassEnv) {
+fn check_var_def(v: &mut VarDef, errors: &mut Vec<CompilerError>, classes: &ClassEnv) {
     let core_type = v.var.type_.core_type_mut();
     if !classes.contains(&core_type.class_name) {
         let msg = error_invalid_type(&core_type.class_name);
@@ -38,7 +38,7 @@ fn always_return(statements: &[Stmt]) -> bool {
 
 fn check_func(
     f: &mut FuncDef,
-    errors: &mut Vec<Error>,
+    errors: &mut Vec<CompilerError>,
     classes: &ClassEnv,
     globals: &HashSet<String>,
     nonlocals: &HashSet<String>,

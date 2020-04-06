@@ -9,7 +9,7 @@ type TypeLocalEnv = LocalEnv<FuncType, ValueType>;
 impl Expr {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -36,7 +36,7 @@ impl Expr {
 impl Literal {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -55,7 +55,7 @@ impl Literal {
 impl Identifier {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         _m: &ClassEnv,
     ) -> ValueType {
@@ -74,7 +74,7 @@ impl Identifier {
 impl AssignStmt {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
         _r: Option<&ValueType>,
@@ -116,7 +116,7 @@ impl AssignStmt {
 }
 
 impl VarDef {
-    pub fn analyze(&mut self, errors: &mut Vec<Error>, o: &mut TypeLocalEnv, m: &ClassEnv) {
+    pub fn analyze(&mut self, errors: &mut Vec<CompilerError>, o: &mut TypeLocalEnv, m: &ClassEnv) {
         let right = self.value.analyze(errors, o, m);
         let left = ValueType::from_annotation(&self.var.type_);
         if !m.is_compatible(&right, &left) {
@@ -130,7 +130,7 @@ impl VarDef {
 impl ExprStmt {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
         _r: Option<&ValueType>,
@@ -142,7 +142,7 @@ impl ExprStmt {
 impl BooleanLiteral {
     pub fn analyze(
         &mut self,
-        _errors: &mut Vec<Error>,
+        _errors: &mut Vec<CompilerError>,
         _o: &mut TypeLocalEnv,
         _m: &ClassEnv,
     ) -> ValueType {
@@ -153,7 +153,7 @@ impl BooleanLiteral {
 impl IntegerLiteral {
     pub fn analyze(
         &mut self,
-        _errors: &mut Vec<Error>,
+        _errors: &mut Vec<CompilerError>,
         _o: &mut TypeLocalEnv,
         _m: &ClassEnv,
     ) -> ValueType {
@@ -164,7 +164,7 @@ impl IntegerLiteral {
 impl StringLiteral {
     pub fn analyze(
         &mut self,
-        _errors: &mut Vec<Error>,
+        _errors: &mut Vec<CompilerError>,
         _o: &mut TypeLocalEnv,
         _m: &ClassEnv,
     ) -> ValueType {
@@ -175,7 +175,7 @@ impl StringLiteral {
 impl NoneLiteral {
     pub fn analyze(
         &mut self,
-        _errors: &mut Vec<Error>,
+        _errors: &mut Vec<CompilerError>,
         _o: &mut TypeLocalEnv,
         _m: &ClassEnv,
     ) -> ValueType {
@@ -186,7 +186,7 @@ impl NoneLiteral {
 impl UnaryExpr {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -215,7 +215,7 @@ impl UnaryExpr {
 impl BinaryExpr {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -318,7 +318,7 @@ impl BinaryExpr {
 impl IfExpr {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -337,7 +337,7 @@ impl IfExpr {
 impl ListExpr {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -357,7 +357,7 @@ impl ListExpr {
 impl IndexExpr {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -387,7 +387,7 @@ impl IndexExpr {
 impl MemberExpr {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -417,7 +417,7 @@ impl MemberExpr {
 impl CallExpr {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -465,7 +465,7 @@ impl CallExpr {
 impl MethodCallExpr {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -521,7 +521,7 @@ impl MethodCallExpr {
 impl ReturnStmt {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
@@ -554,7 +554,7 @@ impl ReturnStmt {
 impl IfStmt {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
@@ -574,7 +574,7 @@ impl IfStmt {
 impl WhileStmt {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
@@ -593,7 +593,7 @@ impl WhileStmt {
 impl ForStmt {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
@@ -645,7 +645,7 @@ impl ForStmt {
 
 fn analyze_stmt(
     statements: &mut [Stmt],
-    errors: &mut Vec<Error>,
+    errors: &mut Vec<CompilerError>,
     o: &mut TypeLocalEnv,
     m: &ClassEnv,
     r: Option<&ValueType>,
@@ -664,7 +664,7 @@ fn analyze_stmt(
 
 fn analyze_decl(
     declarations: &mut [Declaration],
-    errors: &mut Vec<Error>,
+    errors: &mut Vec<CompilerError>,
     o: &mut TypeLocalEnv,
     m: &ClassEnv,
 ) {
@@ -679,7 +679,7 @@ fn analyze_decl(
 }
 
 impl FuncDef {
-    pub fn analyze(&mut self, errors: &mut Vec<Error>, o: &mut TypeLocalEnv, m: &ClassEnv) {
+    pub fn analyze(&mut self, errors: &mut Vec<CompilerError>, o: &mut TypeLocalEnv, m: &ClassEnv) {
         let frame: HashMap<String, LocalSlot<FuncType, ValueType>> = self
             .declarations
             .iter()
@@ -721,13 +721,13 @@ impl FuncDef {
 }
 
 impl ClassDef {
-    pub fn analyze(&mut self, errors: &mut Vec<Error>, o: &mut TypeLocalEnv, m: &ClassEnv) {
+    pub fn analyze(&mut self, errors: &mut Vec<CompilerError>, o: &mut TypeLocalEnv, m: &ClassEnv) {
         analyze_decl(&mut self.declarations, errors, o, m);
     }
 }
 
 impl Program {
-    pub fn analyze(&mut self, errors: &mut Vec<Error>, o: &mut TypeLocalEnv, m: &ClassEnv) {
+    pub fn analyze(&mut self, errors: &mut Vec<CompilerError>, o: &mut TypeLocalEnv, m: &ClassEnv) {
         analyze_decl(&mut self.declarations, errors, o, m);
         analyze_stmt(&mut self.statements, errors, o, m, None);
     }

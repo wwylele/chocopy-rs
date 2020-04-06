@@ -192,7 +192,7 @@ fn is_not(b: &bool) -> bool {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields)]
+#[serde(tag = "kind")]
 pub struct CompilerError {
     #[serde(flatten)]
     pub base: NodeBase,
@@ -230,19 +230,12 @@ impl Declaration {
     }
 }
 
-#[enum_dispatch(Node)]
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub enum Error {
-    CompilerError(CompilerError),
-}
-
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Errors {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub errors: Vec<Error>,
+    pub errors: Vec<CompilerError>,
 }
 
 impl_node!(Errors);

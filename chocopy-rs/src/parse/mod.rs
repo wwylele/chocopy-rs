@@ -58,8 +58,8 @@ mod tests {
             if b_errors.is_empty() {
                 return false;
             }
-            let Error::CompilerError(CompilerError { base: a_base, .. }) = &a_errors[0];
-            let Error::CompilerError(CompilerError { base: b_base, .. }) = &b_errors[0];
+            let CompilerError { base: a_base, .. } = &a_errors[0];
+            let CompilerError { base: b_base, .. } = &b_errors[0];
             a_base == b_base
         }
     }

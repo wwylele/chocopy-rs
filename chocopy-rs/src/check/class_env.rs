@@ -45,7 +45,7 @@ impl ClassEnv {
     pub fn add_class(
         &mut self,
         class_def: &mut ClassDef,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         id_set: &HashSet<String>,
     ) {
         let class_name = &class_def.name.id().name;
