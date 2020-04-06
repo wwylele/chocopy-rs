@@ -1452,9 +1452,9 @@ pub async fn parse<GetTokenFuture: Future<Output = ComplexToken>>(
         base: NodeBase::from_positions(start, end),
         declarations,
         statements,
-        errors: ErrorInfo::Errors(Errors {
+        errors: Errors {
             base: NodeBase::new(0, 0, 0, 0),
             errors,
-        }),
+        },
     })
 }

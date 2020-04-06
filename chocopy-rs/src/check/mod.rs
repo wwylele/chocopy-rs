@@ -326,10 +326,10 @@ pub fn check(mut ast: Ast) -> Ast {
         ast.program_mut().analyze(&mut errors, &mut env, &classes);
     }
 
-    ast.program_mut().errors = ErrorInfo::Errors(Errors {
+    ast.program_mut().errors = Errors {
         base: NodeBase::new(0, 0, 0, 0),
         errors,
-    });
+    };
     ast
 }
 

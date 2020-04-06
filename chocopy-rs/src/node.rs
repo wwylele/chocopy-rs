@@ -231,7 +231,7 @@ impl Declaration {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields)]
+#[serde(tag = "kind")]
 pub struct Errors {
     #[serde(flatten)]
     pub base: NodeBase,
@@ -240,22 +240,9 @@ pub struct Errors {
 
 impl_node!(Errors);
 
-#[enum_dispatch(Node)]
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub enum ErrorInfo {
-    Errors(Errors),
-}
-
-impl ErrorInfo {
-    pub fn errors(&self) -> &Errors {
-        let ErrorInfo::Errors(errors) = self;
-        errors
-    }
-
+impl Errors {
     pub fn sort(&mut self) {
-        let ErrorInfo::Errors(errors) = self;
-        errors.errors.sort_by_key(|error| error.base().location);
+        self.errors.sort_by_key(|error| error.base().location);
     }
 }
 
@@ -644,7 +631,7 @@ pub struct Program {
     pub base: NodeBase,
     pub declarations: Vec<Declaration>,
     pub statements: Vec<Stmt>,
-    pub errors: ErrorInfo,
+    pub errors: Errors,
 }
 
 impl_node!(Program);
@@ -883,10 +870,10 @@ mod tests {
                     }),
                 })),
             })],
-            errors: ErrorInfo::Errors(Errors {
+            errors: Errors {
                 base: NodeBase::new(0, 0, 0, 0),
                 errors: vec![],
-            }),
+            },
         });
 
         let json = serde_json::to_string_pretty(&program).unwrap();

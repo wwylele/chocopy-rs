@@ -41,15 +41,15 @@ mod tests {
 
     fn compare_ast(a: &Ast, b: &Ast) -> bool {
         let Ast::Program(Program {
-            errors: ErrorInfo::Errors(Errors {
+            errors: Errors {
                 errors: a_errors, ..
-            }),
+            },
             ..
         }) = a;
         let Ast::Program(Program {
-            errors: ErrorInfo::Errors(Errors {
+            errors: Errors {
                 errors: b_errors, ..
-            }),
+            },
             ..
         }) = b;
         if a_errors.is_empty() {

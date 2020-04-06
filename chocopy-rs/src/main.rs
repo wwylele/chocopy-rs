@@ -17,7 +17,7 @@ fn print_usage(program: &str, opts: Options) {
 }
 
 fn check_error(file: &str, ast: &Ast) -> bool {
-    let errors = &ast.program().errors.errors().errors;
+    let errors = &ast.program().errors.errors;
     if errors.is_empty() {
         true
     } else {
