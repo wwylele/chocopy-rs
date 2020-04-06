@@ -160,7 +160,7 @@ impl ClassDebug {
 
 struct CodeSet {
     chunks: Vec<Chunk>,
-    global_size: usize,
+    global_size: u64,
     globals_debug: Vec<VarDebug>,
     classes_debug: HashMap<String, ClassDebug>,
 }
@@ -284,23 +284,20 @@ pub fn gen(
         dwarf.add_class(class_name, classes_debug);
     }
 
-    let (global_section, global_section_offset) = obj.add_subsection(
-        object::write::StandardSection::Data,
-        GLOBAL_SECTION.as_bytes(),
-        &vec![0; code_set.global_size],
-        8,
-    );
+    let bss_section = obj.section_id(object::write::StandardSection::UninitializedData);
 
-    obj.add_symbol(object::write::Symbol {
+    let global_symbol = obj.add_symbol(object::write::Symbol {
         name: GLOBAL_SECTION.into(),
-        value: global_section_offset,
-        size: code_set.global_size as u64,
+        value: 0,
+        size: code_set.global_size,
         kind: object::SymbolKind::Data,
         scope: object::SymbolScope::Compilation,
         weak: false,
-        section: object::write::SymbolSection::Section(global_section),
+        section: object::write::SymbolSection::Undefined,
         flags: object::SymbolFlags::None,
     });
+
+    obj.add_symbol_bss(global_symbol, bss_section, code_set.global_size, 8);
 
     for global_debug in code_set.globals_debug {
         dwarf.add_global(global_debug);

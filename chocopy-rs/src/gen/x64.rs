@@ -2307,7 +2307,7 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
 
     CodeSet {
         chunks,
-        global_size: global_offset as usize,
+        global_size: global_offset as u64,
         globals_debug,
         classes_debug,
     }
