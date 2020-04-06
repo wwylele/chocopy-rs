@@ -144,7 +144,7 @@ impl_node!(BooleanLiteral);
 pub struct CallExpr {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub function: FuncId,
+    pub function: FuncIdentifier,
     pub args: Vec<Expr>,
 }
 
@@ -357,26 +357,8 @@ pub struct FuncType {
     pub return_type: ValueType,
 }
 
-#[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub enum FuncId {
-    Identifier(FuncIdentifier),
-}
-
-impl FuncId {
-    pub fn id(&self) -> &FuncIdentifier {
-        let FuncId::Identifier(id) = self;
-        id
-    }
-    pub fn id_mut(&mut self) -> &mut FuncIdentifier {
-        let FuncId::Identifier(id) = self;
-        id
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields)]
+#[serde(tag = "kind", rename = "Identifier")]
 pub struct FuncIdentifier {
     #[serde(rename = "inferredType", skip_serializing_if = "Option::is_none")]
     pub inferred_type: Option<FuncType>,

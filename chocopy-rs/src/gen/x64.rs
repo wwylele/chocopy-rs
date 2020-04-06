@@ -1099,8 +1099,8 @@ impl<'a> Emitter<'a> {
             ExprContent::CallExpr(expr) => {
                 self.emit_call_expr(
                     &expr.args,
-                    &expr.function.id().inferred_type,
-                    &expr.function.id().name,
+                    &expr.function.inferred_type,
+                    &expr.function.name,
                     false,
                 );
             }

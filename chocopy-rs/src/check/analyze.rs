@@ -427,11 +427,10 @@ impl CallExpr {
             .map(|arg| arg.analyze(errors, o, m))
             .collect();
 
-        let id = self.function.id_mut();
-        let function = match o.get(&id.name) {
+        let function = match o.get(&self.function.name) {
             Some(EnvSlot::Func(f)) => f,
             _ => {
-                let msg = error_function(&id.name);
+                let msg = error_function(&self.function.name);
                 self.base_mut().error_msg = Some(msg);
                 errors.push(error_from(self));
                 return TYPE_OBJECT.clone();
@@ -439,8 +438,8 @@ impl CallExpr {
         };
 
         // Reference program: don't attach type to constructor
-        if !m.contains(&id.name) {
-            id.inferred_type = Some(function.clone());
+        if !m.contains(&self.function.name) {
+            self.function.inferred_type = Some(function.clone());
         }
 
         if function.parameters.len() != args.len() {
