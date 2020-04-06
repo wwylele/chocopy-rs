@@ -1,0 +1,563 @@
+{
+  "kind" : "Program",
+  "location" : [ 4, 1, 34, 1 ],
+  "declarations" : [ {
+    "kind" : "VarDef",
+    "location" : [ 4, 1, 4, 12 ],
+    "errorMsg" : "Expected type `int`; got type `bool`",
+    "var" : {
+      "kind" : "TypedVar",
+      "location" : [ 4, 1, 4, 5 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 4, 1, 4, 1 ],
+        "name" : "x"
+      },
+      "type" : {
+        "kind" : "ClassType",
+        "location" : [ 4, 3, 4, 5 ],
+        "className" : "int"
+      }
+    },
+    "value" : {
+      "kind" : "BooleanLiteral",
+      "location" : [ 4, 9, 4, 12 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "bool"
+      },
+      "value" : true
+    }
+  }, {
+    "kind" : "VarDef",
+    "location" : [ 6, 1, 6, 14 ],
+    "var" : {
+      "kind" : "TypedVar",
+      "location" : [ 6, 1, 6, 7 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 6, 1, 6, 1 ],
+        "name" : "y"
+      },
+      "type" : {
+        "kind" : "ListType",
+        "location" : [ 6, 3, 6, 7 ],
+        "elementType" : {
+          "kind" : "ClassType",
+          "location" : [ 6, 4, 6, 6 ],
+          "className" : "int"
+        }
+      }
+    },
+    "value" : {
+      "kind" : "NoneLiteral",
+      "location" : [ 6, 11, 6, 14 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "<None>"
+      }
+    }
+  }, {
+    "kind" : "VarDef",
+    "location" : [ 7, 1, 7, 17 ],
+    "var" : {
+      "kind" : "TypedVar",
+      "location" : [ 7, 1, 7, 10 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 7, 1, 7, 1 ],
+        "name" : "z"
+      },
+      "type" : {
+        "kind" : "ListType",
+        "location" : [ 7, 3, 7, 10 ],
+        "elementType" : {
+          "kind" : "ClassType",
+          "location" : [ 7, 4, 7, 9 ],
+          "className" : "object"
+        }
+      }
+    },
+    "value" : {
+      "kind" : "NoneLiteral",
+      "location" : [ 7, 14, 7, 17 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "<None>"
+      }
+    }
+  } ],
+  "statements" : [ {
+    "kind" : "AssignStmt",
+    "location" : [ 11, 1, 11, 14 ],
+    "errorMsg" : "Expected type `[int]`; got type `object`",
+    "targets" : [ {
+      "kind" : "Identifier",
+      "location" : [ 11, 1, 11, 1 ],
+      "inferredType" : {
+        "kind" : "ListValueType",
+        "elementType" : {
+          "kind" : "ClassValueType",
+          "className" : "int"
+        }
+      },
+      "name" : "y"
+    } ],
+    "value" : {
+      "kind" : "BinaryExpr",
+      "location" : [ 11, 5, 11, 14 ],
+      "errorMsg" : "Cannot apply operator `+` on types `[int]` and `<Empty>`",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "object"
+      },
+      "left" : {
+        "kind" : "ListExpr",
+        "location" : [ 11, 5, 11, 11 ],
+        "inferredType" : {
+          "kind" : "ListValueType",
+          "elementType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          }
+        },
+        "elements" : [ {
+          "kind" : "IntegerLiteral",
+          "location" : [ 11, 6, 11, 6 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          },
+          "value" : 1
+        }, {
+          "kind" : "IntegerLiteral",
+          "location" : [ 11, 8, 11, 8 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          },
+          "value" : 2
+        }, {
+          "kind" : "IntegerLiteral",
+          "location" : [ 11, 10, 11, 10 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          },
+          "value" : 3
+        } ]
+      },
+      "operator" : "+",
+      "right" : {
+        "kind" : "ListExpr",
+        "location" : [ 11, 13, 11, 14 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "<Empty>"
+        },
+        "elements" : [ ]
+      }
+    }
+  }, {
+    "kind" : "AssignStmt",
+    "location" : [ 15, 1, 15, 16 ],
+    "errorMsg" : "Expected type `[int]`; got type `int`",
+    "targets" : [ {
+      "kind" : "Identifier",
+      "location" : [ 15, 1, 15, 1 ],
+      "inferredType" : {
+        "kind" : "ListValueType",
+        "elementType" : {
+          "kind" : "ClassValueType",
+          "className" : "int"
+        }
+      },
+      "name" : "y"
+    } ],
+    "value" : {
+      "kind" : "BinaryExpr",
+      "location" : [ 15, 5, 15, 16 ],
+      "errorMsg" : "Cannot apply operator `+` on types `int` and `str`",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "int"
+      },
+      "left" : {
+        "kind" : "Identifier",
+        "location" : [ 15, 5, 15, 5 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "int"
+        },
+        "name" : "x"
+      },
+      "operator" : "+",
+      "right" : {
+        "kind" : "StringLiteral",
+        "location" : [ 15, 9, 15, 16 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "str"
+        },
+        "value" : "string"
+      }
+    }
+  }, {
+    "kind" : "AssignStmt",
+    "location" : [ 18, 1, 18, 16 ],
+    "targets" : [ {
+      "kind" : "Identifier",
+      "location" : [ 18, 1, 18, 1 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "int"
+      },
+      "name" : "x"
+    } ],
+    "value" : {
+      "kind" : "BinaryExpr",
+      "location" : [ 18, 5, 18, 16 ],
+      "errorMsg" : "Cannot apply operator `+` on types `int` and `str`",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "int"
+      },
+      "left" : {
+        "kind" : "Identifier",
+        "location" : [ 18, 5, 18, 5 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "int"
+        },
+        "name" : "x"
+      },
+      "operator" : "+",
+      "right" : {
+        "kind" : "StringLiteral",
+        "location" : [ 18, 9, 18, 16 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "str"
+        },
+        "value" : "string"
+      }
+    }
+  }, {
+    "kind" : "AssignStmt",
+    "location" : [ 20, 1, 20, 10 ],
+    "targets" : [ {
+      "kind" : "Identifier",
+      "location" : [ 20, 1, 20, 1 ],
+      "inferredType" : {
+        "kind" : "ListValueType",
+        "elementType" : {
+          "kind" : "ClassValueType",
+          "className" : "object"
+        }
+      },
+      "name" : "z"
+    } ],
+    "value" : {
+      "kind" : "ListExpr",
+      "location" : [ 20, 5, 20, 10 ],
+      "inferredType" : {
+        "kind" : "ListValueType",
+        "elementType" : {
+          "kind" : "ClassValueType",
+          "className" : "<None>"
+        }
+      },
+      "elements" : [ {
+        "kind" : "NoneLiteral",
+        "location" : [ 20, 6, 20, 9 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "<None>"
+        }
+      } ]
+    }
+  }, {
+    "kind" : "AssignStmt",
+    "location" : [ 23, 1, 23, 18 ],
+    "errorMsg" : "Right-hand side of multiple assignment may not be [<None>]",
+    "targets" : [ {
+      "kind" : "Identifier",
+      "location" : [ 23, 1, 23, 1 ],
+      "inferredType" : {
+        "kind" : "ListValueType",
+        "elementType" : {
+          "kind" : "ClassValueType",
+          "className" : "object"
+        }
+      },
+      "name" : "z"
+    }, {
+      "kind" : "Identifier",
+      "location" : [ 23, 5, 23, 5 ],
+      "inferredType" : {
+        "kind" : "ListValueType",
+        "elementType" : {
+          "kind" : "ClassValueType",
+          "className" : "object"
+        }
+      },
+      "name" : "z"
+    }, {
+      "kind" : "Identifier",
+      "location" : [ 23, 9, 23, 9 ],
+      "inferredType" : {
+        "kind" : "ListValueType",
+        "elementType" : {
+          "kind" : "ClassValueType",
+          "className" : "object"
+        }
+      },
+      "name" : "z"
+    } ],
+    "value" : {
+      "kind" : "ListExpr",
+      "location" : [ 23, 13, 23, 18 ],
+      "inferredType" : {
+        "kind" : "ListValueType",
+        "elementType" : {
+          "kind" : "ClassValueType",
+          "className" : "<None>"
+        }
+      },
+      "elements" : [ {
+        "kind" : "NoneLiteral",
+        "location" : [ 23, 14, 23, 17 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "<None>"
+        }
+      } ]
+    }
+  }, {
+    "kind" : "AssignStmt",
+    "location" : [ 26, 1, 26, 12 ],
+    "targets" : [ {
+      "kind" : "IndexExpr",
+      "location" : [ 26, 1, 26, 8 ],
+      "errorMsg" : "Index is of non-integer type `str`",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "int"
+      },
+      "list" : {
+        "kind" : "Identifier",
+        "location" : [ 26, 1, 26, 1 ],
+        "inferredType" : {
+          "kind" : "ListValueType",
+          "elementType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          }
+        },
+        "name" : "y"
+      },
+      "index" : {
+        "kind" : "StringLiteral",
+        "location" : [ 26, 3, 26, 7 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "str"
+        },
+        "value" : "str"
+      }
+    } ],
+    "value" : {
+      "kind" : "IntegerLiteral",
+      "location" : [ 26, 12, 26, 12 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "int"
+      },
+      "value" : 1
+    }
+  }, {
+    "kind" : "AssignStmt",
+    "location" : [ 29, 1, 29, 22 ],
+    "targets" : [ {
+      "kind" : "Identifier",
+      "location" : [ 29, 1, 29, 1 ],
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "int"
+      },
+      "name" : "x"
+    } ],
+    "value" : {
+      "kind" : "CallExpr",
+      "location" : [ 29, 5, 29, 22 ],
+      "errorMsg" : "Expected 1 arguments; got 4",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "int"
+      },
+      "function" : {
+        "kind" : "Identifier",
+        "location" : [ 29, 5, 29, 7 ],
+        "inferredType" : {
+          "kind" : "FuncType",
+          "parameters" : [ {
+            "kind" : "ClassValueType",
+            "className" : "object"
+          } ],
+          "returnType" : {
+            "kind" : "ClassValueType",
+            "className" : "int"
+          }
+        },
+        "name" : "len"
+      },
+      "args" : [ {
+        "kind" : "IntegerLiteral",
+        "location" : [ 29, 9, 29, 9 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "int"
+        },
+        "value" : 1
+      }, {
+        "kind" : "IntegerLiteral",
+        "location" : [ 29, 11, 29, 11 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "int"
+        },
+        "value" : 2
+      }, {
+        "kind" : "IntegerLiteral",
+        "location" : [ 29, 13, 29, 13 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "int"
+        },
+        "value" : 3
+      }, {
+        "kind" : "StringLiteral",
+        "location" : [ 29, 15, 29, 21 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "str"
+        },
+        "value" : "hello"
+      } ]
+    }
+  }, {
+    "kind" : "IfStmt",
+    "location" : [ 32, 1, 34, 1 ],
+    "condition" : {
+      "kind" : "BinaryExpr",
+      "location" : [ 32, 4, 32, 9 ],
+      "errorMsg" : "Cannot apply operator `is` on types `int` and `int`",
+      "inferredType" : {
+        "kind" : "ClassValueType",
+        "className" : "bool"
+      },
+      "left" : {
+        "kind" : "IntegerLiteral",
+        "location" : [ 32, 4, 32, 4 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "int"
+        },
+        "value" : 1
+      },
+      "operator" : "is",
+      "right" : {
+        "kind" : "IntegerLiteral",
+        "location" : [ 32, 9, 32, 9 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "int"
+        },
+        "value" : 2
+      }
+    },
+    "thenBody" : [ {
+      "kind" : "ExprStmt",
+      "location" : [ 33, 5, 33, 15 ],
+      "expr" : {
+        "kind" : "CallExpr",
+        "location" : [ 33, 5, 33, 15 ],
+        "inferredType" : {
+          "kind" : "ClassValueType",
+          "className" : "<None>"
+        },
+        "function" : {
+          "kind" : "Identifier",
+          "location" : [ 33, 5, 33, 9 ],
+          "inferredType" : {
+            "kind" : "FuncType",
+            "parameters" : [ {
+              "kind" : "ClassValueType",
+              "className" : "object"
+            } ],
+            "returnType" : {
+              "kind" : "ClassValueType",
+              "className" : "<None>"
+            }
+          },
+          "name" : "print"
+        },
+        "args" : [ {
+          "kind" : "StringLiteral",
+          "location" : [ 33, 11, 33, 14 ],
+          "inferredType" : {
+            "kind" : "ClassValueType",
+            "className" : "str"
+          },
+          "value" : "ok"
+        } ]
+      }
+    } ],
+    "elseBody" : [ ]
+  } ],
+  "errors" : {
+    "errors" : [ {
+      "kind" : "CompilerError",
+      "location" : [ 4, 1, 4, 12 ],
+      "message" : "Expected type `int`; got type `bool`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 11, 5, 11, 14 ],
+      "message" : "Cannot apply operator `+` on types `[int]` and `<Empty>`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 11, 1, 11, 14 ],
+      "message" : "Expected type `[int]`; got type `object`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 15, 5, 15, 16 ],
+      "message" : "Cannot apply operator `+` on types `int` and `str`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 15, 1, 15, 16 ],
+      "message" : "Expected type `[int]`; got type `int`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 18, 5, 18, 16 ],
+      "message" : "Cannot apply operator `+` on types `int` and `str`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 23, 1, 23, 18 ],
+      "message" : "Right-hand side of multiple assignment may not be [<None>]"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 26, 1, 26, 8 ],
+      "message" : "Index is of non-integer type `str`"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 29, 5, 29, 22 ],
+      "message" : "Expected 1 arguments; got 4"
+    }, {
+      "kind" : "CompilerError",
+      "location" : [ 32, 4, 32, 9 ],
+      "message" : "Cannot apply operator `is` on types `int` and `int`"
+    } ],
+    "kind" : "Errors",
+    "location" : [ 0, 0, 0, 0 ]
+  }
+}

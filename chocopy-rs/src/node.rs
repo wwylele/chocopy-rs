@@ -259,6 +259,11 @@ impl ErrorInfo {
         let ErrorInfo::Errors(errors) = self;
         errors
     }
+
+    pub fn errors_mut(&mut self) -> &mut Errors {
+        let ErrorInfo::Errors(errors) = self;
+        errors
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
