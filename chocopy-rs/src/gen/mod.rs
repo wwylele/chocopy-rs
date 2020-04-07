@@ -203,7 +203,7 @@ impl std::error::Error for ToolChainError {}
 
 pub fn gen(
     source_path: &str,
-    ast: Ast,
+    ast: Program,
     path: &str,
     no_link: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {

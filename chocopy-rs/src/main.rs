@@ -16,8 +16,8 @@ fn print_usage(program: &str, opts: Options) {
     print!("{}", opts.usage(&brief));
 }
 
-fn check_error(file: &str, ast: &Ast) -> bool {
-    let errors = &ast.program().errors.errors;
+fn check_error(file: &str, ast: &Program) -> bool {
+    let errors = &ast.errors.errors;
     if errors.is_empty() {
         true
     } else {
@@ -84,7 +84,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let mut ast = parse::process(input)?;
-    ast.program_mut().errors.sort();
+    ast.errors.sort();
 
     if matches.opt_present("ast") {
         println!("{}", serde_json::to_string_pretty(&ast).unwrap());
@@ -96,7 +96,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut ast = check::check(ast);
-    ast.program_mut().errors.sort();
+    ast.errors.sort();
 
     if matches.opt_present("typed") {
         println!("{}", serde_json::to_string_pretty(&ast).unwrap());

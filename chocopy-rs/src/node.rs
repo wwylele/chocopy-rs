@@ -56,24 +56,6 @@ macro_rules! impl_node {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields, tag = "kind")]
-pub enum Ast {
-    Program(Program),
-}
-
-impl Ast {
-    pub fn program(&self) -> &Program {
-        let Ast::Program(program) = self;
-        program
-    }
-
-    pub fn program_mut(&mut self) -> &mut Program {
-        let Ast::Program(program) = self;
-        program
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct AssignStmt {
     #[serde(flatten)]
@@ -584,7 +566,7 @@ pub struct NonLocalDecl {
 impl_node!(NonLocalDecl);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields)]
+#[serde(tag = "kind")]
 pub struct Program {
     #[serde(flatten)]
     pub base: NodeBase,
@@ -768,7 +750,7 @@ mod tests {
     use super::*;
     #[test]
     fn serialize() {
-        let program = Ast::Program(Program {
+        let program = Program {
             base: NodeBase::new(1, 1, 1, 10),
             declarations: vec![Declaration::VarDef(VarDef {
                 base: NodeBase::new(0, 0, 0, 0),
@@ -815,7 +797,7 @@ mod tests {
                 base: NodeBase::new(0, 0, 0, 0),
                 errors: vec![],
             },
-        });
+        };
 
         let json = serde_json::to_string_pretty(&program).unwrap();
         let recover = serde_json::from_str(&json).unwrap();

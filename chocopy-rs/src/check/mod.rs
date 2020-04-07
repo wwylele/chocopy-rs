@@ -162,7 +162,7 @@ fn check_func(
     }
 }
 
-pub fn check(mut ast: Ast) -> Ast {
+pub fn check(mut ast: Program) -> Program {
     let mut errors = vec![];
 
     let mut id_set = HashSet::new();
@@ -179,7 +179,7 @@ pub fn check(mut ast: Ast) -> Ast {
     // Pass A
     // semantic rule: 1(global/class), 4, 5, 6, 7
     // collects class info
-    for decl in &mut ast.program_mut().declarations {
+    for decl in &mut ast.declarations {
         // Global identifier collision check
         let name = decl.name_mut();
         if !id_set.insert(name.name.clone()) {
@@ -199,7 +199,7 @@ pub fn check(mut ast: Ast) -> Ast {
     // semantic rules: 11(global/class variable)
     // collects global variables
     let mut globals = HashSet::new();
-    for decl in &mut ast.program_mut().declarations {
+    for decl in &mut ast.declarations {
         if let Declaration::VarDef(v) = decl {
             check_var_def(v, &mut errors, &classes);
             let name = &v.var.identifier.name;
@@ -279,7 +279,7 @@ pub fn check(mut ast: Ast) -> Ast {
     // Pass C
     // semantic rules: 1(function), 2, 3, 9, 11(function)
     // collects global environment
-    for decl in &mut ast.program_mut().declarations {
+    for decl in &mut ast.declarations {
         if let Declaration::FuncDef(f) = decl {
             check_func(f, &mut errors, &classes, &globals, &HashSet::new());
             global_env.insert(
@@ -323,10 +323,10 @@ pub fn check(mut ast: Ast) -> Ast {
     // and type checking
     if errors.is_empty() {
         let mut env = LocalEnv::new(global_env);
-        ast.program_mut().analyze(&mut errors, &mut env, &classes);
+        ast.analyze(&mut errors, &mut env, &classes);
     }
 
-    ast.program_mut().errors = Errors {
+    ast.errors = Errors {
         base: NodeBase::new(0, 0, 0, 0),
         errors,
     };
@@ -360,11 +360,11 @@ mod tests {
                 typed_file.set_file_name(file_name);
                 let ast_string = String::from_utf8(std::fs::read(ast_file).unwrap()).unwrap();
                 let typed_string = String::from_utf8(std::fs::read(typed_file).unwrap()).unwrap();
-                let ast = serde_json::from_str::<Ast>(&ast_string).unwrap();
-                let mut typed = serde_json::from_str::<Ast>(&typed_string).unwrap();
+                let ast = serde_json::from_str::<Program>(&ast_string).unwrap();
+                let mut typed = serde_json::from_str::<Program>(&typed_string).unwrap();
                 let mut result = check(ast);
-                result.program_mut().errors.sort();
-                typed.program_mut().errors.sort();
+                result.errors.sort();
+                typed.errors.sort();
                 if result == typed {
                     println!("\x1b[32mOK\x1b[0m");
                 } else {

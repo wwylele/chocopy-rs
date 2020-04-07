@@ -1372,7 +1372,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
 pub async fn parse<GetTokenFuture: Future<Output = ComplexToken>>(
     get_token: impl FnMut() -> GetTokenFuture,
-) -> Ast {
+) -> Program {
     let mut tokens = BufferedReceiver::new(get_token);
 
     let mut declarations = vec![];
@@ -1448,7 +1448,7 @@ pub async fn parse<GetTokenFuture: Future<Output = ComplexToken>>(
 
     let statements = statements.unwrap_or_default();
 
-    Ast::Program(Program {
+    Program {
         base: NodeBase::from_positions(start, end),
         declarations,
         statements,
@@ -1456,5 +1456,5 @@ pub async fn parse<GetTokenFuture: Future<Output = ComplexToken>>(
             base: NodeBase::new(0, 0, 0, 0),
             errors,
         },
-    })
+    }
 }

@@ -4,7 +4,7 @@ mod pipe;
 mod token;
 use crate::node::*;
 
-pub fn process(path: &str) -> Result<Ast, Box<dyn std::error::Error>> {
+pub fn process(path: &str) -> Result<Program, Box<dyn std::error::Error>> {
     use async_std::fs::*;
     use async_std::io::*;
     use futures::executor::block_on;
@@ -39,19 +39,19 @@ mod tests {
     use super::*;
     use std::io::{stdout, Write};
 
-    fn compare_ast(a: &Ast, b: &Ast) -> bool {
-        let Ast::Program(Program {
+    fn compare_ast(a: &Program, b: &Program) -> bool {
+        let Program {
             errors: Errors {
                 errors: a_errors, ..
             },
             ..
-        }) = a;
-        let Ast::Program(Program {
+        } = a;
+        let Program {
             errors: Errors {
                 errors: b_errors, ..
             },
             ..
-        }) = b;
+        } = b;
         if a_errors.is_empty() {
             b_errors.is_empty() && a == b
         } else {
@@ -96,7 +96,7 @@ mod tests {
                 ast_file.set_file_name(file_name);
 
                 let ast_string = String::from_utf8(std::fs::read(ast_file).unwrap()).unwrap();
-                let ast_reference = serde_json::from_str::<Ast>(&ast_string).unwrap();
+                let ast_reference = serde_json::from_str::<Program>(&ast_string).unwrap();
 
                 let (sender, receiver) = std::sync::mpsc::channel();
                 std::thread::Builder::new()

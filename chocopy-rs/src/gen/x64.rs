@@ -1976,7 +1976,7 @@ fn gen_print() -> Chunk {
 }
 
 fn gen_main(
-    ast: &Ast,
+    ast: &Program,
     storage_env: &mut StorageEnv,
     classes: &HashMap<String, ClassSlot>,
 ) -> Chunk {
@@ -1997,7 +1997,7 @@ fn gen_main(
         main_code.emit_push_rsi();
     }
 
-    for declaration in &ast.program().declarations {
+    for declaration in &ast.declarations {
         if let Declaration::VarDef(v) = declaration {
             main_code.emit_global_var_init(v);
         }
@@ -2005,11 +2005,11 @@ fn gen_main(
 
     let mut lines = vec![];
 
-    for statement in &ast.program().statements {
+    for statement in &ast.statements {
         main_code.emit_statement(statement, &mut lines);
     }
 
-    for declaration in &ast.program().declarations {
+    for declaration in &ast.declarations {
         if let Declaration::VarDef(v) = declaration {
             main_code.emit_global_var_drop(v);
         }
@@ -2038,7 +2038,6 @@ fn gen_main(
 
     main_code.finalize(ProcedureDebug {
         decl_line: ast
-            .program()
             .statements
             .get(0)
             .map_or(1, |s| s.base().location.start.row),
@@ -2145,7 +2144,7 @@ fn add_class(
     classes_debug.insert(class_name.clone(), class_debug);
 }
 
-pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
+pub(super) fn gen_code_set(ast: Program) -> CodeSet {
     let mut globals = HashMap::new();
     let mut classes = HashMap::new();
     let mut base_methods = HashMap::new();
@@ -2193,7 +2192,7 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
             .collect(),
         },
     );
-    for declaration in &ast.program().declarations {
+    for declaration in &ast.declarations {
         if let Declaration::VarDef(v) = declaration {
             let name = &v.var.identifier.name;
             let target_type = ValueType::from_annotation(&v.var.type_);
@@ -2257,7 +2256,7 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
 
     let mut chunks = vec![gen_main(&ast, &mut storage_env, &classes)];
 
-    for declaration in &ast.program().declarations {
+    for declaration in &ast.declarations {
         if let Declaration::FuncDef(f) = declaration {
             chunks.append(&mut gen_function(&f, &mut storage_env, &classes, 0, None));
         } else if let Declaration::ClassDef(c) = declaration {
