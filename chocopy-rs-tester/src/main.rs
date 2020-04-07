@@ -57,10 +57,31 @@ impl Iterator for IntegratedCases {
     }
 }
 
-fn get_cases(file_path: &std::path::Path) -> IntegratedCases {
-    IntegratedCases {
-        file: BufReader::new(std::fs::File::open(file_path).unwrap()),
+fn get_cases(file_path: &std::path::Path) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)>> {
+    let mut ref_path = file_path.to_path_buf();
+    ref_path.set_file_name(
+        ref_path.file_name().unwrap().to_str().unwrap().to_owned() + ".ast.typed.s.result",
+    );
+
+    if let Ok(file) = std::fs::File::open(ref_path) {
+        let mut file = BufReader::new(file);
+        let mut expected_output = vec![];
+        loop {
+            let mut line = "".to_owned();
+            if file.read_line(&mut line).unwrap() == 0 {
+                break;
+            }
+            fixup_newline(&mut line);
+            let bytes = line.as_bytes();
+            expected_output.extend(bytes.iter());
+        }
+
+        return Box::new(std::iter::once((vec![], expected_output)));
     }
+
+    Box::new(IntegratedCases {
+        file: BufReader::new(std::fs::File::open(file_path).unwrap()),
+    })
 }
 
 fn main() {
