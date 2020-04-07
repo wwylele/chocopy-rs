@@ -16,29 +16,11 @@ fn print_usage(program: &str, opts: Options) {
     print!("{}", opts.usage(&brief));
 }
 
-fn check_error(file: &str, ast: &Ast) -> bool {
-    let errors = &ast.program().errors.errors().errors;
+fn check_error(file: &str, ast: &Program) -> bool {
+    let errors = &ast.errors.errors;
     if errors.is_empty() {
         true
     } else {
-        let mut errors: Vec<_> = errors
-            .iter()
-            .map(|e| {
-                let Error::CompilerError(c) = e;
-                c
-            })
-            .collect();
-        errors.sort_by_key(|e| {
-            let CompilerError {
-                base:
-                    NodeBase {
-                        location: Location { start, .. },
-                        ..
-                    },
-                ..
-            } = e;
-            (start.row, start.col)
-        });
         let file = File::open(file).unwrap();
         let mut lines = BufReader::new(file)
             .lines()
@@ -102,7 +84,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let mut ast = parse::process(input)?;
-    ast.program_mut().errors.sort();
+    ast.errors.sort();
 
     if matches.opt_present("ast") {
         println!("{}", serde_json::to_string_pretty(&ast).unwrap());
@@ -114,7 +96,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut ast = check::check(ast);
-    ast.program_mut().errors.sort();
+    ast.errors.sort();
 
     if matches.opt_present("typed") {
         println!("{}", serde_json::to_string_pretty(&ast).unwrap());

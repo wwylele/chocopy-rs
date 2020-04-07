@@ -1,0 +1,1130 @@
+{
+  "kind" : "Program",
+  "location" : [ 1, 1, 33, 30 ],
+  "declarations" : [ {
+    "kind" : "VarDef",
+    "location" : [ 1, 1, 1, 10 ],
+    "var" : {
+      "kind" : "TypedVar",
+      "location" : [ 1, 1, 1, 6 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 1, 1, 1, 1 ],
+        "name" : "z"
+      },
+      "type" : {
+        "kind" : "ClassType",
+        "location" : [ 1, 4, 1, 6 ],
+        "className" : "int"
+      }
+    },
+    "value" : {
+      "kind" : "IntegerLiteral",
+      "location" : [ 1, 10, 1, 10 ],
+      "value" : 3
+    }
+  }, {
+    "kind" : "ClassDef",
+    "location" : [ 2, 1, 9, 0 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 2, 7, 2, 7 ],
+      "name" : "C"
+    },
+    "superClass" : {
+      "kind" : "Identifier",
+      "location" : [ 2, 9, 2, 14 ],
+      "name" : "object"
+    },
+    "declarations" : [ {
+      "kind" : "VarDef",
+      "location" : [ 3, 5, 3, 21 ],
+      "var" : {
+        "kind" : "TypedVar",
+        "location" : [ 3, 5, 3, 14 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 3, 5, 3, 5 ],
+          "name" : "m"
+        },
+        "type" : {
+          "kind" : "ListType",
+          "location" : [ 3, 8, 3, 14 ],
+          "elementType" : {
+            "kind" : "ListType",
+            "location" : [ 3, 9, 3, 13 ],
+            "elementType" : {
+              "kind" : "ClassType",
+              "location" : [ 3, 10, 3, 12 ],
+              "className" : "int"
+            }
+          }
+        }
+      },
+      "value" : {
+        "kind" : "NoneLiteral",
+        "location" : [ 3, 18, 3, 21 ]
+      }
+    }, {
+      "kind" : "FuncDef",
+      "location" : [ 4, 5, 5, 20 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 4, 9, 4, 9 ],
+        "name" : "f"
+      },
+      "params" : [ {
+        "kind" : "TypedVar",
+        "location" : [ 4, 11, 4, 19 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 4, 11, 4, 14 ],
+          "name" : "self"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 4, 17, 4, 19 ],
+          "className" : "C"
+        }
+      } ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 4, 25, 4, 28 ],
+        "className" : "bool"
+      },
+      "declarations" : [ ],
+      "statements" : [ {
+        "kind" : "ReturnStmt",
+        "location" : [ 5, 9, 5, 19 ],
+        "value" : {
+          "kind" : "BooleanLiteral",
+          "location" : [ 5, 16, 5, 19 ],
+          "value" : true
+        }
+      } ]
+    }, {
+      "kind" : "FuncDef",
+      "location" : [ 6, 5, 7, 13 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 6, 9, 6, 9 ],
+        "name" : "j"
+      },
+      "params" : [ {
+        "kind" : "TypedVar",
+        "location" : [ 6, 11, 6, 14 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 6, 11, 6, 11 ],
+          "name" : "o"
+        },
+        "type" : {
+          "kind" : "ClassType",
+          "location" : [ 6, 14, 6, 14 ],
+          "className" : "C"
+        }
+      }, {
+        "kind" : "TypedVar",
+        "location" : [ 6, 17, 6, 36 ],
+        "identifier" : {
+          "kind" : "Identifier",
+          "location" : [ 6, 17, 6, 17 ],
+          "name" : "a"
+        },
+        "type" : {
+          "kind" : "ListType",
+          "location" : [ 6, 20, 6, 36 ],
+          "elementType" : {
+            "kind" : "ListType",
+            "location" : [ 6, 21, 6, 35 ],
+            "elementType" : {
+              "kind" : "ListType",
+              "location" : [ 6, 22, 6, 34 ],
+              "elementType" : {
+                "kind" : "ListType",
+                "location" : [ 6, 23, 6, 33 ],
+                "elementType" : {
+                  "kind" : "ListType",
+                  "location" : [ 6, 24, 6, 32 ],
+                  "elementType" : {
+                    "kind" : "ListType",
+                    "location" : [ 6, 25, 6, 31 ],
+                    "elementType" : {
+                      "kind" : "ListType",
+                      "location" : [ 6, 26, 6, 30 ],
+                      "elementType" : {
+                        "kind" : "ClassType",
+                        "location" : [ 6, 27, 6, 29 ],
+                        "className" : "int"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 6, 38, 6, 38 ],
+        "className" : "<None>"
+      },
+      "declarations" : [ ],
+      "statements" : [ ]
+    } ]
+  }, {
+    "kind" : "FuncDef",
+    "location" : [ 9, 1, 24, 16 ],
+    "name" : {
+      "kind" : "Identifier",
+      "location" : [ 9, 5, 9, 5 ],
+      "name" : "g"
+    },
+    "params" : [ {
+      "kind" : "TypedVar",
+      "location" : [ 9, 7, 9, 12 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 9, 7, 9, 7 ],
+        "name" : "a"
+      },
+      "type" : {
+        "kind" : "ClassType",
+        "location" : [ 9, 10, 9, 12 ],
+        "className" : "int"
+      }
+    }, {
+      "kind" : "TypedVar",
+      "location" : [ 9, 15, 9, 20 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 9, 15, 9, 15 ],
+        "name" : "b"
+      },
+      "type" : {
+        "kind" : "ClassType",
+        "location" : [ 9, 18, 9, 20 ],
+        "className" : "int"
+      }
+    } ],
+    "returnType" : {
+      "kind" : "ClassType",
+      "location" : [ 9, 26, 9, 28 ],
+      "className" : "int"
+    },
+    "declarations" : [ {
+      "kind" : "NonLocalDecl",
+      "location" : [ 10, 5, 10, 14 ],
+      "variable" : {
+        "kind" : "Identifier",
+        "location" : [ 10, 14, 10, 14 ],
+        "name" : "z"
+      }
+    }, {
+      "kind" : "FuncDef",
+      "location" : [ 11, 5, 24, 4 ],
+      "name" : {
+        "kind" : "Identifier",
+        "location" : [ 11, 9, 11, 9 ],
+        "name" : "h"
+      },
+      "params" : [ ],
+      "returnType" : {
+        "kind" : "ClassType",
+        "location" : [ 11, 12, 11, 12 ],
+        "className" : "<None>"
+      },
+      "declarations" : [ {
+        "kind" : "GlobalDecl",
+        "location" : [ 12, 9, 12, 16 ],
+        "variable" : {
+          "kind" : "Identifier",
+          "location" : [ 12, 16, 12, 16 ],
+          "name" : "z"
+        }
+      } ],
+      "statements" : [ {
+        "kind" : "IfStmt",
+        "location" : [ 13, 9, 24, 4 ],
+        "condition" : {
+          "kind" : "IfExpr",
+          "location" : [ 13, 12, 13, 34 ],
+          "condition" : {
+            "kind" : "BooleanLiteral",
+            "location" : [ 13, 20, 13, 23 ],
+            "value" : true
+          },
+          "thenExpr" : {
+            "kind" : "BooleanLiteral",
+            "location" : [ 13, 12, 13, 15 ],
+            "value" : true
+          },
+          "elseExpr" : {
+            "kind" : "BooleanLiteral",
+            "location" : [ 13, 30, 13, 34 ],
+            "value" : false
+          }
+        },
+        "thenBody" : [ {
+          "kind" : "IfStmt",
+          "location" : [ 14, 13, 17, 8 ],
+          "condition" : {
+            "kind" : "BooleanLiteral",
+            "location" : [ 14, 16, 14, 20 ],
+            "value" : false
+          },
+          "thenBody" : [ ],
+          "elseBody" : [ ]
+        } ],
+        "elseBody" : [ {
+          "kind" : "IfStmt",
+          "location" : [ 18, 13, 24, 4 ],
+          "condition" : {
+            "kind" : "BinaryExpr",
+            "location" : [ 18, 16, 18, 20 ],
+            "left" : {
+              "kind" : "IntegerLiteral",
+              "location" : [ 18, 16, 18, 16 ],
+              "value" : 1
+            },
+            "operator" : ">",
+            "right" : {
+              "kind" : "IntegerLiteral",
+              "location" : [ 18, 20, 18, 20 ],
+              "value" : 2
+            }
+          },
+          "thenBody" : [ {
+            "kind" : "WhileStmt",
+            "location" : [ 19, 17, 21, 12 ],
+            "condition" : {
+              "kind" : "BinaryExpr",
+              "location" : [ 19, 23, 19, 38 ],
+              "left" : {
+                "kind" : "IndexExpr",
+                "location" : [ 19, 23, 19, 30 ],
+                "list" : {
+                  "kind" : "StringLiteral",
+                  "location" : [ 19, 23, 19, 27 ],
+                  "value" : "\n0"
+                },
+                "index" : {
+                  "kind" : "Identifier",
+                  "location" : [ 19, 29, 19, 29 ],
+                  "name" : "z"
+                }
+              },
+              "operator" : "==",
+              "right" : {
+                "kind" : "StringLiteral",
+                "location" : [ 19, 35, 19, 38 ],
+                "value" : "\""
+              }
+            },
+            "body" : [ ]
+          } ],
+          "elseBody" : [ {
+            "kind" : "IfStmt",
+            "location" : [ 21, 13, 24, 4 ],
+            "condition" : {
+              "kind" : "BinaryExpr",
+              "location" : [ 21, 18, 21, 22 ],
+              "left" : {
+                "kind" : "IntegerLiteral",
+                "location" : [ 21, 18, 21, 18 ],
+                "value" : 3
+              },
+              "operator" : ">",
+              "right" : {
+                "kind" : "IntegerLiteral",
+                "location" : [ 21, 22, 21, 22 ],
+                "value" : 2
+              }
+            },
+            "thenBody" : [ {
+              "kind" : "ForStmt",
+              "location" : [ 22, 17, 24, 4 ],
+              "identifier" : {
+                "kind" : "Identifier",
+                "location" : [ 22, 21, 22, 21 ],
+                "name" : "z"
+              },
+              "iterable" : {
+                "kind" : "IndexExpr",
+                "location" : [ 22, 26, 22, 33 ],
+                "list" : {
+                  "kind" : "MemberExpr",
+                  "location" : [ 22, 26, 22, 30 ],
+                  "object" : {
+                    "kind" : "CallExpr",
+                    "location" : [ 22, 26, 22, 28 ],
+                    "function" : {
+                      "kind" : "Identifier",
+                      "location" : [ 22, 26, 22, 26 ],
+                      "name" : "C"
+                    },
+                    "args" : [ ]
+                  },
+                  "member" : {
+                    "kind" : "Identifier",
+                    "location" : [ 22, 30, 22, 30 ],
+                    "name" : "m"
+                  }
+                },
+                "index" : {
+                  "kind" : "IntegerLiteral",
+                  "location" : [ 22, 32, 22, 32 ],
+                  "value" : 0
+                }
+              },
+              "body" : [ {
+                "kind" : "ReturnStmt",
+                "location" : [ 23, 21, 23, 26 ],
+                "value" : null
+              } ]
+            } ],
+            "elseBody" : [ ]
+          } ]
+        } ]
+      } ]
+    } ],
+    "statements" : [ {
+      "kind" : "ReturnStmt",
+      "location" : [ 24, 5, 24, 15 ],
+      "value" : {
+        "kind" : "BinaryExpr",
+        "location" : [ 24, 12, 24, 15 ],
+        "left" : {
+          "kind" : "Identifier",
+          "location" : [ 24, 12, 24, 12 ],
+          "name" : "a"
+        },
+        "operator" : "+",
+        "right" : {
+          "kind" : "UnaryExpr",
+          "location" : [ 24, 14, 24, 15 ],
+          "operator" : "-",
+          "operand" : {
+            "kind" : "Identifier",
+            "location" : [ 24, 15, 24, 15 ],
+            "name" : "b"
+          }
+        }
+      }
+    } ]
+  }, {
+    "kind" : "VarDef",
+    "location" : [ 26, 1, 26, 15 ],
+    "var" : {
+      "kind" : "TypedVar",
+      "location" : [ 26, 1, 26, 8 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 26, 1, 26, 1 ],
+        "name" : "y"
+      },
+      "type" : {
+        "kind" : "ListType",
+        "location" : [ 26, 4, 26, 8 ],
+        "elementType" : {
+          "kind" : "ClassType",
+          "location" : [ 26, 5, 26, 7 ],
+          "className" : "int"
+        }
+      }
+    },
+    "value" : {
+      "kind" : "NoneLiteral",
+      "location" : [ 26, 12, 26, 15 ]
+    }
+  }, {
+    "kind" : "VarDef",
+    "location" : [ 27, 1, 27, 11 ],
+    "var" : {
+      "kind" : "TypedVar",
+      "location" : [ 27, 1, 27, 4 ],
+      "identifier" : {
+        "kind" : "Identifier",
+        "location" : [ 27, 1, 27, 1 ],
+        "name" : "x"
+      },
+      "type" : {
+        "kind" : "ClassType",
+        "location" : [ 27, 4, 27, 4 ],
+        "className" : "C"
+      }
+    },
+    "value" : {
+      "kind" : "NoneLiteral",
+      "location" : [ 27, 8, 27, 11 ]
+    }
+  } ],
+  "statements" : [ {
+    "kind" : "AssignStmt",
+    "location" : [ 28, 1, 28, 7 ],
+    "targets" : [ {
+      "kind" : "Identifier",
+      "location" : [ 28, 1, 28, 1 ],
+      "name" : "x"
+    } ],
+    "value" : {
+      "kind" : "CallExpr",
+      "location" : [ 28, 5, 28, 7 ],
+      "function" : {
+        "kind" : "Identifier",
+        "location" : [ 28, 5, 28, 5 ],
+        "name" : "C"
+      },
+      "args" : [ ]
+    }
+  }, {
+    "kind" : "AssignStmt",
+    "location" : [ 29, 1, 29, 13 ],
+    "targets" : [ {
+      "kind" : "Identifier",
+      "location" : [ 29, 1, 29, 1 ],
+      "name" : "y"
+    } ],
+    "value" : {
+      "kind" : "ListExpr",
+      "location" : [ 29, 5, 29, 13 ],
+      "elements" : [ {
+        "kind" : "IntegerLiteral",
+        "location" : [ 29, 6, 29, 6 ],
+        "value" : 1
+      }, {
+        "kind" : "IntegerLiteral",
+        "location" : [ 29, 9, 29, 9 ],
+        "value" : 2
+      }, {
+        "kind" : "IntegerLiteral",
+        "location" : [ 29, 12, 29, 12 ],
+        "value" : 3
+      } ]
+    }
+  }, {
+    "kind" : "AssignStmt",
+    "location" : [ 30, 1, 30, 15 ],
+    "targets" : [ {
+      "kind" : "MemberExpr",
+      "location" : [ 30, 1, 30, 3 ],
+      "object" : {
+        "kind" : "Identifier",
+        "location" : [ 30, 1, 30, 1 ],
+        "name" : "x"
+      },
+      "member" : {
+        "kind" : "Identifier",
+        "location" : [ 30, 3, 30, 3 ],
+        "name" : "m"
+      }
+    } ],
+    "value" : {
+      "kind" : "ListExpr",
+      "location" : [ 30, 7, 30, 15 ],
+      "elements" : [ {
+        "kind" : "ListExpr",
+        "location" : [ 30, 8, 30, 10 ],
+        "elements" : [ {
+          "kind" : "IntegerLiteral",
+          "location" : [ 30, 9, 30, 9 ],
+          "value" : 0
+        } ]
+      }, {
+        "kind" : "ListExpr",
+        "location" : [ 30, 13, 30, 14 ],
+        "elements" : [ ]
+      } ]
+    }
+  }, {
+    "kind" : "AssignStmt",
+    "location" : [ 32, 1, 32, 264 ],
+    "targets" : [ {
+      "kind" : "Identifier",
+      "location" : [ 32, 1, 32, 1 ],
+      "name" : "z"
+    }, {
+      "kind" : "IndexExpr",
+      "location" : [ 32, 5, 32, 11 ],
+      "list" : {
+        "kind" : "Identifier",
+        "location" : [ 32, 5, 32, 5 ],
+        "name" : "y"
+      },
+      "index" : {
+        "kind" : "IndexExpr",
+        "location" : [ 32, 7, 32, 10 ],
+        "list" : {
+          "kind" : "Identifier",
+          "location" : [ 32, 7, 32, 7 ],
+          "name" : "y"
+        },
+        "index" : {
+          "kind" : "IntegerLiteral",
+          "location" : [ 32, 9, 32, 9 ],
+          "value" : 0
+        }
+      }
+    } ],
+    "value" : {
+      "kind" : "IfExpr",
+      "location" : [ 32, 15, 32, 264 ],
+      "condition" : {
+        "kind" : "IfExpr",
+        "location" : [ 32, 157, 32, 257 ],
+        "condition" : {
+          "kind" : "MethodCallExpr",
+          "location" : [ 32, 177, 32, 181 ],
+          "method" : {
+            "kind" : "MemberExpr",
+            "location" : [ 32, 177, 32, 179 ],
+            "object" : {
+              "kind" : "Identifier",
+              "location" : [ 32, 177, 32, 177 ],
+              "name" : "x"
+            },
+            "member" : {
+              "kind" : "Identifier",
+              "location" : [ 32, 179, 32, 179 ],
+              "name" : "f"
+            }
+          },
+          "args" : [ ]
+        },
+        "thenExpr" : {
+          "kind" : "BinaryExpr",
+          "location" : [ 32, 157, 32, 172 ],
+          "left" : {
+            "kind" : "BinaryExpr",
+            "location" : [ 32, 158, 32, 163 ],
+            "left" : {
+              "kind" : "Identifier",
+              "location" : [ 32, 158, 32, 158 ],
+              "name" : "x"
+            },
+            "operator" : "is",
+            "right" : {
+              "kind" : "Identifier",
+              "location" : [ 32, 163, 32, 163 ],
+              "name" : "y"
+            }
+          },
+          "operator" : "!=",
+          "right" : {
+            "kind" : "BooleanLiteral",
+            "location" : [ 32, 169, 32, 172 ],
+            "value" : true
+          }
+        },
+        "elseExpr" : {
+          "kind" : "IfExpr",
+          "location" : [ 32, 188, 32, 257 ],
+          "condition" : {
+            "kind" : "BooleanLiteral",
+            "location" : [ 32, 222, 32, 226 ],
+            "value" : false
+          },
+          "thenExpr" : {
+            "kind" : "IndexExpr",
+            "location" : [ 32, 188, 32, 217 ],
+            "list" : {
+              "kind" : "IndexExpr",
+              "location" : [ 32, 188, 32, 214 ],
+              "list" : {
+                "kind" : "MemberExpr",
+                "location" : [ 32, 188, 32, 211 ],
+                "object" : {
+                  "kind" : "IndexExpr",
+                  "location" : [ 32, 188, 32, 209 ],
+                  "list" : {
+                    "kind" : "IndexExpr",
+                    "location" : [ 32, 188, 32, 206 ],
+                    "list" : {
+                      "kind" : "ListExpr",
+                      "location" : [ 32, 188, 32, 203 ],
+                      "elements" : [ {
+                        "kind" : "ListExpr",
+                        "location" : [ 32, 189, 32, 190 ],
+                        "elements" : [ ]
+                      }, {
+                        "kind" : "ListExpr",
+                        "location" : [ 32, 193, 32, 202 ],
+                        "elements" : [ {
+                          "kind" : "CallExpr",
+                          "location" : [ 32, 194, 32, 196 ],
+                          "function" : {
+                            "kind" : "Identifier",
+                            "location" : [ 32, 194, 32, 194 ],
+                            "name" : "C"
+                          },
+                          "args" : [ ]
+                        }, {
+                          "kind" : "CallExpr",
+                          "location" : [ 32, 199, 32, 201 ],
+                          "function" : {
+                            "kind" : "Identifier",
+                            "location" : [ 32, 199, 32, 199 ],
+                            "name" : "C"
+                          },
+                          "args" : [ ]
+                        } ]
+                      } ]
+                    },
+                    "index" : {
+                      "kind" : "IntegerLiteral",
+                      "location" : [ 32, 205, 32, 205 ],
+                      "value" : 1
+                    }
+                  },
+                  "index" : {
+                    "kind" : "IntegerLiteral",
+                    "location" : [ 32, 208, 32, 208 ],
+                    "value" : 0
+                  }
+                },
+                "member" : {
+                  "kind" : "Identifier",
+                  "location" : [ 32, 211, 32, 211 ],
+                  "name" : "m"
+                }
+              },
+              "index" : {
+                "kind" : "IntegerLiteral",
+                "location" : [ 32, 213, 32, 213 ],
+                "value" : 0
+              }
+            },
+            "index" : {
+              "kind" : "IntegerLiteral",
+              "location" : [ 32, 216, 32, 216 ],
+              "value" : 0
+            }
+          },
+          "elseExpr" : {
+            "kind" : "BinaryExpr",
+            "location" : [ 32, 233, 32, 257 ],
+            "left" : {
+              "kind" : "BinaryExpr",
+              "location" : [ 32, 233, 32, 249 ],
+              "left" : {
+                "kind" : "BinaryExpr",
+                "location" : [ 32, 233, 32, 242 ],
+                "left" : {
+                  "kind" : "CallExpr",
+                  "location" : [ 32, 233, 32, 238 ],
+                  "function" : {
+                    "kind" : "Identifier",
+                    "location" : [ 32, 233, 32, 233 ],
+                    "name" : "g"
+                  },
+                  "args" : [ {
+                    "kind" : "IntegerLiteral",
+                    "location" : [ 32, 235, 32, 235 ],
+                    "value" : 1
+                  }, {
+                    "kind" : "IntegerLiteral",
+                    "location" : [ 32, 237, 32, 237 ],
+                    "value" : 2
+                  } ]
+                },
+                "operator" : "+",
+                "right" : {
+                  "kind" : "IntegerLiteral",
+                  "location" : [ 32, 242, 32, 242 ],
+                  "value" : 3
+                }
+              },
+              "operator" : "+",
+              "right" : {
+                "kind" : "BinaryExpr",
+                "location" : [ 32, 246, 32, 249 ],
+                "left" : {
+                  "kind" : "IntegerLiteral",
+                  "location" : [ 32, 246, 32, 246 ],
+                  "value" : 4
+                },
+                "operator" : "%",
+                "right" : {
+                  "kind" : "IntegerLiteral",
+                  "location" : [ 32, 249, 32, 249 ],
+                  "value" : 5
+                }
+              }
+            },
+            "operator" : "+",
+            "right" : {
+              "kind" : "BinaryExpr",
+              "location" : [ 32, 254, 32, 256 ],
+              "left" : {
+                "kind" : "IntegerLiteral",
+                "location" : [ 32, 254, 32, 254 ],
+                "value" : 6
+              },
+              "operator" : "-",
+              "right" : {
+                "kind" : "IntegerLiteral",
+                "location" : [ 32, 256, 32, 256 ],
+                "value" : 7
+              }
+            }
+          }
+        }
+      },
+      "thenExpr" : {
+        "kind" : "IfExpr",
+        "location" : [ 32, 16, 32, 151 ],
+        "condition" : {
+          "kind" : "BinaryExpr",
+          "location" : [ 32, 21, 32, 136 ],
+          "left" : {
+            "kind" : "BinaryExpr",
+            "location" : [ 32, 21, 32, 60 ],
+            "left" : {
+              "kind" : "BinaryExpr",
+              "location" : [ 32, 21, 32, 50 ],
+              "left" : {
+                "kind" : "BinaryExpr",
+                "location" : [ 32, 21, 32, 31 ],
+                "left" : {
+                  "kind" : "Identifier",
+                  "location" : [ 32, 21, 32, 21 ],
+                  "name" : "y"
+                },
+                "operator" : "*",
+                "right" : {
+                  "kind" : "BinaryExpr",
+                  "location" : [ 32, 26, 32, 30 ],
+                  "left" : {
+                    "kind" : "IntegerLiteral",
+                    "location" : [ 32, 26, 32, 26 ],
+                    "value" : 2
+                  },
+                  "operator" : "+",
+                  "right" : {
+                    "kind" : "IntegerLiteral",
+                    "location" : [ 32, 30, 32, 30 ],
+                    "value" : 3
+                  }
+                }
+              },
+              "operator" : ">",
+              "right" : {
+                "kind" : "BinaryExpr",
+                "location" : [ 32, 35, 32, 50 ],
+                "left" : {
+                  "kind" : "BinaryExpr",
+                  "location" : [ 32, 35, 32, 46 ],
+                  "left" : {
+                    "kind" : "IndexExpr",
+                    "location" : [ 32, 35, 32, 41 ],
+                    "list" : {
+                      "kind" : "IndexExpr",
+                      "location" : [ 32, 35, 32, 38 ],
+                      "list" : {
+                        "kind" : "Identifier",
+                        "location" : [ 32, 35, 32, 35 ],
+                        "name" : "x"
+                      },
+                      "index" : {
+                        "kind" : "IntegerLiteral",
+                        "location" : [ 32, 37, 32, 37 ],
+                        "value" : 0
+                      }
+                    },
+                    "index" : {
+                      "kind" : "IntegerLiteral",
+                      "location" : [ 32, 40, 32, 40 ],
+                      "value" : 0
+                    }
+                  },
+                  "operator" : "//",
+                  "right" : {
+                    "kind" : "IntegerLiteral",
+                    "location" : [ 32, 46, 32, 46 ],
+                    "value" : 4
+                  }
+                },
+                "operator" : "-",
+                "right" : {
+                  "kind" : "IntegerLiteral",
+                  "location" : [ 32, 50, 32, 50 ],
+                  "value" : 1
+                }
+              }
+            },
+            "operator" : "and",
+            "right" : {
+              "kind" : "BinaryExpr",
+              "location" : [ 32, 56, 32, 60 ],
+              "left" : {
+                "kind" : "Identifier",
+                "location" : [ 32, 56, 32, 56 ],
+                "name" : "z"
+              },
+              "operator" : "<",
+              "right" : {
+                "kind" : "Identifier",
+                "location" : [ 32, 60, 32, 60 ],
+                "name" : "y"
+              }
+            }
+          },
+          "operator" : "or",
+          "right" : {
+            "kind" : "BinaryExpr",
+            "location" : [ 32, 65, 32, 136 ],
+            "left" : {
+              "kind" : "BinaryExpr",
+              "location" : [ 32, 66, 32, 87 ],
+              "left" : {
+                "kind" : "BinaryExpr",
+                "location" : [ 32, 66, 32, 74 ],
+                "left" : {
+                  "kind" : "Identifier",
+                  "location" : [ 32, 66, 32, 66 ],
+                  "name" : "y"
+                },
+                "operator" : "<",
+                "right" : {
+                  "kind" : "BinaryExpr",
+                  "location" : [ 32, 70, 32, 74 ],
+                  "left" : {
+                    "kind" : "Identifier",
+                    "location" : [ 32, 70, 32, 70 ],
+                    "name" : "z"
+                  },
+                  "operator" : "+",
+                  "right" : {
+                    "kind" : "IntegerLiteral",
+                    "location" : [ 32, 74, 32, 74 ],
+                    "value" : 1
+                  }
+                }
+              },
+              "operator" : "or",
+              "right" : {
+                "kind" : "BinaryExpr",
+                "location" : [ 32, 79, 32, 87 ],
+                "left" : {
+                  "kind" : "Identifier",
+                  "location" : [ 32, 79, 32, 79 ],
+                  "name" : "z"
+                },
+                "operator" : "<",
+                "right" : {
+                  "kind" : "BinaryExpr",
+                  "location" : [ 32, 83, 32, 87 ],
+                  "left" : {
+                    "kind" : "Identifier",
+                    "location" : [ 32, 83, 32, 83 ],
+                    "name" : "y"
+                  },
+                  "operator" : "*",
+                  "right" : {
+                    "kind" : "IntegerLiteral",
+                    "location" : [ 32, 87, 32, 87 ],
+                    "value" : 2
+                  }
+                }
+              }
+            },
+            "operator" : "and",
+            "right" : {
+              "kind" : "UnaryExpr",
+              "location" : [ 32, 94, 32, 136 ],
+              "operator" : "not",
+              "operand" : {
+                "kind" : "BinaryExpr",
+                "location" : [ 32, 98, 32, 136 ],
+                "left" : {
+                  "kind" : "IndexExpr",
+                  "location" : [ 32, 98, 32, 129 ],
+                  "list" : {
+                    "kind" : "IndexExpr",
+                    "location" : [ 32, 98, 32, 126 ],
+                    "list" : {
+                      "kind" : "IndexExpr",
+                      "location" : [ 32, 98, 32, 108 ],
+                      "list" : {
+                        "kind" : "StringLiteral",
+                        "location" : [ 32, 98, 32, 105 ],
+                        "value" : "aa\\\t"
+                      },
+                      "index" : {
+                        "kind" : "IntegerLiteral",
+                        "location" : [ 32, 107, 32, 107 ],
+                        "value" : 1
+                      }
+                    },
+                    "index" : {
+                      "kind" : "IfExpr",
+                      "location" : [ 32, 110, 32, 125 ],
+                      "condition" : {
+                        "kind" : "BooleanLiteral",
+                        "location" : [ 32, 115, 32, 118 ],
+                        "value" : true
+                      },
+                      "thenExpr" : {
+                        "kind" : "IntegerLiteral",
+                        "location" : [ 32, 110, 32, 110 ],
+                        "value" : 0
+                      },
+                      "elseExpr" : {
+                        "kind" : "IntegerLiteral",
+                        "location" : [ 32, 125, 32, 125 ],
+                        "value" : 1
+                      }
+                    }
+                  },
+                  "index" : {
+                    "kind" : "IntegerLiteral",
+                    "location" : [ 32, 128, 32, 128 ],
+                    "value" : 0
+                  }
+                },
+                "operator" : "==",
+                "right" : {
+                  "kind" : "StringLiteral",
+                  "location" : [ 32, 134, 32, 136 ],
+                  "value" : "a"
+                }
+              }
+            }
+          }
+        },
+        "thenExpr" : {
+          "kind" : "IntegerLiteral",
+          "location" : [ 32, 16, 32, 16 ],
+          "value" : 3
+        },
+        "elseExpr" : {
+          "kind" : "IndexExpr",
+          "location" : [ 32, 143, 32, 151 ],
+          "list" : {
+            "kind" : "IndexExpr",
+            "location" : [ 32, 143, 32, 148 ],
+            "list" : {
+              "kind" : "MemberExpr",
+              "location" : [ 32, 143, 32, 145 ],
+              "object" : {
+                "kind" : "Identifier",
+                "location" : [ 32, 143, 32, 143 ],
+                "name" : "x"
+              },
+              "member" : {
+                "kind" : "Identifier",
+                "location" : [ 32, 145, 32, 145 ],
+                "name" : "m"
+              }
+            },
+            "index" : {
+              "kind" : "IntegerLiteral",
+              "location" : [ 32, 147, 32, 147 ],
+              "value" : 0
+            }
+          },
+          "index" : {
+            "kind" : "IntegerLiteral",
+            "location" : [ 32, 150, 32, 150 ],
+            "value" : 0
+          }
+        }
+      },
+      "elseExpr" : {
+        "kind" : "IntegerLiteral",
+        "location" : [ 32, 264, 32, 264 ],
+        "value" : 7
+      }
+    }
+  }, {
+    "kind" : "ExprStmt",
+    "location" : [ 33, 1, 33, 29 ],
+    "expr" : {
+      "kind" : "CallExpr",
+      "location" : [ 33, 1, 33, 29 ],
+      "function" : {
+        "kind" : "Identifier",
+        "location" : [ 33, 1, 33, 5 ],
+        "name" : "print"
+      },
+      "args" : [ {
+        "kind" : "IndexExpr",
+        "location" : [ 33, 7, 33, 28 ],
+        "list" : {
+          "kind" : "IndexExpr",
+          "location" : [ 33, 7, 33, 20 ],
+          "list" : {
+            "kind" : "MemberExpr",
+            "location" : [ 33, 7, 33, 9 ],
+            "object" : {
+              "kind" : "Identifier",
+              "location" : [ 33, 7, 33, 7 ],
+              "name" : "x"
+            },
+            "member" : {
+              "kind" : "Identifier",
+              "location" : [ 33, 9, 33, 9 ],
+              "name" : "m"
+            }
+          },
+          "index" : {
+            "kind" : "IndexExpr",
+            "location" : [ 33, 11, 33, 19 ],
+            "list" : {
+              "kind" : "IndexExpr",
+              "location" : [ 33, 11, 33, 16 ],
+              "list" : {
+                "kind" : "MemberExpr",
+                "location" : [ 33, 11, 33, 13 ],
+                "object" : {
+                  "kind" : "Identifier",
+                  "location" : [ 33, 11, 33, 11 ],
+                  "name" : "x"
+                },
+                "member" : {
+                  "kind" : "Identifier",
+                  "location" : [ 33, 13, 33, 13 ],
+                  "name" : "n"
+                }
+              },
+              "index" : {
+                "kind" : "IntegerLiteral",
+                "location" : [ 33, 15, 33, 15 ],
+                "value" : 0
+              }
+            },
+            "index" : {
+              "kind" : "IntegerLiteral",
+              "location" : [ 33, 18, 33, 18 ],
+              "value" : 0
+            }
+          }
+        },
+        "index" : {
+          "kind" : "IndexExpr",
+          "location" : [ 33, 22, 33, 27 ],
+          "list" : {
+            "kind" : "ListExpr",
+            "location" : [ 33, 22, 33, 24 ],
+            "elements" : [ {
+              "kind" : "IntegerLiteral",
+              "location" : [ 33, 23, 33, 23 ],
+              "value" : 0
+            } ]
+          },
+          "index" : {
+            "kind" : "IntegerLiteral",
+            "location" : [ 33, 26, 33, 26 ],
+            "value" : 0
+          }
+        }
+      } ]
+    }
+  } ],
+  "errors" : {
+    "errors" : [ ],
+    "kind" : "Errors",
+    "location" : [ 0, 0, 0, 0 ]
+  }
+}

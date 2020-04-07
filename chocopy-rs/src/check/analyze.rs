@@ -9,7 +9,7 @@ type TypeLocalEnv = LocalEnv<FuncType, ValueType>;
 impl Expr {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -36,7 +36,7 @@ impl Expr {
 impl Literal {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -55,7 +55,7 @@ impl Literal {
 impl Identifier {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         _m: &ClassEnv,
     ) -> ValueType {
@@ -74,7 +74,7 @@ impl Identifier {
 impl AssignStmt {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
         _r: Option<&ValueType>,
@@ -116,9 +116,9 @@ impl AssignStmt {
 }
 
 impl VarDef {
-    pub fn analyze(&mut self, errors: &mut Vec<Error>, o: &mut TypeLocalEnv, m: &ClassEnv) {
+    pub fn analyze(&mut self, errors: &mut Vec<CompilerError>, o: &mut TypeLocalEnv, m: &ClassEnv) {
         let right = self.value.analyze(errors, o, m);
-        let left = ValueType::from_annotation(&self.var.tv().type_);
+        let left = ValueType::from_annotation(&self.var.type_);
         if !m.is_compatible(&right, &left) {
             let msg = error_assign(&left, &right);
             self.base_mut().error_msg = Some(msg);
@@ -130,7 +130,7 @@ impl VarDef {
 impl ExprStmt {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
         _r: Option<&ValueType>,
@@ -142,7 +142,7 @@ impl ExprStmt {
 impl BooleanLiteral {
     pub fn analyze(
         &mut self,
-        _errors: &mut Vec<Error>,
+        _errors: &mut Vec<CompilerError>,
         _o: &mut TypeLocalEnv,
         _m: &ClassEnv,
     ) -> ValueType {
@@ -153,7 +153,7 @@ impl BooleanLiteral {
 impl IntegerLiteral {
     pub fn analyze(
         &mut self,
-        _errors: &mut Vec<Error>,
+        _errors: &mut Vec<CompilerError>,
         _o: &mut TypeLocalEnv,
         _m: &ClassEnv,
     ) -> ValueType {
@@ -164,7 +164,7 @@ impl IntegerLiteral {
 impl StringLiteral {
     pub fn analyze(
         &mut self,
-        _errors: &mut Vec<Error>,
+        _errors: &mut Vec<CompilerError>,
         _o: &mut TypeLocalEnv,
         _m: &ClassEnv,
     ) -> ValueType {
@@ -175,7 +175,7 @@ impl StringLiteral {
 impl NoneLiteral {
     pub fn analyze(
         &mut self,
-        _errors: &mut Vec<Error>,
+        _errors: &mut Vec<CompilerError>,
         _o: &mut TypeLocalEnv,
         _m: &ClassEnv,
     ) -> ValueType {
@@ -186,7 +186,7 @@ impl NoneLiteral {
 impl UnaryExpr {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -215,7 +215,7 @@ impl UnaryExpr {
 impl BinaryExpr {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -318,7 +318,7 @@ impl BinaryExpr {
 impl IfExpr {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -337,7 +337,7 @@ impl IfExpr {
 impl ListExpr {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -357,7 +357,7 @@ impl ListExpr {
 impl IndexExpr {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -387,7 +387,7 @@ impl IndexExpr {
 impl MemberExpr {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -402,7 +402,7 @@ impl MemberExpr {
                 return TYPE_OBJECT.clone();
             };
 
-        let name = &self.member.id().name;
+        let name = &self.member.name;
         if let Some(member) = m.get_attribute(class_name, name) {
             member.clone()
         } else {
@@ -417,7 +417,7 @@ impl MemberExpr {
 impl CallExpr {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -427,11 +427,10 @@ impl CallExpr {
             .map(|arg| arg.analyze(errors, o, m))
             .collect();
 
-        let id = self.function.id_mut();
-        let function = match o.get(&id.name) {
+        let function = match o.get(&self.function.name) {
             Some(EnvSlot::Func(f)) => f,
             _ => {
-                let msg = error_function(&id.name);
+                let msg = error_function(&self.function.name);
                 self.base_mut().error_msg = Some(msg);
                 errors.push(error_from(self));
                 return TYPE_OBJECT.clone();
@@ -439,8 +438,8 @@ impl CallExpr {
         };
 
         // Reference program: don't attach type to constructor
-        if !m.contains(&id.name) {
-            id.inferred_type = Some(FuncTypeWrapper::FuncType(function.clone()));
+        if !m.contains(&self.function.name) {
+            self.function.inferred_type = Some(function.clone());
         }
 
         if function.parameters.len() != args.len() {
@@ -465,7 +464,7 @@ impl CallExpr {
 impl MethodCallExpr {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
@@ -475,7 +474,7 @@ impl MethodCallExpr {
             .map(|arg| arg.analyze(errors, o, m))
             .collect();
 
-        let member = self.method.member_mut();
+        let member = &mut self.method;
         let class = member.object.analyze(errors, o, m);
         let class_name = if let ValueType::ClassValueType(ClassValueType { class_name }) = class {
             class_name
@@ -486,7 +485,7 @@ impl MethodCallExpr {
             return TYPE_OBJECT.clone();
         };
 
-        let method_name = &member.member.id().name;
+        let method_name = &member.member.name;
 
         let method = if let Some(method) = m.get_method(&class_name, method_name) {
             method
@@ -497,7 +496,7 @@ impl MethodCallExpr {
             return TYPE_OBJECT.clone();
         };
 
-        member.inferred_type = Some(FuncTypeWrapper::FuncType(method.clone()));
+        member.inferred_type = Some(method.clone());
 
         if method.parameters.len() - 1 != args.len() {
             let msg = error_call_count(method.parameters.len() - 1, args.len());
@@ -521,7 +520,7 @@ impl MethodCallExpr {
 impl ReturnStmt {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
@@ -554,7 +553,7 @@ impl ReturnStmt {
 impl IfStmt {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
@@ -574,7 +573,7 @@ impl IfStmt {
 impl WhileStmt {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
@@ -593,7 +592,7 @@ impl WhileStmt {
 impl ForStmt {
     pub fn analyze(
         &mut self,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
         r: Option<&ValueType>,
@@ -613,19 +612,18 @@ impl ForStmt {
         };
 
         if let Some(element_type) = element_type {
-            let id = self.identifier.id_mut();
-            let variable = match o.get(&id.name) {
+            let variable = match o.get(&self.identifier.name) {
                 None | Some(EnvSlot::Func(_)) => None,
                 Some(EnvSlot::Var(t, assignable)) => Some((t.clone(), assignable)),
             };
 
             if let Some((variable, Assignable(assignable))) = variable {
                 if m.is_compatible(element_type, &variable) {
-                    id.inferred_type = Some(variable); // yes, we attach the type here
+                    self.identifier.inferred_type = Some(variable); // yes, we attach the type here
                     if !assignable {
-                        let msg = error_nonlocal_assign(&id.name);
-                        id.base_mut().error_msg = Some(msg); // and this error is attached to the identifier
-                        errors.push(error_from(id));
+                        let msg = error_nonlocal_assign(&self.identifier.name);
+                        self.identifier.base_mut().error_msg = Some(msg); // and this error is attached to the identifier
+                        errors.push(error_from(&mut self.identifier));
                     }
                 } else {
                     let msg = error_assign(&variable, element_type);
@@ -633,7 +631,7 @@ impl ForStmt {
                     errors.push(error_from(self));
                 }
             } else {
-                let msg = error_variable(&id.name);
+                let msg = error_variable(&self.identifier.name);
                 self.base_mut().error_msg = Some(msg);
                 errors.push(error_from(self));
             }
@@ -645,7 +643,7 @@ impl ForStmt {
 
 fn analyze_stmt(
     statements: &mut [Stmt],
-    errors: &mut Vec<Error>,
+    errors: &mut Vec<CompilerError>,
     o: &mut TypeLocalEnv,
     m: &ClassEnv,
     r: Option<&ValueType>,
@@ -664,7 +662,7 @@ fn analyze_stmt(
 
 fn analyze_decl(
     declarations: &mut [Declaration],
-    errors: &mut Vec<Error>,
+    errors: &mut Vec<CompilerError>,
     o: &mut TypeLocalEnv,
     m: &ClassEnv,
 ) {
@@ -679,38 +677,34 @@ fn analyze_decl(
 }
 
 impl FuncDef {
-    pub fn analyze(&mut self, errors: &mut Vec<Error>, o: &mut TypeLocalEnv, m: &ClassEnv) {
+    pub fn analyze(&mut self, errors: &mut Vec<CompilerError>, o: &mut TypeLocalEnv, m: &ClassEnv) {
         let frame: HashMap<String, LocalSlot<FuncType, ValueType>> = self
             .declarations
             .iter()
             .map(|decl| match decl {
                 Declaration::FuncDef(f) => (
-                    f.name.id().name.clone(),
+                    f.name.name.clone(),
                     LocalSlot::Func(FuncType {
                         parameters: f
                             .params
                             .iter()
-                            .map(|tv| ValueType::from_annotation(&tv.tv().type_))
+                            .map(|tv| ValueType::from_annotation(&tv.type_))
                             .collect(),
                         return_type: ValueType::from_annotation(&f.return_type),
                     }),
                 ),
-                Declaration::VarDef(v) => {
-                    let tv = v.var.tv();
-                    (
-                        tv.identifier.id().name.clone(),
-                        LocalSlot::Var(ValueType::from_annotation(&tv.type_)),
-                    )
-                }
-                Declaration::GlobalDecl(v) => (v.variable.id().name.clone(), LocalSlot::Global),
-                Declaration::NonLocalDecl(v) => (v.variable.id().name.clone(), LocalSlot::NonLocal),
+                Declaration::VarDef(v) => (
+                    v.var.identifier.name.clone(),
+                    LocalSlot::Var(ValueType::from_annotation(&v.var.type_)),
+                ),
+                Declaration::GlobalDecl(v) => (v.variable.name.clone(), LocalSlot::Global),
+                Declaration::NonLocalDecl(v) => (v.variable.name.clone(), LocalSlot::NonLocal),
                 _ => panic!(),
             })
             .chain(self.params.iter().map(|param| {
-                let tv = param.tv();
                 (
-                    tv.identifier.id().name.clone(),
-                    LocalSlot::Var(ValueType::from_annotation(&tv.type_)),
+                    param.identifier.name.clone(),
+                    LocalSlot::Var(ValueType::from_annotation(&param.type_)),
                 )
             }))
             .collect();
@@ -725,13 +719,13 @@ impl FuncDef {
 }
 
 impl ClassDef {
-    pub fn analyze(&mut self, errors: &mut Vec<Error>, o: &mut TypeLocalEnv, m: &ClassEnv) {
+    pub fn analyze(&mut self, errors: &mut Vec<CompilerError>, o: &mut TypeLocalEnv, m: &ClassEnv) {
         analyze_decl(&mut self.declarations, errors, o, m);
     }
 }
 
 impl Program {
-    pub fn analyze(&mut self, errors: &mut Vec<Error>, o: &mut TypeLocalEnv, m: &ClassEnv) {
+    pub fn analyze(&mut self, errors: &mut Vec<CompilerError>, o: &mut TypeLocalEnv, m: &ClassEnv) {
         analyze_decl(&mut self.declarations, errors, o, m);
         analyze_stmt(&mut self.statements, errors, o, m, None);
     }

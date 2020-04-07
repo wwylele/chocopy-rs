@@ -4,7 +4,7 @@ mod pipe;
 mod token;
 use crate::node::*;
 
-pub fn process(path: &str) -> Result<Ast, Box<dyn std::error::Error>> {
+pub fn process(path: &str) -> Result<Program, Box<dyn std::error::Error>> {
     use async_std::fs::*;
     use async_std::io::*;
     use futures::executor::block_on;
@@ -39,27 +39,27 @@ mod tests {
     use super::*;
     use std::io::{stdout, Write};
 
-    fn compare_ast(a: &Ast, b: &Ast) -> bool {
-        let Ast::Program(Program {
-            errors: ErrorInfo::Errors(Errors {
+    fn compare_ast(a: &Program, b: &Program) -> bool {
+        let Program {
+            errors: Errors {
                 errors: a_errors, ..
-            }),
+            },
             ..
-        }) = a;
-        let Ast::Program(Program {
-            errors: ErrorInfo::Errors(Errors {
+        } = a;
+        let Program {
+            errors: Errors {
                 errors: b_errors, ..
-            }),
+            },
             ..
-        }) = b;
+        } = b;
         if a_errors.is_empty() {
             b_errors.is_empty() && a == b
         } else {
             if b_errors.is_empty() {
                 return false;
             }
-            let Error::CompilerError(CompilerError { base: a_base, .. }) = &a_errors[0];
-            let Error::CompilerError(CompilerError { base: b_base, .. }) = &b_errors[0];
+            let CompilerError { base: a_base, .. } = &a_errors[0];
+            let CompilerError { base: b_base, .. } = &b_errors[0];
             a_base == b_base
         }
     }
@@ -72,6 +72,7 @@ mod tests {
             "test/original/pa1",
             "test/original/pa1/hidden",
             "test/original/pa2",
+            "test/pa1",
             "test/pa2",
         ];
 
@@ -95,7 +96,7 @@ mod tests {
                 ast_file.set_file_name(file_name);
 
                 let ast_string = String::from_utf8(std::fs::read(ast_file).unwrap()).unwrap();
-                let ast_reference = serde_json::from_str::<Ast>(&ast_string).unwrap();
+                let ast_reference = serde_json::from_str::<Program>(&ast_string).unwrap();
 
                 let (sender, receiver) = std::sync::mpsc::channel();
                 std::thread::Builder::new()

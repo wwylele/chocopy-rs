@@ -727,7 +727,7 @@ impl<'a> Emitter<'a> {
     pub fn emit_call_expr(
         &mut self,
         args: &[Expr],
-        func_type: &Option<FuncTypeWrapper>,
+        func_type: &Option<FuncType>,
         name: &str,
         virtual_call: bool,
     ) {
@@ -736,7 +736,7 @@ impl<'a> Emitter<'a> {
         for (i, arg) in args.iter().enumerate() {
             self.emit_expression(arg);
 
-            let param_type = &func_type.as_ref().unwrap().func_type().parameters[i];
+            let param_type = &func_type.as_ref().unwrap().parameters[i];
 
             self.emit_coerce(arg.inferred_type.as_ref().unwrap(), param_type);
 
@@ -870,7 +870,7 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x48, 0x89, 0xC6]);
 
         let slot = if let Some(ValueType::ClassValueType(c)) = &expr.object.inferred_type {
-            &self.classes.as_ref().unwrap()[&c.class_name].attributes[&expr.member.id().name]
+            &self.classes.as_ref().unwrap()[&c.class_name].attributes[&expr.member.name]
         } else {
             panic!()
         };
@@ -1099,17 +1099,17 @@ impl<'a> Emitter<'a> {
             ExprContent::CallExpr(expr) => {
                 self.emit_call_expr(
                     &expr.args,
-                    &expr.function.id().inferred_type,
-                    &expr.function.id().name,
+                    &expr.function.inferred_type,
+                    &expr.function.name,
                     false,
                 );
             }
             ExprContent::MethodCallExpr(expr) => {
-                let method = expr.method.member();
+                let method = &expr.method;
                 let args: Vec<Expr> = std::iter::once(method.object.clone())
                     .chain(expr.args.iter().cloned())
                     .collect();
-                self.emit_call_expr(&args, &method.inferred_type, &method.member.id().name, true);
+                self.emit_call_expr(&args, &method.inferred_type, &method.member.name, true);
             }
             ExprContent::IndexExpr(expr) => {
                 if expr.list.inferred_type.as_ref().unwrap() == &*TYPE_STR {
@@ -1305,13 +1305,13 @@ impl<'a> Emitter<'a> {
                     self.emit_check_none();
                     self.emit_push_rax();
 
-                    let slot =
-                        if let Some(ValueType::ClassValueType(c)) = &expr.object.inferred_type {
-                            &self.classes.as_ref().unwrap()[&c.class_name].attributes
-                                [&expr.member.id().name]
-                        } else {
-                            panic!()
-                        };
+                    let slot = if let Some(ValueType::ClassValueType(c)) =
+                        &expr.object.inferred_type
+                    {
+                        &self.classes.as_ref().unwrap()[&c.class_name].attributes[&expr.member.name]
+                    } else {
+                        panic!()
+                    };
 
                     if slot.target_type != *TYPE_INT && slot.target_type != *TYPE_BOOL {
                         // mov rax,[rax+{}]
@@ -1413,8 +1413,8 @@ impl<'a> Emitter<'a> {
         };
 
         //// Assign the element
-        let target_type = stmt.identifier.id().inferred_type.as_ref().unwrap();
-        self.emit_assign_identifier(&stmt.identifier.id().name, source_type, target_type);
+        let target_type = stmt.identifier.inferred_type.as_ref().unwrap();
+        self.emit_assign_identifier(&stmt.identifier.name, source_type, target_type);
 
         //// Execute the loop body
         for stmt in &stmt.body {
@@ -1492,7 +1492,7 @@ impl<'a> Emitter<'a> {
             }
         }
 
-        let target_type = ValueType::from_annotation(&decl.var.tv().type_);
+        let target_type = ValueType::from_annotation(&decl.var.type_);
         self.emit_coerce(decl.value.inferred_type.as_ref().unwrap(), &target_type);
         self.emit_push_rax();
     }
@@ -1502,7 +1502,7 @@ impl<'a> Emitter<'a> {
             .storage_env
             .as_ref()
             .unwrap()
-            .get(&decl.var.tv().identifier.id().name)
+            .get(&decl.var.identifier.name)
         {
             assert!(v.level == 0);
             v.offset
@@ -1525,7 +1525,7 @@ impl<'a> Emitter<'a> {
             }
         }
 
-        let target_type = ValueType::from_annotation(&decl.var.tv().type_);
+        let target_type = ValueType::from_annotation(&decl.var.type_);
         self.emit_coerce(decl.value.inferred_type.as_ref().unwrap(), &target_type);
 
         if target_type == *TYPE_INT {
@@ -1550,7 +1550,7 @@ impl<'a> Emitter<'a> {
             .storage_env
             .as_ref()
             .unwrap()
-            .get(&decl.var.tv().identifier.id().name)
+            .get(&decl.var.identifier.name)
         {
             assert!(v.level == 0);
             v.offset
@@ -1558,7 +1558,7 @@ impl<'a> Emitter<'a> {
             panic!()
         };
 
-        let target_type = ValueType::from_annotation(&decl.var.tv().type_);
+        let target_type = ValueType::from_annotation(&decl.var.type_);
         if target_type != *TYPE_INT && target_type != *TYPE_BOOL {
             // mov rax,[rip+{}]
             self.emit(&[0x48, 0x8B, 0x05]);
@@ -1580,9 +1580,9 @@ fn gen_function(
     parent: Option<&str>,
 ) -> Vec<Chunk> {
     let link_name = if let Some(parent) = parent {
-        parent.to_owned() + "." + &function.name.id().name
+        parent.to_owned() + "." + &function.name.name
     } else {
-        function.name.id().name.clone()
+        function.name.name.clone()
     };
 
     let mut locals = HashMap::new();
@@ -1593,7 +1593,7 @@ fn gen_function(
     for (i, param) in function.params.iter().enumerate() {
         let offset;
         offset = i as i32 * 8 + 16;
-        let name = &param.tv().identifier.id().name;
+        let name = &param.identifier.name;
         locals.insert(
             name.clone(),
             LocalSlot::Var(VarSlot {
@@ -1601,7 +1601,7 @@ fn gen_function(
                 level: level + 1,
             }),
         );
-        let param_type = ValueType::from_annotation(&param.tv().type_);
+        let param_type = ValueType::from_annotation(&param.type_);
         if param_type != *TYPE_INT && param_type != *TYPE_BOOL {
             clean_up_list.push(offset);
         }
@@ -1610,7 +1610,7 @@ fn gen_function(
             offset,
             line: param.base().location.start.row,
             name: name.clone(),
-            var_type: TypeDebug::from_annotation(&param.tv().type_),
+            var_type: TypeDebug::from_annotation(&param.type_),
         })
     }
 
@@ -1620,7 +1620,7 @@ fn gen_function(
 
     for declaration in &function.declarations {
         if let Declaration::VarDef(v) = declaration {
-            let name = &v.var.tv().identifier.id().name;
+            let name = &v.var.identifier.name;
             let offset = local_offset;
             local_offset -= 8;
             locals.insert(
@@ -1630,7 +1630,7 @@ fn gen_function(
                     level: level + 1,
                 }),
             );
-            let local_type = ValueType::from_annotation(&v.var.tv().type_);
+            let local_type = ValueType::from_annotation(&v.var.type_);
             if local_type != *TYPE_INT && local_type != *TYPE_BOOL {
                 clean_up_list.push(offset);
             }
@@ -1639,10 +1639,10 @@ fn gen_function(
                 offset,
                 line: v.base().location.start.row,
                 name: name.clone(),
-                var_type: TypeDebug::from_annotation(&v.var.tv().type_),
+                var_type: TypeDebug::from_annotation(&v.var.type_),
             })
         } else if let Declaration::FuncDef(f) = declaration {
-            let name = &f.name.id().name;
+            let name = &f.name.name;
             locals.insert(
                 name.clone(),
                 LocalSlot::Func(FuncSlot {
@@ -1976,7 +1976,7 @@ fn gen_print() -> Chunk {
 }
 
 fn gen_main(
-    ast: &Ast,
+    ast: &Program,
     storage_env: &mut StorageEnv,
     classes: &HashMap<String, ClassSlot>,
 ) -> Chunk {
@@ -1997,7 +1997,7 @@ fn gen_main(
         main_code.emit_push_rsi();
     }
 
-    for declaration in &ast.program().declarations {
+    for declaration in &ast.declarations {
         if let Declaration::VarDef(v) = declaration {
             main_code.emit_global_var_init(v);
         }
@@ -2005,11 +2005,11 @@ fn gen_main(
 
     let mut lines = vec![];
 
-    for statement in &ast.program().statements {
+    for statement in &ast.statements {
         main_code.emit_statement(statement, &mut lines);
     }
 
-    for declaration in &ast.program().declarations {
+    for declaration in &ast.declarations {
         if let Declaration::VarDef(v) = declaration {
             main_code.emit_global_var_drop(v);
         }
@@ -2038,7 +2038,6 @@ fn gen_main(
 
     main_code.finalize(ProcedureDebug {
         decl_line: ast
-            .program()
             .statements
             .get(0)
             .map_or(1, |s| s.base().location.start.row),
@@ -2057,8 +2056,8 @@ fn add_class(
     classes_debug: &mut HashMap<String, ClassDebug>,
     c: &ClassDef,
 ) {
-    let class_name = &c.name.id().name;
-    let super_name = &c.super_class.id().name;
+    let class_name = &c.name.name;
+    let super_name = &c.super_class.name;
     let mut class_slot = classes.get(super_name).unwrap().clone();
     let mut class_debug = classes_debug.get(super_name).unwrap().clone();
     class_slot.methods.get_mut("$dtor").unwrap().link_name = class_name.clone() + ".$dtor";
@@ -2072,7 +2071,7 @@ fn add_class(
     for declaration in &c.declarations {
         if let Declaration::VarDef(v) = declaration {
             let source_type = v.value.inferred_type.clone().unwrap();
-            let target_type = ValueType::from_annotation(&v.var.tv().type_);
+            let target_type = ValueType::from_annotation(&v.var.type_);
             let size = if target_type == *TYPE_INT {
                 4
             } else if target_type == *TYPE_BOOL {
@@ -2082,7 +2081,7 @@ fn add_class(
             };
             class_slot.object_size += (size - class_slot.object_size % size) % size;
             let offset = class_slot.object_size + 16;
-            let name = &v.var.tv().identifier.id().name;
+            let name = &v.var.identifier.name;
             class_slot.attributes.insert(
                 name.clone(),
                 AttributeSlot {
@@ -2098,15 +2097,15 @@ fn add_class(
                 offset: offset as i32,
                 line: v.base().location.start.row,
                 name: name.clone(),
-                var_type: TypeDebug::from_annotation(&v.var.tv().type_),
+                var_type: TypeDebug::from_annotation(&v.var.type_),
             });
         } else if let Declaration::FuncDef(f) = declaration {
-            let method_name = &f.name.id().name;
+            let method_name = &f.name.name;
             let link_name = class_name.clone() + "." + method_name;
             if let Some(method) = class_slot.methods.get_mut(method_name) {
                 method.link_name = link_name;
 
-                let self_type = TypeDebug::from_annotation(&f.params[0].tv().type_);
+                let self_type = TypeDebug::from_annotation(&f.params[0].type_);
                 class_debug
                     .methods
                     .get_mut(&method.offset)
@@ -2123,7 +2122,7 @@ fn add_class(
                 let params = f
                     .params
                     .iter()
-                    .map(|tv| TypeDebug::from_annotation(&tv.tv().type_))
+                    .map(|tv| TypeDebug::from_annotation(&tv.type_))
                     .collect();
                 let return_type = TypeDebug::from_annotation(&f.return_type);
 
@@ -2145,7 +2144,7 @@ fn add_class(
     classes_debug.insert(class_name.clone(), class_debug);
 }
 
-pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
+pub(super) fn gen_code_set(ast: Program) -> CodeSet {
     let mut globals = HashMap::new();
     let mut classes = HashMap::new();
     let mut base_methods = HashMap::new();
@@ -2193,10 +2192,10 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
             .collect(),
         },
     );
-    for declaration in &ast.program().declarations {
+    for declaration in &ast.declarations {
         if let Declaration::VarDef(v) = declaration {
-            let name = &v.var.tv().identifier.id().name;
-            let target_type = ValueType::from_annotation(&v.var.tv().type_);
+            let name = &v.var.identifier.name;
+            let target_type = ValueType::from_annotation(&v.var.type_);
             let size = if target_type == *TYPE_INT {
                 4
             } else if target_type == *TYPE_BOOL {
@@ -2217,12 +2216,12 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
                 offset: global_offset,
                 line: v.base().location.start.row,
                 name: name.clone(),
-                var_type: TypeDebug::from_annotation(&v.var.tv().type_),
+                var_type: TypeDebug::from_annotation(&v.var.type_),
             });
 
             global_offset += size;
         } else if let Declaration::FuncDef(f) = declaration {
-            let name = &f.name.id().name;
+            let name = &f.name.name;
             globals.insert(
                 name.clone(),
                 LocalSlot::Func(FuncSlot {
@@ -2257,7 +2256,7 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
 
     let mut chunks = vec![gen_main(&ast, &mut storage_env, &classes)];
 
-    for declaration in &ast.program().declarations {
+    for declaration in &ast.declarations {
         if let Declaration::FuncDef(f) = declaration {
             chunks.append(&mut gen_function(&f, &mut storage_env, &classes, 0, None));
         } else if let Declaration::ClassDef(c) = declaration {
@@ -2268,7 +2267,7 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
                         &mut storage_env,
                         &classes,
                         0,
-                        Some(&c.name.id().name),
+                        Some(&c.name.name),
                     ));
                 }
             }

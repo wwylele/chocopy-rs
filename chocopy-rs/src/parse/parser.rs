@@ -6,13 +6,13 @@ use std::collections::vec_deque::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
 
-impl Error {
-    pub fn unexpected(token: ComplexToken) -> Error {
-        Error::CompilerError(CompilerError {
+impl CompilerError {
+    pub fn unexpected(token: ComplexToken) -> CompilerError {
+        CompilerError {
             base: NodeBase::from_location(token.location),
             message: "unexptected token".to_owned(),
             syntax: true,
-        })
+        }
     }
 }
 
@@ -20,7 +20,7 @@ macro_rules! parse_expr_unary {
     ($name:ident, $parse_next:ident, $operator_token:expr => $operator_str:expr) => {
         async fn $name(
             &mut self,
-        ) -> (Option<Expr>, Vec<Error>) {
+        ) -> (Option<Expr>, Vec<CompilerError>) {
             let mut errors = vec![];
             let start = self.next_pos().await;
 
@@ -57,7 +57,7 @@ macro_rules! parse_expr_binary {
     ($name:ident, $parse_next:ident, $($operator_token:pat => $operator_str:expr),*) => {
         async fn $name(
             &mut self,
-        ) -> (Option<Expr>, Vec<Error>) {
+        ) -> (Option<Expr>, Vec<CompilerError>) {
             let mut errors = vec![];
             let start = self.next_pos().await;
 
@@ -197,7 +197,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         self.prev_pos_buf.back().cloned()
     }
 
-    fn parse_expr1<'a>(&'a mut self) -> BoxedFuture<'a, (Option<Expr>, Vec<Error>)> {
+    fn parse_expr1<'a>(&'a mut self) -> BoxedFuture<'a, (Option<Expr>, Vec<CompilerError>)> {
         Box::pin(async move {
             let mut errors = vec![];
             let start = self.next_pos().await;
@@ -228,7 +228,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
             let token = self.take().await;
             if token.token != Token::Else {
-                errors.push(Error::unexpected(token));
+                errors.push(CompilerError::unexpected(token));
                 return (None, errors);
             }
 
@@ -258,7 +258,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
     parse_expr_binary!(parse_expr3, parse_expr4, Token::And => BinaryOp::And);
     parse_expr_unary!(parse_expr4, parse_expr5, Token::Not => UnaryOp::Not);
 
-    async fn parse_expr5(&mut self) -> (Option<Expr>, Vec<Error>) {
+    async fn parse_expr5(&mut self) -> (Option<Expr>, Vec<CompilerError>) {
         let mut errors = vec![];
         let start = self.next_pos().await;
 
@@ -318,7 +318,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
     parse_expr_unary!(parse_expr8, parse_expr9, Token::Minus => UnaryOp::Negative);
 
-    async fn parse_expr9(&mut self) -> (Option<Expr>, Vec<Error>) {
+    async fn parse_expr9(&mut self) -> (Option<Expr>, Vec<CompilerError>) {
         let mut errors = vec![];
         let start = self.next_pos().await;
 
@@ -351,7 +351,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                                 Token::Comma => (),
                                 Token::RightPar => break,
                                 _ => {
-                                    errors.push(Error::unexpected(token));
+                                    errors.push(CompilerError::unexpected(token));
                                     return (None, errors);
                                 }
                             }
@@ -363,27 +363,27 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     expr = match expr.content {
                         ExprContent::Identifier(function) => Expr::CallExpr(CallExpr {
                             base,
-                            function: FuncId::Identifier(FuncIdentifier {
+                            function: FuncIdentifier {
                                 inferred_type: None,
                                 base: function.base,
                                 name: function.name,
-                            }),
+                            },
                             args,
                         }),
                         ExprContent::MemberExpr(method) => {
                             Expr::MethodCallExpr(Box::new(MethodCallExpr {
                                 base,
-                                method: Method::MemberExpr(TypedMemberExpr {
+                                method: TypedMemberExpr {
                                     inferred_type: None,
                                     base: method.base,
                                     object: method.object,
                                     member: method.member,
-                                }),
+                                },
                                 args,
                             }))
                         }
                         _ => {
-                            errors.push(Error::unexpected(token));
+                            errors.push(CompilerError::unexpected(token));
                             return (None, errors);
                         }
                     }
@@ -399,7 +399,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
                     let token = self.take().await;
                     if token.token != Token::RightSquare {
-                        errors.push(Error::unexpected(token));
+                        errors.push(CompilerError::unexpected(token));
                         return (None, errors);
                     }
 
@@ -414,12 +414,12 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                 Token::Dot => {
                     let token = self.take().await;
                     let member = if let Token::Identifier(name) = token.token {
-                        Id::Identifier(Identifier {
+                        UntypedIdentifier {
                             base: NodeBase::from_location(token.location),
                             name,
-                        })
+                        }
                     } else {
-                        errors.push(Error::unexpected(token));
+                        errors.push(CompilerError::unexpected(token));
                         return (None, errors);
                     };
 
@@ -441,7 +441,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         (Some(expr), errors)
     }
 
-    async fn parse_expr10(&mut self) -> (Option<Expr>, Vec<Error>) {
+    async fn parse_expr10(&mut self) -> (Option<Expr>, Vec<CompilerError>) {
         let mut errors = vec![];
         let start = self.next_pos().await;
 
@@ -464,7 +464,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                 if let Some(expr) = expr {
                     let token = self.take().await;
                     if token.token != Token::RightPar {
-                        errors.push(Error::unexpected(token));
+                        errors.push(CompilerError::unexpected(token));
                         return (None, errors);
                     }
                     expr
@@ -489,7 +489,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                             Token::Comma => (),
                             Token::RightSquare => break,
                             _ => {
-                                errors.push(Error::unexpected(token));
+                                errors.push(CompilerError::unexpected(token));
                                 return (None, errors);
                             }
                         }
@@ -501,7 +501,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                 Expr::ListExpr(ListExpr { base, elements })
             }
             _ => {
-                errors.push(Error::unexpected(token));
+                errors.push(CompilerError::unexpected(token));
                 return (None, errors);
             }
         };
@@ -509,7 +509,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         (Some(expr), errors)
     }
 
-    async fn parse_assign_or_expr_stmt(&mut self) -> (Option<Stmt>, Vec<Error>) {
+    async fn parse_assign_or_expr_stmt(&mut self) -> (Option<Stmt>, Vec<CompilerError>) {
         let mut expr_list = vec![];
         let mut errors = vec![];
         let start = self.next_pos().await;
@@ -531,13 +531,13 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     | Some(ExprContent::MemberExpr(_))
                     | Some(ExprContent::IndexExpr(_)) => (),
                     _ => {
-                        errors.push(Error::unexpected(token));
+                        errors.push(CompilerError::unexpected(token));
                         return (None, errors);
                     }
                 },
                 Token::NewLine => break,
                 _ => {
-                    errors.push(Error::unexpected(token));
+                    errors.push(CompilerError::unexpected(token));
                     return (None, errors);
                 }
             }
@@ -561,13 +561,13 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         (stmt, errors)
     }
 
-    async fn parse_return(&mut self) -> (Option<ReturnStmt>, Vec<Error>) {
+    async fn parse_return(&mut self) -> (Option<ReturnStmt>, Vec<CompilerError>) {
         let mut errors = vec![];
         let start = self.next_pos().await;
 
         let token = self.take().await;
         if token.token != Token::Return {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
@@ -590,7 +590,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
         let token = self.take().await;
         if token.token != Token::NewLine {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
@@ -603,24 +603,24 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         )
     }
 
-    async fn parse_block(&mut self) -> (Option<Vec<Stmt>>, Vec<Error>) {
+    async fn parse_block(&mut self) -> (Option<Vec<Stmt>>, Vec<CompilerError>) {
         let mut errors = vec![];
 
         let token = self.take().await;
         if token.token != Token::Colon {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
         let token = self.take().await;
         if token.token != Token::NewLine {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
         let token = self.take().await;
         if token.token != Token::Indent {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
@@ -629,20 +629,20 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
         let token = self.take().await;
         if token.token != Token::Dedent {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
         (Some(body), errors)
     }
 
-    async fn parse_while(&mut self) -> (Option<WhileStmt>, Vec<Error>) {
+    async fn parse_while(&mut self) -> (Option<WhileStmt>, Vec<CompilerError>) {
         let mut errors = vec![];
         let start = self.next_pos().await;
 
         let token = self.take().await;
         if token.token != Token::While {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
@@ -673,31 +673,31 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         )
     }
 
-    async fn parse_for(&mut self) -> (Option<ForStmt>, Vec<Error>) {
+    async fn parse_for(&mut self) -> (Option<ForStmt>, Vec<CompilerError>) {
         let mut errors = vec![];
         let start = self.next_pos().await;
 
         let token = self.take().await;
         if token.token != Token::For {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
         let token = self.take().await;
         let identifier = if let Token::Identifier(name) = token.token {
-            TypedId::Identifier(TypedIdentifier {
+            TypedIdentifier {
                 inferred_type: None,
                 base: NodeBase::from_location(token.location),
                 name,
-            })
+            }
         } else {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         };
 
         let token = self.take().await;
         if token.token != Token::In {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
@@ -729,14 +729,14 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         )
     }
 
-    fn parse_if<'a>(&'a mut self) -> BoxedFuture<'a, (Option<IfStmt>, Vec<Error>)> {
+    fn parse_if<'a>(&'a mut self) -> BoxedFuture<'a, (Option<IfStmt>, Vec<CompilerError>)> {
         Box::pin(async move {
             let mut errors = vec![];
             let start = self.next_pos().await;
 
             let token = self.take().await;
             if token.token != Token::If && token.token != Token::Elif {
-                errors.push(Error::unexpected(token));
+                errors.push(CompilerError::unexpected(token));
                 return (None, errors);
             }
 
@@ -796,7 +796,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         })
     }
 
-    fn parse_stmt_list<'a>(&'a mut self) -> BoxedFuture<'a, (Vec<Stmt>, Vec<Error>)> {
+    fn parse_stmt_list<'a>(&'a mut self) -> BoxedFuture<'a, (Vec<Stmt>, Vec<CompilerError>)> {
         Box::pin(async move {
             let mut stmt_list = vec![];
             let mut errors = vec![];
@@ -811,7 +811,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     Token::Pass => {
                         let token = self.take().await;
                         if token.token != Token::NewLine {
-                            errors.push(Error::unexpected(token));
+                            errors.push(CompilerError::unexpected(token));
                             self.skip_to_next_line().await;
                         }
                     }
@@ -872,7 +872,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         })
     }
 
-    async fn parse_decl_in_class(&mut self) -> (Option<Vec<Declaration>>, Vec<Error>) {
+    async fn parse_decl_in_class(&mut self) -> (Option<Vec<Declaration>>, Vec<CompilerError>) {
         let mut declarations = vec![];
         let mut errors = vec![];
 
@@ -880,7 +880,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         if token.token == Token::Pass {
             let token = self.take().await;
             if token.token != Token::NewLine {
-                errors.push(Error::unexpected(token));
+                errors.push(CompilerError::unexpected(token));
                 return (None, errors);
             }
         } else {
@@ -920,66 +920,66 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         (Some(declarations), errors)
     }
 
-    async fn parse_class_def(&mut self) -> (Option<ClassDef>, Vec<Error>) {
+    async fn parse_class_def(&mut self) -> (Option<ClassDef>, Vec<CompilerError>) {
         let mut errors = vec![];
         let start = self.next_pos().await;
 
         // Parse "class ID ( ID ) : \n {"
         let token = self.take().await;
         if token.token != Token::Class {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
         let token = self.take().await;
         let name = if let Token::Identifier(name) = token.token {
-            Id::Identifier(Identifier {
+            UntypedIdentifier {
                 base: NodeBase::from_location(token.location),
                 name,
-            })
+            }
         } else {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         };
 
         let token = self.take().await;
         if token.token != Token::LeftPar {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
         let token = self.take().await;
         let super_class = if let Token::Identifier(name) = token.token {
-            Id::Identifier(Identifier {
+            UntypedIdentifier {
                 base: NodeBase::from_location(token.location),
                 name,
-            })
+            }
         } else {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         };
 
         let token = self.take().await;
         if token.token != Token::RightPar {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
         let token = self.take().await;
         if token.token != Token::Colon {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
         let token = self.take().await;
         if token.token != Token::NewLine {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
         let token = self.take().await;
         if token.token != Token::Indent {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
@@ -997,7 +997,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
         let token = self.take().await;
         if token.token != Token::Dedent {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
@@ -1012,7 +1012,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         )
     }
 
-    async fn parse_decl_in_func(&mut self) -> (Option<Vec<Declaration>>, Vec<Error>) {
+    async fn parse_decl_in_func(&mut self) -> (Option<Vec<Declaration>>, Vec<CompilerError>) {
         let mut declarations = vec![];
         let mut errors = vec![];
 
@@ -1033,12 +1033,12 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     let start = head.location.start;
                     let token = self.take().await;
                     let variable = if let Token::Identifier(name) = token.token {
-                        Id::Identifier(Identifier {
+                        UntypedIdentifier {
                             base: NodeBase::from_location(token.location),
                             name,
-                        })
+                        }
                     } else {
-                        errors.push(Error::unexpected(token));
+                        errors.push(CompilerError::unexpected(token));
                         self.skip_to_next_line().await;
                         continue;
                     };
@@ -1047,7 +1047,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
                     let token = self.take().await;
                     if token.token != Token::NewLine {
-                        errors.push(Error::unexpected(token));
+                        errors.push(CompilerError::unexpected(token));
                         self.skip_to_next_line().await;
                         continue;
                     }
@@ -1089,7 +1089,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         (Some(declarations), errors)
     }
 
-    fn parse_func_def<'a>(&'a mut self) -> BoxedFuture<'a, (Option<FuncDef>, Vec<Error>)> {
+    fn parse_func_def<'a>(&'a mut self) -> BoxedFuture<'a, (Option<FuncDef>, Vec<CompilerError>)> {
         Box::pin(async move {
             let mut errors = vec![];
             let start = self.next_pos().await;
@@ -1097,24 +1097,24 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
             // Parse "def ID ("
             let token = self.take().await;
             if token.token != Token::Def {
-                errors.push(Error::unexpected(token));
+                errors.push(CompilerError::unexpected(token));
                 return (None, errors);
             }
 
             let token = self.take().await;
             let name = if let Token::Identifier(name) = token.token {
-                Id::Identifier(Identifier {
+                UntypedIdentifier {
                     base: NodeBase::from_location(token.location),
                     name,
-                })
+                }
             } else {
-                errors.push(Error::unexpected(token));
+                errors.push(CompilerError::unexpected(token));
                 return (None, errors);
             };
 
             let token = self.take().await;
             if token.token != Token::LeftPar {
-                errors.push(Error::unexpected(token));
+                errors.push(CompilerError::unexpected(token));
                 return (None, errors);
             }
 
@@ -1131,14 +1131,14 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     } else {
                         return (None, errors);
                     };
-                    params.push(Tv::TypedVar(typed_var));
+                    params.push(typed_var);
 
                     let token = self.take().await;
                     match token.token {
                         Token::Comma => (),
                         Token::RightPar => break,
                         _ => {
-                            errors.push(Error::unexpected(token));
+                            errors.push(CompilerError::unexpected(token));
                             return (None, errors);
                         }
                     }
@@ -1163,27 +1163,27 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
                     let token = self.take().await;
                     if token.token != Token::Colon {
-                        errors.push(Error::unexpected(token));
+                        errors.push(CompilerError::unexpected(token));
                         return (None, errors);
                     }
 
                     return_type
                 }
                 _ => {
-                    errors.push(Error::unexpected(token));
+                    errors.push(CompilerError::unexpected(token));
                     return (None, errors);
                 }
             };
 
             let token = self.take().await;
             if token.token != Token::NewLine {
-                errors.push(Error::unexpected(token));
+                errors.push(CompilerError::unexpected(token));
                 return (None, errors);
             }
 
             let token = self.take().await;
             if token.token != Token::Indent {
-                errors.push(Error::unexpected(token));
+                errors.push(CompilerError::unexpected(token));
                 return (None, errors);
             }
 
@@ -1205,7 +1205,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
             let token = self.take().await;
             if token.token != Token::Dedent {
-                errors.push(Error::unexpected(token));
+                errors.push(CompilerError::unexpected(token));
                 return (None, errors);
             }
 
@@ -1222,7 +1222,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
             )
         })
     }
-    async fn parse_var_def(&mut self) -> (Option<VarDef>, Vec<Error>) {
+    async fn parse_var_def(&mut self) -> (Option<VarDef>, Vec<CompilerError>) {
         let mut errors = vec![];
         let start = self.next_pos().await;
 
@@ -1237,7 +1237,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
         let token = self.take().await;
         if token.token != Token::Assign {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
@@ -1252,7 +1252,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                 Literal::StringLiteral(StringLiteral { base, value })
             }
             _ => {
-                errors.push(Error::unexpected(token));
+                errors.push(CompilerError::unexpected(token));
                 return (None, errors);
             }
         };
@@ -1262,14 +1262,14 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
         let token = self.take().await;
         if token.token != Token::NewLine {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
         (
             Some(VarDef {
                 base: NodeBase::from_positions(start, end),
-                var: Tv::TypedVar(typed_var),
+                var: typed_var,
                 value,
             }),
             errors,
@@ -1278,7 +1278,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
     fn parse_type_annotation<'a>(
         &'a mut self,
-    ) -> BoxedFuture<'a, (Option<TypeAnnotation>, Vec<Error>)> {
+    ) -> BoxedFuture<'a, (Option<TypeAnnotation>, Vec<CompilerError>)> {
         Box::pin(async move {
             let mut errors = vec![];
             let start = self.next_pos().await;
@@ -1306,7 +1306,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
                     let token = self.take().await;
                     if token.token != Token::RightSquare {
-                        errors.push(Error::unexpected(token));
+                        errors.push(CompilerError::unexpected(token));
                         return (None, errors);
                     }
 
@@ -1320,32 +1320,32 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     )
                 }
                 _ => {
-                    errors.push(Error::unexpected(token));
+                    errors.push(CompilerError::unexpected(token));
                     (None, errors)
                 }
             }
         })
     }
 
-    async fn parse_typed_var(&mut self) -> (Option<TypedVar>, Vec<Error>) {
+    async fn parse_typed_var(&mut self) -> (Option<TypedVar>, Vec<CompilerError>) {
         let mut errors = vec![];
         let start = self.next_pos().await;
 
         // Parse "ID : type"
         let token = self.take().await;
         let identifier = if let Token::Identifier(name) = token.token {
-            Id::Identifier(Identifier {
+            UntypedIdentifier {
                 base: NodeBase::from_location(token.location),
                 name,
-            })
+            }
         } else {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         };
 
         let token = self.take().await;
         if token.token != Token::Colon {
-            errors.push(Error::unexpected(token));
+            errors.push(CompilerError::unexpected(token));
             return (None, errors);
         }
 
@@ -1372,7 +1372,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
 pub async fn parse<GetTokenFuture: Future<Output = ComplexToken>>(
     get_token: impl FnMut() -> GetTokenFuture,
-) -> Ast {
+) -> Program {
     let mut tokens = BufferedReceiver::new(get_token);
 
     let mut declarations = vec![];
@@ -1436,7 +1436,7 @@ pub async fn parse<GetTokenFuture: Future<Output = ComplexToken>>(
                             if token.token == Token::Eof {
                                 break;
                             } else {
-                                errors.push(Error::unexpected(token));
+                                errors.push(CompilerError::unexpected(token));
                             }
                         }
                         break;
@@ -1448,13 +1448,13 @@ pub async fn parse<GetTokenFuture: Future<Output = ComplexToken>>(
 
     let statements = statements.unwrap_or_default();
 
-    Ast::Program(Program {
+    Program {
         base: NodeBase::from_positions(start, end),
         declarations,
         statements,
-        errors: ErrorInfo::Errors(Errors {
+        errors: Errors {
             base: NodeBase::new(0, 0, 0, 0),
             errors,
-        }),
-    })
+        },
+    }
 }

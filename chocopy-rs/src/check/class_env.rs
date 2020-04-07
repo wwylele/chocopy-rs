@@ -45,11 +45,11 @@ impl ClassEnv {
     pub fn add_class(
         &mut self,
         class_def: &mut ClassDef,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         id_set: &HashSet<String>,
     ) {
-        let class_name = &class_def.name.id().name;
-        let super_name = &class_def.super_class.id().name;
+        let class_name = &class_def.name.name;
+        let super_name = &class_def.super_class.name;
         let super_class = if let Some(super_class) = self.0.get(super_name) {
             super_class
         } else {
@@ -87,7 +87,7 @@ impl ClassEnv {
                     let parameters: Vec<_> = func
                         .params
                         .iter()
-                        .map(|t| ValueType::from_annotation(&t.tv().type_))
+                        .map(|t| ValueType::from_annotation(&t.type_))
                         .collect();
                     let return_type = ValueType::from_annotation(&func.return_type);
 
@@ -134,7 +134,7 @@ impl ClassEnv {
                     if items
                         .insert(
                             name_str.clone(),
-                            Type::ValueType(ValueType::from_annotation(&var.var.tv().type_)),
+                            Type::ValueType(ValueType::from_annotation(&var.var.type_)),
                         )
                         .is_some()
                     {
@@ -150,7 +150,7 @@ impl ClassEnv {
         self.0.insert(
             class_name.clone(),
             ClassInfo {
-                super_class: class_def.super_class.id().name.clone(),
+                super_class: class_def.super_class.name.clone(),
                 items,
             },
         );
