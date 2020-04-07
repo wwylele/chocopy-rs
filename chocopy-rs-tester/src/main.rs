@@ -1,3 +1,4 @@
+use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Write};
 
 fn fixup_newline(s: &mut String) {
@@ -5,6 +6,60 @@ fn fixup_newline(s: &mut String) {
         s.pop();
         s.pop();
         s.push('\n');
+    }
+}
+
+struct IntegratedCases {
+    file: BufReader<File>,
+}
+
+impl Iterator for IntegratedCases {
+    type Item = (Vec<u8>, Vec<u8>);
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let mut line = "".to_owned();
+            if self.file.read_line(&mut line).unwrap() == 0 {
+                return None;
+            }
+            fixup_newline(&mut line);
+            if line == "#!\n" {
+                break;
+            }
+        }
+
+        let mut input = vec![];
+        loop {
+            let mut line = "".to_owned();
+            self.file.read_line(&mut line).unwrap();
+            fixup_newline(&mut line);
+            if line == "#<->#\n" {
+                break;
+            }
+            let bytes = line.as_bytes();
+            assert!(bytes[0] == b'#');
+            input.extend(bytes.iter().skip(1));
+        }
+
+        let mut expected_output = vec![];
+        loop {
+            let mut line = "".to_owned();
+            self.file.read_line(&mut line).unwrap();
+            fixup_newline(&mut line);
+            if line == "#<->#\n" {
+                break;
+            }
+            let bytes = line.as_bytes();
+            assert!(bytes[0] == b'#');
+            expected_output.extend(bytes.iter().skip(1));
+        }
+
+        Some((input, expected_output))
+    }
+}
+
+fn get_cases(file_path: &std::path::Path) -> IntegratedCases {
+    IntegratedCases {
+        file: BufReader::new(std::fs::File::open(file_path).unwrap()),
     }
 }
 
@@ -66,23 +121,7 @@ fn main() {
                 .success());
         }
 
-        let mut file = BufReader::new(std::fs::File::open(&file_path).unwrap());
-
-        let mut case = 0;
-        loop {
-            if !loop {
-                let mut line = "".to_owned();
-                if file.read_line(&mut line).unwrap() == 0 {
-                    break false;
-                }
-                fixup_newline(&mut line);
-                if line == "#!\n" {
-                    break true;
-                }
-            } {
-                break;
-            }
-
+        for (case, (input, expected_output)) in get_cases(&file_path).enumerate() {
             print!("Case {} ---- ", case);
 
             let mut process = if !python {
@@ -100,36 +139,8 @@ fn main() {
             let stdin = process.stdin.as_mut().unwrap();
             let stdout = process.stdout.as_mut().unwrap();
 
-            loop {
-                let mut line = "".to_owned();
-                file.read_line(&mut line).unwrap();
-                fixup_newline(&mut line);
-                if line == "#<->#\n" {
-                    break;
-                }
-                let bytes = line.as_bytes();
-                assert!(bytes[0] == b'#');
-
-                #[allow(unused_must_use)]
-                {
-                    stdin.write(&bytes[1..bytes.len()]);
-                }
-            }
-
-            let mut expected_output: Vec<u8> = vec![];
-            loop {
-                let mut line = "".to_owned();
-                file.read_line(&mut line).unwrap();
-                fixup_newline(&mut line);
-                if line == "#<->#\n" {
-                    break;
-                }
-                let bytes = line.as_bytes();
-                assert!(bytes[0] == b'#');
-                expected_output.extend(bytes.iter().skip(1));
-            }
-
             let mut actual_output = vec![];
+            stdin.write_all(&input).unwrap();
             stdout.read_to_end(&mut actual_output).unwrap();
             if expected_output == actual_output {
                 println!("\x1b[32mOK\x1b[0m");
@@ -138,7 +149,6 @@ fn main() {
                 println!("\x1b[31mError\x1b[0m");
             }
             total += 1;
-            case += 1;
 
             process.wait().unwrap();
         }
