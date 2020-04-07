@@ -12,8 +12,7 @@ fn check_var_def(v: &mut VarDef, errors: &mut Vec<CompilerError>, classes: &Clas
     let core_type = v.var.type_.core_type_mut();
     if !classes.contains(&core_type.class_name) {
         let msg = error_invalid_type(&core_type.class_name);
-        core_type.base_mut().error_msg = Some(msg);
-        errors.push(error_from(core_type));
+        core_type.add_error(errors, msg);
     }
 }
 
@@ -51,20 +50,17 @@ fn check_func(
         let core_type = param.type_.core_type_mut();
         if !classes.contains(&core_type.class_name) {
             let msg = error_invalid_type(&core_type.class_name);
-            core_type.base_mut().error_msg = Some(msg);
-            errors.push(error_from(core_type));
+            core_type.add_error(errors, msg);
         }
 
         let id = &mut param.identifier;
         if classes.contains(&id.name) {
             let msg = error_shadow(&id.name);
-            id.base_mut().error_msg = Some(msg);
-            errors.push(error_from(id));
+            id.add_error(errors, msg);
         }
         if id_set.contains(&id.name) {
             let msg = error_dup(&id.name);
-            id.base_mut().error_msg = Some(msg);
-            errors.push(error_from(id));
+            id.add_error(errors, msg);
         }
         locals.insert(id.name.clone());
         id_set.insert(id.name.clone());
@@ -75,8 +71,7 @@ fn check_func(
     let core_type = f.return_type.core_type_mut();
     if !classes.contains(&core_type.class_name) {
         let msg = error_invalid_type(&core_type.class_name);
-        core_type.base_mut().error_msg = Some(msg);
-        errors.push(error_from(core_type));
+        core_type.add_error(errors, msg);
     }
 
     let mut nonlocal_remove = HashSet::new();
@@ -85,8 +80,7 @@ fn check_func(
         let name = decl.name_mut();
         if id_set.contains(&name.name) {
             let msg = error_dup(&name.name);
-            name.base_mut().error_msg = Some(msg);
-            errors.push(error_from(name));
+            name.add_error(errors, msg);
         }
         id_set.insert(name.name.clone());
 
@@ -96,15 +90,13 @@ fn check_func(
                 let core_type = var.type_.core_type_mut();
                 if !classes.contains(&core_type.class_name) {
                     let msg = error_invalid_type(&core_type.class_name);
-                    core_type.base_mut().error_msg = Some(msg);
-                    errors.push(error_from(core_type));
+                    core_type.add_error(errors, msg);
                 }
 
                 let id = &mut var.identifier;
                 if classes.contains(&id.name) {
                     let msg = error_shadow(&id.name);
-                    id.base_mut().error_msg = Some(msg);
-                    errors.push(error_from(id));
+                    id.add_error(errors, msg);
                 }
                 locals.insert(id.name.clone());
             }
@@ -112,8 +104,7 @@ fn check_func(
                 let id = &mut f.name;
                 if classes.contains(&id.name) {
                     let msg = error_shadow(&id.name);
-                    id.base_mut().error_msg = Some(msg);
-                    errors.push(error_from(id));
+                    id.add_error(errors, msg);
                 }
                 nonlocal_remove.insert(id.name.clone());
             }
@@ -121,16 +112,14 @@ fn check_func(
                 let id = &mut v.variable;
                 if !nonlocals.contains(&id.name) {
                     let msg = error_nonlocal(&id.name);
-                    id.base_mut().error_msg = Some(msg);
-                    errors.push(error_from(id));
+                    id.add_error(errors, msg);
                 }
             }
             Declaration::GlobalDecl(v) => {
                 let id = &mut v.variable;
                 if !globals.contains(&id.name) {
                     let msg = error_global(&id.name);
-                    id.base_mut().error_msg = Some(msg);
-                    errors.push(error_from(id));
+                    id.add_error(errors, msg);
                 }
                 nonlocal_remove.insert(id.name.clone());
             }
@@ -143,8 +132,7 @@ fn check_func(
         if let "int" | "str" | "bool" = c.class_name.as_str() {
             if !always_return(&f.statements) {
                 let msg = error_return(&f.name.name);
-                f.name.base_mut().error_msg = Some(msg);
-                errors.push(error_from(&f.name));
+                f.name.add_error(errors, msg);
             }
         }
     }
@@ -184,8 +172,7 @@ pub fn check(mut ast: Program) -> Program {
         let name = decl.name_mut();
         if !id_set.insert(name.name.clone()) {
             let msg = error_dup(&name.name);
-            name.base_mut().error_msg = Some(msg);
-            errors.push(error_from(name));
+            name.add_error(&mut errors, msg);
         }
 
         if let Declaration::ClassDef(class_def) = decl {

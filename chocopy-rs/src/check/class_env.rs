@@ -60,8 +60,7 @@ impl ClassEnv {
             } else {
                 error_super_undef
             }(super_name);
-            class_def.super_class.base_mut().error_msg = Some(msg);
-            errors.push(error_from(&class_def.super_class));
+            class_def.super_class.add_error(errors, msg);
             self.0.get("object").unwrap()
         };
 
@@ -77,8 +76,7 @@ impl ClassEnv {
             if !id_set.insert(name_str.clone()) {
                 let msg = error_dup(&name_str);
                 let name = item_decl.name_mut();
-                name.base_mut().error_msg = Some(msg);
-                errors.push(error_from(name));
+                name.add_error(errors, msg);
                 continue;
             }
 
@@ -100,8 +98,7 @@ impl ClassEnv {
                         }))
                     {
                         let msg = error_method_self(&name_str);
-                        name.base_mut().error_msg = Some(msg);
-                        errors.push(error_from(name));
+                        name.add_error(errors, msg);
                     }
 
                     let item_type = Type::FuncType(FuncType {
@@ -118,14 +115,12 @@ impl ClassEnv {
                             });
                             if Type::FuncType(old) != item_type {
                                 let msg = error_method_override(&name_str);
-                                name.base_mut().error_msg = Some(msg);
-                                errors.push(error_from(name));
+                                name.add_error(errors, msg);
                             }
                         }
                         _ => {
                             let msg = error_attribute_redefine(&name_str);
-                            name.base_mut().error_msg = Some(msg);
-                            errors.push(error_from(name));
+                            name.add_error(errors, msg);
                         }
                     }
                 }
@@ -140,8 +135,7 @@ impl ClassEnv {
                     {
                         let name = item_decl.name_mut();
                         let msg = error_attribute_redefine(&name_str);
-                        name.base_mut().error_msg = Some(msg);
-                        errors.push(error_from(name));
+                        name.add_error(errors, msg);
                     }
                 }
                 _ => unreachable!(),

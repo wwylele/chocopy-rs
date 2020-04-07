@@ -62,8 +62,7 @@ impl Identifier {
         match o.get(&self.name) {
             None | Some(EnvSlot::Func(_)) => {
                 let msg = error_variable(&self.name);
-                self.base_mut().error_msg = Some(msg);
-                errors.push(error_from(self));
+                self.add_error(errors, msg);
                 TYPE_OBJECT.clone()
             }
             Some(EnvSlot::Var(t, _)) => t.clone(),
@@ -87,30 +86,26 @@ impl AssignStmt {
             if let ExprContent::Identifier(Identifier { name, .. }) = &self.targets[i].content {
                 if let Some(EnvSlot::Var(_, Assignable(false))) = o.get(name) {
                     let msg = error_nonlocal_assign(name);
-                    self.targets[i].base_mut().error_msg = Some(msg);
-                    errors.push(error_from(&self.targets[i]));
+                    self.targets[i].add_error(errors, msg);
                 }
             } else if let ExprContent::IndexExpr(index_expr) = &self.targets[i].content {
                 if index_expr.list.inferred_type.as_ref().unwrap() == &*TYPE_STR
-                    && self.targets[i].base_mut().error_msg.is_none()
+                    && self.targets[i].base().error_msg.is_none()
                 {
                     let msg = error_str_index_assign();
-                    self.targets[i].base_mut().error_msg = Some(msg);
-                    errors.push(error_from(&self.targets[i]));
+                    self.targets[i].add_error(errors, msg);
                 }
             }
 
             if !m.is_compatible(&right, &left) && self.base.error_msg.is_none() {
                 let msg = error_assign(&left, &right);
-                self.base_mut().error_msg = Some(msg);
-                errors.push(error_from(self));
+                self.add_error(errors, msg);
             }
         }
 
         if self.targets.len() > 1 && right == *TYPE_NONE_LIST && self.base().error_msg.is_none() {
             let msg = error_multi_assign();
-            self.base_mut().error_msg = Some(msg);
-            errors.push(error_from(self));
+            self.add_error(errors, msg);
         }
     }
 }
@@ -121,8 +116,7 @@ impl VarDef {
         let left = ValueType::from_annotation(&self.var.type_);
         if !m.is_compatible(&right, &left) {
             let msg = error_assign(&left, &right);
-            self.base_mut().error_msg = Some(msg);
-            errors.push(error_from(self));
+            self.add_error(errors, msg);
         }
     }
 }
@@ -195,16 +189,14 @@ impl UnaryExpr {
             UnaryOp::Negative => {
                 if operand != *TYPE_INT {
                     let msg = error_unary("-", &operand);
-                    self.base_mut().error_msg = Some(msg);
-                    errors.push(error_from(self));
+                    self.add_error(errors, msg);
                 }
                 TYPE_INT.clone()
             }
             UnaryOp::Not => {
                 if operand != *TYPE_BOOL {
                     let msg = error_unary("not", &operand);
-                    self.base_mut().error_msg = Some(msg);
-                    errors.push(error_from(self));
+                    self.add_error(errors, msg);
                 }
                 TYPE_BOOL.clone()
             }
@@ -307,8 +299,7 @@ impl BinaryExpr {
                 BinaryOp::Is => "is",
             };
             let msg = error_binary(op_name, &left, &right);
-            self.base_mut().error_msg = Some(msg);
-            errors.push(error_from(self));
+            self.add_error(errors, msg);
         }
 
         output
@@ -325,8 +316,7 @@ impl IfExpr {
         let condition = self.condition.analyze(errors, o, m);
         if condition != *TYPE_BOOL {
             let msg = error_condition(&condition);
-            self.base_mut().error_msg = Some(msg);
-            errors.push(error_from(self))
+            self.add_error(errors, msg);
         }
         let then_type = self.then_expr.analyze(errors, o, m);
         let else_type = self.else_expr.analyze(errors, o, m);
@@ -368,16 +358,14 @@ impl IndexExpr {
             TYPE_STR.clone()
         } else {
             let msg = error_index_left(&left);
-            self.base_mut().error_msg = Some(msg);
-            errors.push(error_from(self));
+            self.add_error(errors, msg);
             TYPE_OBJECT.clone()
         };
 
         let index = self.index.analyze(errors, o, m);
         if index != *TYPE_INT && self.base().error_msg.is_none() {
             let msg = error_index_right(&index);
-            self.base_mut().error_msg = Some(msg);
-            errors.push(error_from(self));
+            self.add_error(errors, msg);
         }
 
         element_type
@@ -397,8 +385,7 @@ impl MemberExpr {
                 class_name
             } else {
                 let msg = error_member(&class_type);
-                self.base_mut().error_msg = Some(msg);
-                errors.push(error_from(self));
+                self.add_error(errors, msg);
                 return TYPE_OBJECT.clone();
             };
 
@@ -407,8 +394,7 @@ impl MemberExpr {
             member.clone()
         } else {
             let msg = error_attribute(name, &class_type);
-            self.base_mut().error_msg = Some(msg);
-            errors.push(error_from(self));
+            self.add_error(errors, msg);
             TYPE_OBJECT.clone()
         }
     }
@@ -431,8 +417,7 @@ impl CallExpr {
             Some(EnvSlot::Func(f)) => f,
             _ => {
                 let msg = error_function(&self.function.name);
-                self.base_mut().error_msg = Some(msg);
-                errors.push(error_from(self));
+                self.add_error(errors, msg);
                 return TYPE_OBJECT.clone();
             }
         };
@@ -444,14 +429,12 @@ impl CallExpr {
 
         if function.parameters.len() != args.len() {
             let msg = error_call_count(function.parameters.len(), args.len());
-            self.base_mut().error_msg = Some(msg);
-            errors.push(error_from(self));
+            self.add_error(errors, msg);
         } else {
             for (i, arg) in args.into_iter().enumerate() {
                 if !m.is_compatible(&arg, &function.parameters[i]) {
                     let msg = error_call_type(i, &function.parameters[i], &arg);
-                    self.base_mut().error_msg = Some(msg);
-                    errors.push(error_from(self));
+                    self.add_error(errors, msg);
                     break;
                 }
             }
@@ -480,8 +463,7 @@ impl MethodCallExpr {
             class_name
         } else {
             let msg = error_member(&class);
-            self.base_mut().error_msg = Some(msg);
-            errors.push(error_from(self));
+            self.add_error(errors, msg);
             return TYPE_OBJECT.clone();
         };
 
@@ -491,8 +473,7 @@ impl MethodCallExpr {
             method
         } else {
             let msg = error_method(method_name, &class_name);
-            self.base_mut().error_msg = Some(msg);
-            errors.push(error_from(self));
+            self.add_error(errors, msg);
             return TYPE_OBJECT.clone();
         };
 
@@ -500,14 +481,12 @@ impl MethodCallExpr {
 
         if method.parameters.len() - 1 != args.len() {
             let msg = error_call_count(method.parameters.len() - 1, args.len());
-            self.base_mut().error_msg = Some(msg);
-            errors.push(error_from(self));
+            self.add_error(errors, msg);
         } else {
             for (i, arg) in args.into_iter().enumerate() {
                 if !m.is_compatible(&arg, &method.parameters[i + 1]) {
                     let msg = error_call_type(i + 1, &method.parameters[i + 1], &arg);
-                    self.base_mut().error_msg = Some(msg);
-                    errors.push(error_from(self));
+                    self.add_error(errors, msg);
                     break;
                 }
             }
@@ -539,13 +518,11 @@ impl ReturnStmt {
                 } else {
                     error_none_return(&return_expected)
                 };
-                self.base_mut().error_msg = Some(msg);
-                errors.push(error_from(self));
+                self.add_error(errors, msg);
             }
         } else {
             let msg = error_top_return();
-            self.base_mut().error_msg = Some(msg);
-            errors.push(error_from(self));
+            self.add_error(errors, msg);
         }
     }
 }
@@ -561,8 +538,7 @@ impl IfStmt {
         let condition = self.condition.analyze(errors, o, m);
         if condition != *TYPE_BOOL {
             let msg = error_condition(&condition);
-            self.base_mut().error_msg = Some(msg);
-            errors.push(error_from(self));
+            self.add_error(errors, msg);
         }
 
         analyze_stmt(&mut self.then_body, errors, o, m, r);
@@ -581,8 +557,7 @@ impl WhileStmt {
         let condition = self.condition.analyze(errors, o, m);
         if condition != *TYPE_BOOL {
             let msg = error_condition(&condition);
-            self.base_mut().error_msg = Some(msg);
-            errors.push(error_from(self));
+            self.add_error(errors, msg);
         }
 
         analyze_stmt(&mut self.body, errors, o, m, r);
@@ -606,8 +581,7 @@ impl ForStmt {
             Some(&**element_type)
         } else {
             let msg = error_iterable(&iterable);
-            self.base_mut().error_msg = Some(msg);
-            errors.push(error_from(self));
+            self.add_error(errors, msg);
             None
         };
 
@@ -622,18 +596,16 @@ impl ForStmt {
                     self.identifier.inferred_type = Some(variable); // yes, we attach the type here
                     if !assignable {
                         let msg = error_nonlocal_assign(&self.identifier.name);
-                        self.identifier.base_mut().error_msg = Some(msg); // and this error is attached to the identifier
-                        errors.push(error_from(&mut self.identifier));
+                        // and this error is attached to the identifier
+                        self.identifier.add_error(errors, msg);
                     }
                 } else {
                     let msg = error_assign(&variable, element_type);
-                    self.base_mut().error_msg = Some(msg);
-                    errors.push(error_from(self));
+                    self.add_error(errors, msg);
                 }
             } else {
                 let msg = error_variable(&self.identifier.name);
-                self.base_mut().error_msg = Some(msg);
-                errors.push(error_from(self));
+                self.add_error(errors, msg);
             }
         }
 

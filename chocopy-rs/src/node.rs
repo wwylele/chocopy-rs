@@ -39,6 +39,16 @@ impl NodeBase {
 pub trait Node {
     fn base(&self) -> &NodeBase;
     fn base_mut(&mut self) -> &mut NodeBase;
+
+    fn add_error(&mut self, errors: &mut Vec<CompilerError>, message: String) {
+        let base = self.base_mut();
+        base.error_msg = Some(message.clone());
+        errors.push(CompilerError {
+            base: NodeBase::from_location(base.location),
+            message,
+            syntax: false,
+        })
+    }
 }
 
 macro_rules! impl_node {

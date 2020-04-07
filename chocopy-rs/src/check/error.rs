@@ -147,12 +147,3 @@ pub fn error_top_return() -> String {
 pub fn error_str_index_assign() -> String {
     "`str` is not a list type".to_owned()
 }
-
-pub fn error_from(node: &impl Node) -> CompilerError {
-    let base = node.base();
-    CompilerError {
-        base: NodeBase::from_location(base.location),
-        message: base.error_msg.clone().unwrap(),
-        syntax: false,
-    }
-}
