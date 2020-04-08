@@ -84,6 +84,41 @@ fn get_cases(file_path: &std::path::Path) -> Box<dyn Iterator<Item = (Vec<u8>, V
     })
 }
 
+#[derive(Debug)]
+struct TestFail;
+
+impl std::fmt::Display for TestFail {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Output is wrong")
+    }
+}
+
+impl std::error::Error for TestFail {}
+
+fn test_one_case(
+    mut command: std::process::Command,
+    input: &[u8],
+    expected_output: &[u8],
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut process = command
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()?;
+
+    let stdin = process.stdin.as_mut().unwrap();
+    let stdout = process.stdout.as_mut().unwrap();
+
+    let mut actual_output = vec![];
+    stdin.write_all(&input)?;
+    stdout.read_to_end(&mut actual_output)?;
+    process.wait()?;
+    if expected_output == &actual_output[..] {
+        Ok(())
+    } else {
+        Err(Box::new(TestFail))
+    }
+}
+
 fn main() {
     let temp_path = std::env::temp_dir();
 
@@ -142,40 +177,38 @@ fn main() {
                 .success());
         }
 
+        let mut no_case = true;
         for (case, (input, expected_output)) in get_cases(&file_path).enumerate() {
+            no_case = false;
             print!("Case {} ---- ", case);
 
-            let mut process = if !python {
+            let command = if !python {
                 std::process::Command::new(&exe_path)
             } else {
                 let mut p = std::process::Command::new(python_command.unwrap());
                 p.arg(&file_path);
                 p
-            }
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .spawn()
-            .unwrap();
+            };
 
-            let stdin = process.stdin.as_mut().unwrap();
-            let stdout = process.stdout.as_mut().unwrap();
-
-            let mut actual_output = vec![];
-            stdin.write_all(&input).unwrap();
-            stdout.read_to_end(&mut actual_output).unwrap();
-            if expected_output == actual_output {
-                println!("\x1b[32mOK\x1b[0m");
-                passed += 1;
-            } else {
-                println!("\x1b[31mError\x1b[0m");
+            match test_one_case(command, &input, &expected_output) {
+                Ok(()) => {
+                    println!("\x1b[32mOK\x1b[0m");
+                    passed += 1;
+                }
+                Err(e) => {
+                    println!("\x1b[31mError\x1b[0m {}", e);
+                }
             }
+
             total += 1;
-
-            process.wait().unwrap();
         }
 
         if !python {
             std::fs::remove_file(exe_path).unwrap();
+        }
+
+        if no_case {
+            panic!("No test case found!");
         }
     }
 
