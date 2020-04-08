@@ -9,8 +9,9 @@ All ChocoPy programs are linked against a small standard library `chocopy_rs_std
 The standard library also provides the program entry point `main`, which directly calls into the main procedure `$chocopy_main` from the compiled object. Doing so is to avoid conflict when the ChocoPy program contains a user-defined function named `main`, which in the current implementation will be a local symbol only visible to the compiled object itself.
 
 ## Symbol naming convention
- - The main procedure is named `$chocopy_main`
- - Global functions use their function names directly as symbol names
+ - The main procedure is named `$chocopy_main`.
+ - The global variable section is named `$global`.
+ - Global functions use their function names directly as symbol names.
  - Constructors use type names as symbol names.
  - Destructors use `<TypeName>.$dtor` as symbol names.
  - Methods use `<TypeName>.<FuncName>` as symbol names.
