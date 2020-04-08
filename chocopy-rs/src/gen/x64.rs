@@ -38,12 +38,12 @@ struct Emitter<'a> {
     name: String,
     storage_env: Option<&'a mut StorageEnv>,
     classes: Option<&'a HashMap<String, ClassSlot>>,
-    clean_up_list: &'a [i32], // offsets relative to rbp
+    clean_up_list: Vec<i32>, // offsets relative to rbp
     level: u32,
     code: Vec<u8>,
     links: Vec<ChunkLink>,
-    rsp_aligned: bool,
-    rsp_call_restore: Vec<(usize, bool)>,
+    rsp_offset: usize, // offsets relative to rbp
+    rsp_call_restore: Vec<usize>,
     strings: Vec<(usize, String)>,
 }
 
@@ -61,7 +61,7 @@ impl<'a> Emitter<'a> {
         name: &str,
         storage_env: Option<&'a mut StorageEnv>,
         classes: Option<&'a HashMap<String, ClassSlot>>,
-        clean_up_list: &'a [i32],
+        clean_up_list: Vec<i32>,
         level: u32,
     ) -> Emitter<'a> {
         Emitter {
@@ -73,7 +73,7 @@ impl<'a> Emitter<'a> {
             // push rbp; mov rbp,rsp
             code: vec![0x55, 0x48, 0x89, 0xe5],
             links: vec![],
-            rsp_aligned: true,
+            rsp_offset: 0,
             rsp_call_restore: vec![],
             strings: vec![],
         }
@@ -90,7 +90,7 @@ impl<'a> Emitter<'a> {
     pub fn end_proc(&mut self) {
         if !self.clean_up_list.is_empty() {
             self.emit_push_rax();
-            for &offset in self.clean_up_list {
+            for offset in self.clean_up_list.clone() {
                 // mov rax,[rbp+{}]
                 self.emit(&[0x48, 0x8B, 0x85]);
                 self.emit(&offset.to_le_bytes());
@@ -104,23 +104,23 @@ impl<'a> Emitter<'a> {
 
     pub fn prepare_call(&mut self, stack_reserve: usize) {
         let mut spill = stack_reserve;
-        if self.rsp_aligned != (spill % 2 == 0) {
+        if (self.rsp_offset / 8) % 2 != spill % 2 {
             spill += 1;
         }
         spill *= 8;
         // sub rsp,{spill}
         self.emit(&[0x48, 0x81, 0xEC]);
         self.emit(&(spill as u32).to_le_bytes());
-        self.rsp_call_restore.push((spill, self.rsp_aligned));
-        self.rsp_aligned = true;
+        self.rsp_call_restore.push(spill);
+        self.rsp_offset += spill;
     }
 
     pub fn after_call(&mut self) {
-        let (spill, rsp_aligned) = self.rsp_call_restore.pop().unwrap();
+        let spill = self.rsp_call_restore.pop().unwrap();
         // add rsp,{spill}
         self.emit(&[0x48, 0x81, 0xC4]);
         self.emit(&(spill as u32).to_le_bytes());
-        self.rsp_aligned = rsp_aligned;
+        self.rsp_offset -= spill;
     }
 
     pub fn call(&mut self, name: &str) {
@@ -162,67 +162,67 @@ impl<'a> Emitter<'a> {
 
     pub fn emit_push_rax(&mut self) {
         self.emit(&[0x50]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset += 8;
     }
 
     pub fn emit_push_rcx(&mut self) {
         self.emit(&[0x51]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset += 8;
     }
 
     pub fn emit_push_rdx(&mut self) {
         self.emit(&[0x52]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset += 8;
     }
 
     pub fn emit_push_rsi(&mut self) {
         self.emit(&[0x56]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset += 8;
     }
 
     pub fn emit_push_rdi(&mut self) {
         self.emit(&[0x57]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset += 8;
     }
 
     pub fn emit_push_r10(&mut self) {
         self.emit(&[0x41, 0x52]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset += 8;
     }
 
     pub fn emit_push_r11(&mut self) {
         self.emit(&[0x41, 0x53]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset += 8;
     }
 
     pub fn emit_pop_rax(&mut self) {
         self.emit(&[0x58]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset -= 8;
     }
 
     pub fn emit_pop_rcx(&mut self) {
         self.emit(&[0x59]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset -= 8;
     }
 
     pub fn emit_pop_rsi(&mut self) {
         self.emit(&[0x5e]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset -= 8;
     }
 
     pub fn emit_pop_rdi(&mut self) {
         self.emit(&[0x5f]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset -= 8;
     }
 
     pub fn emit_pop_r10(&mut self) {
         self.emit(&[0x41, 0x5A]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset -= 8;
     }
 
     pub fn emit_pop_r11(&mut self) {
         self.emit(&[0x41, 0x5B]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset -= 8;
     }
 
     pub fn call_builtin_alloc(&mut self, prototype: &str) {
@@ -1359,6 +1359,7 @@ impl<'a> Emitter<'a> {
         self.emit_expression(&stmt.iterable);
         self.emit_check_none();
         self.emit_push_rax();
+        self.clean_up_list.push(self.rsp_offset as i32);
         // xor rax,rax
         self.emit(&[0x48, 0x31, 0xC0]);
 
@@ -1433,6 +1434,7 @@ impl<'a> Emitter<'a> {
         self.code[pos_condition..pos_condition + 4].copy_from_slice(&if_delta.to_le_bytes());
 
         //// Drop the iterable
+        self.clean_up_list.pop();
         self.emit_pop_rax();
         self.emit_drop();
     }
@@ -1659,7 +1661,7 @@ fn gen_function(
         &link_name,
         Some(handle.inner()),
         Some(classes),
-        &clean_up_list,
+        clean_up_list,
         level,
     );
 
@@ -1714,7 +1716,7 @@ fn gen_function(
 }
 
 fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
-    let mut code = Emitter::new(class_name, None, None, &[], 0);
+    let mut code = Emitter::new(class_name, None, None, vec![], 0);
 
     code.prepare_call(PLATFORM.stack_reserve());
     match PLATFORM {
@@ -1795,7 +1797,7 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
 }
 
 fn gen_dtor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
-    let mut code = Emitter::new(&(class_name.to_owned() + ".$dtor"), None, None, &[], 0);
+    let mut code = Emitter::new(&(class_name.to_owned() + ".$dtor"), None, None, vec![], 0);
     // Note: This uses C ABI instead of chocopy ABI
     match PLATFORM {
         Platform::Windows => {
@@ -1842,7 +1844,7 @@ fn gen_dtor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
 }
 
 fn gen_int() -> Chunk {
-    let mut code = Emitter::new("int", None, None, &[], 0);
+    let mut code = Emitter::new("int", None, None, vec![], 0);
     code.emit_int_literal(0);
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -1857,7 +1859,7 @@ fn gen_int() -> Chunk {
 }
 
 fn gen_bool() -> Chunk {
-    let mut code = Emitter::new("bool", None, None, &[], 0);
+    let mut code = Emitter::new("bool", None, None, vec![], 0);
     code.emit_bool_literal(false);
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -1872,7 +1874,7 @@ fn gen_bool() -> Chunk {
 }
 
 fn gen_str() -> Chunk {
-    let mut code = Emitter::new("str", None, None, &[], 0);
+    let mut code = Emitter::new("str", None, None, vec![], 0);
     code.emit_string_literal("");
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -1887,7 +1889,7 @@ fn gen_str() -> Chunk {
 }
 
 fn gen_object_init() -> Chunk {
-    let mut code = Emitter::new("object.__init__", None, None, &[], 0);
+    let mut code = Emitter::new("object.__init__", None, None, vec![], 0);
     // mov rax,[rsp+16]
     code.emit(&[0x48, 0x8B, 0x44, 0x24, 0x10]);
     code.emit_drop();
@@ -1910,7 +1912,7 @@ fn gen_object_init() -> Chunk {
 }
 
 fn gen_len() -> Chunk {
-    let mut code = Emitter::new("len", None, None, &[], 0);
+    let mut code = Emitter::new("len", None, None, vec![], 0);
     match PLATFORM {
         Platform::Windows => code.emit(&[0x48, 0x8B, 0x4C, 0x24, 0x10]), //  mov rcx,[rsp+16]
         Platform::Linux => code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]),   // mov rdi,[rsp+16]
@@ -1935,7 +1937,7 @@ fn gen_len() -> Chunk {
 }
 
 fn gen_input() -> Chunk {
-    let mut code = Emitter::new("input", None, None, &[], 0);
+    let mut code = Emitter::new("input", None, None, vec![], 0);
     code.prepare_call(PLATFORM.stack_reserve());
     code.call(BUILTIN_INPUT);
     code.end_proc();
@@ -1951,7 +1953,7 @@ fn gen_input() -> Chunk {
 }
 
 fn gen_print() -> Chunk {
-    let mut code = Emitter::new("print", None, None, &[], 0);
+    let mut code = Emitter::new("print", None, None, vec![], 0);
     match PLATFORM {
         Platform::Windows => code.emit(&[0x48, 0x8B, 0x4C, 0x24, 0x10]), //  mov rcx,[rsp+16]
         Platform::Linux => code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]),   // mov rdi,[rsp+16]
@@ -1984,7 +1986,7 @@ fn gen_main(
         BUILTIN_CHOCOPY_MAIN,
         Some(storage_env),
         Some(classes),
-        &[],
+        vec![],
         0,
     );
 
