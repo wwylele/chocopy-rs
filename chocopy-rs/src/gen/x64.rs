@@ -503,11 +503,13 @@ impl<'a> Emitter<'a> {
         };
 
         self.emit_expression(&expr.left);
+        self.emit_check_none();
         // mov rsi,QWORD PTR [rax+0x10]
         self.emit(&[0x48, 0x8B, 0x70, 0x10]);
         self.emit_push_rax();
         self.emit_push_rsi();
         self.emit_expression(&expr.right);
+        self.emit_check_none();
         self.emit_pop_rsi();
         // add rsi,QWORD PTR [rax+0x10]
         self.emit(&[0x48, 0x03, 0x70, 0x10]);

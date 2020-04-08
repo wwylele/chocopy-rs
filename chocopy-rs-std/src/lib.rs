@@ -221,44 +221,49 @@ pub unsafe extern "C" fn input() -> *mut u8 {
     pointer
 }
 
+fn exit_code(code: i32) -> ! {
+    println!("Exited with error code {}", code);
+    exit(code);
+}
+
 #[cfg(not(test))]
 fn memory_leak() -> ! {
     println!("--- Memory leak detected! ---");
-    exit(-1)
+    exit_code(-1)
 }
 
 #[export_name = "$broken_stack"]
 pub unsafe extern "C" fn broken_stack() -> ! {
     println!("--- Broken stack detected! ---");
-    exit(-2)
+    exit_code(-2)
 }
 
 fn invalid_arg() -> ! {
-    println!("--- Invalid argument ---");
-    exit(1)
+    println!("Invalid argument");
+    exit_code(1)
 }
 
 #[export_name = "$div_zero"]
 pub unsafe extern "C" fn div_zero() -> ! {
-    println!("--- Division by zero ---");
-    exit(2)
+    println!("Division by zero");
+    exit_code(2)
 }
 
 #[export_name = "$out_of_bound"]
 pub unsafe extern "C" fn out_of_bound() -> ! {
-    println!("--- Index out of bounds ---");
-    exit(3)
+    println!("Index out of bounds");
+    exit_code(3)
 }
 
 #[export_name = "$none_op"]
 pub unsafe extern "C" fn none_op() -> ! {
-    println!("--- Operation on None ---");
-    exit(4)
+    println!("Operation on None");
+    exit_code(4)
 }
 
 fn out_of_memory() -> ! {
-    println!("--- Out of memory ---");
-    exit(5)
+    println!("Out of memory");
+    exit_code(5)
 }
 
 extern "C" {
