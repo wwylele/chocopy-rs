@@ -110,10 +110,10 @@ pub fn error_index_right(index: &ValueType) -> String {
     format!("Index is of non-integer type `{}`", &index)
 }
 
-pub fn error_attribute(name: &str, class_type: &ValueType) -> String {
+pub fn error_attribute(name: &str, class_name: &str) -> String {
     format!(
         "There is no attribute named `{}` in class `{}`",
-        name, class_type
+        name, class_name
     )
 }
 

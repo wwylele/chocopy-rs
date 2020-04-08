@@ -379,21 +379,20 @@ impl MemberExpr {
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
-        let class_type = self.object.analyze(errors, o, m);
-        let class_name =
-            if let ValueType::ClassValueType(ClassValueType { class_name }) = &class_type {
-                class_name
-            } else {
-                let msg = error_member(&class_type);
-                self.add_error(errors, msg);
-                return TYPE_OBJECT.clone();
-            };
+        let class = self.object.analyze(errors, o, m);
+        let class_name = if let ValueType::ClassValueType(ClassValueType { class_name }) = class {
+            class_name
+        } else {
+            let msg = error_member(&class);
+            self.add_error(errors, msg);
+            return TYPE_OBJECT.clone();
+        };
 
         let name = &self.member.name;
-        if let Some(member) = m.get_attribute(class_name, name) {
+        if let Some(member) = m.get_attribute(&class_name, name) {
             member.clone()
         } else {
-            let msg = error_attribute(name, &class_type);
+            let msg = error_attribute(name, &class_name);
             self.add_error(errors, msg);
             TYPE_OBJECT.clone()
         }
