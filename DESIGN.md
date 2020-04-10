@@ -1,10 +1,18 @@
 # Design of the compiler
 
-
-
 ## Parser
 
+Both lexer and parser are made from scratch using ChocoPy-specific algorithm instead of general purpose lexing and parsing algorithm.
+
+The lexer is written as a "generator". Generator is not available in stable rust yet, so it is emulated by an async pipe instead.
+
+The parser is written in top-down style. Each `parse_xxx(...)` function roughly corresponds to the non-terminal `xxx` in the grammer. Operator precedence is implemented by specifying unambiguous grammer with expression "levels". Each `parse_expr`_n_`(...)` handles only operators in the _n_-th level.
+
 ## Semantic analysis
+
+## AST
+
+chocopy-rs supports intermediate AST (typed or untyped) in JSON format that conforms to the course project specification. The internal format of the AST, however, is different from the one provided in the Java starter code. The type hierarchy from the java code is devirtualized into trees of `struct`s and `enum`s for idiomatic Rust code. Similarly, the dispatch pattern in Java AST analyser is devirtualized into pattern matching on `enum`s.
 
 ## Code generation
 
