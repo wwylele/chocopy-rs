@@ -10,9 +10,7 @@ The parser is written in top-down style. Each `parse_xxx(...)` function roughly 
 
 ## Semantic analysis
 
-## AST
-
-chocopy-rs supports intermediate AST (typed or untyped) in JSON format that conforms to the course project specification. The internal format of the AST, however, is different from the one provided in the Java starter code. The type hierarchy from the java code is devirtualized into trees of `struct`s and `enum`s for idiomatic Rust code. Similarly, the dispatch pattern in Java AST analyser is devirtualized into pattern matching on `enum`s.
+chocopy-rs supports intermediate AST (typed or untyped) in JSON format that conforms to the course project specification. The internal format of the AST, however, is different from the one provided in the Java starter code. The type hierarchy from the java code is devirtualized into trees of `struct`s and `enum`s for idiomatic Rust code. Similarly, the dispatch pattern in the semantic analyser is devirtualized into pattern matching on `enum`s.
 
 ## Code generation
 
