@@ -246,6 +246,14 @@ pub struct Expr {
     pub content: ExprContent,
 }
 
+impl Expr {
+    pub fn get_type(&self) -> &ValueType {
+        self.inferred_type
+            .as_ref()
+            .expect("Type should have been inferred")
+    }
+}
+
 impl Node for Expr {
     fn base(&self) -> &NodeBase {
         &self.content.base()
@@ -356,6 +364,14 @@ pub struct FuncIdentifier {
     #[serde(flatten)]
     pub base: NodeBase,
     pub name: String,
+}
+
+impl FuncIdentifier {
+    pub fn get_type(&self) -> &FuncType {
+        self.inferred_type
+            .as_ref()
+            .expect("Type should have been inferred")
+    }
 }
 
 impl_node!(FuncIdentifier);
@@ -482,6 +498,14 @@ pub struct Literal {
     pub content: LiteralContent,
 }
 
+impl Literal {
+    pub fn get_type(&self) -> &ValueType {
+        self.inferred_type
+            .as_ref()
+            .expect("Type should have been inferred")
+    }
+}
+
 impl Node for Literal {
     fn base(&self) -> &NodeBase {
         &self.content.base()
@@ -541,6 +565,14 @@ pub struct TypedMemberExpr {
     pub base: NodeBase,
     pub object: Expr,
     pub member: UntypedIdentifier,
+}
+
+impl TypedMemberExpr {
+    pub fn get_type(&self) -> &FuncType {
+        self.inferred_type
+            .as_ref()
+            .expect("Type should have been inferred")
+    }
 }
 
 impl_node!(TypedMemberExpr);
@@ -644,6 +676,14 @@ pub struct TypedIdentifier {
     #[serde(flatten)]
     pub base: NodeBase,
     pub name: String,
+}
+
+impl TypedIdentifier {
+    pub fn get_type(&self) -> &ValueType {
+        self.inferred_type
+            .as_ref()
+            .expect("Type should have been inferred")
+    }
 }
 
 impl_node!(TypedIdentifier);

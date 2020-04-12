@@ -89,7 +89,7 @@ impl AssignStmt {
                     self.targets[i].add_error(errors, msg);
                 }
             } else if let ExprContent::IndexExpr(index_expr) = &self.targets[i].content {
-                if index_expr.list.inferred_type.as_ref().unwrap() == &*TYPE_STR
+                if index_expr.list.get_type() == &*TYPE_STR
                     && self.targets[i].base().error_msg.is_none()
                 {
                     let msg = error_str_index_assign();

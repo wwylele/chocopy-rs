@@ -2,7 +2,7 @@ use super::*;
 
 struct FuncSlot {
     link_name: String,
-    level: u32, // 0 = global function
+    level: u32, // 0 = global function / method
 }
 
 struct VarSlot {
@@ -36,7 +36,7 @@ struct ClassSlot {
 
 struct Emitter<'a> {
     name: String,
-    storage_env: Option<&'a mut StorageEnv>,
+    storage_env: Option<&'a StorageEnv>,
     classes: Option<&'a HashMap<String, ClassSlot>>,
     clean_up_list: Vec<i32>, // offsets relative to rbp
     level: u32,
@@ -59,7 +59,7 @@ impl Platform {
 impl<'a> Emitter<'a> {
     pub fn new(
         name: &str,
-        storage_env: Option<&'a mut StorageEnv>,
+        storage_env: Option<&'a StorageEnv>,
         classes: Option<&'a HashMap<String, ClassSlot>>,
         clean_up_list: Vec<i32>,
         level: u32,
@@ -77,6 +77,14 @@ impl<'a> Emitter<'a> {
             rsp_call_restore: vec![],
             strings: vec![],
         }
+    }
+
+    pub fn storage_env(&self) -> &'a StorageEnv {
+        self.storage_env.as_ref().unwrap()
+    }
+
+    pub fn classes(&self) -> &'a HashMap<String, ClassSlot> {
+        self.classes.as_ref().unwrap()
     }
 
     pub fn emit(&mut self, instruction: &[u8]) {
@@ -521,7 +529,7 @@ impl<'a> Emitter<'a> {
 
         // mov rsi,[rsp+16]
         self.emit(&[0x48, 0x8B, 0x74, 0x24, 0x10]);
-        let source_element = if let Some(ValueType::ListValueType(l)) = &expr.left.inferred_type {
+        let source_element = if let ValueType::ListValueType(l) = expr.left.get_type() {
             &*l.element_type
         } else {
             panic!()
@@ -530,7 +538,7 @@ impl<'a> Emitter<'a> {
 
         // mov rsi,[rsp+8]
         self.emit(&[0x48, 0x8B, 0x74, 0x24, 0x08]);
-        let source_element = if let Some(ValueType::ListValueType(l)) = &expr.right.inferred_type {
+        let source_element = if let ValueType::ListValueType(l) = expr.right.get_type() {
             &*l.element_type
         } else {
             panic!()
@@ -600,7 +608,7 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn emit_binary_expr(&mut self, expr: &BinaryExpr, target_type: &ValueType) {
-        let left_type = expr.left.inferred_type.as_ref().unwrap();
+        let left_type = expr.left.get_type();
         if expr.operator == BinaryOp::Add && left_type == &*TYPE_STR {
             self.emit_string_add(expr);
         } else if expr.operator == BinaryOp::Add && left_type != &*TYPE_INT {
@@ -729,7 +737,7 @@ impl<'a> Emitter<'a> {
     pub fn emit_call_expr(
         &mut self,
         args: &[Expr],
-        func_type: &Option<FuncType>,
+        func_type: &FuncType,
         name: &str,
         virtual_call: bool,
     ) {
@@ -738,9 +746,9 @@ impl<'a> Emitter<'a> {
         for (i, arg) in args.iter().enumerate() {
             self.emit_expression(arg);
 
-            let param_type = &func_type.as_ref().unwrap().parameters[i];
+            let param_type = &func_type.parameters[i];
 
-            self.emit_coerce(arg.inferred_type.as_ref().unwrap(), param_type);
+            self.emit_coerce(arg.get_type(), param_type);
 
             if i == 0 && virtual_call {
                 self.emit_check_none();
@@ -753,20 +761,19 @@ impl<'a> Emitter<'a> {
         }
 
         if virtual_call {
-            let offset = if let Some(ValueType::ClassValueType(c)) = &args[0].inferred_type {
+            let offset = if let ValueType::ClassValueType(c) = args[0].get_type() {
                 if let "int" | "bool" | "str" | "<None>" | "<Empty>" = c.class_name.as_str() {
                     assert!(name == "__init__");
                     16
                 } else {
-                    self.classes.as_ref().unwrap()[&c.class_name].methods[name].offset
+                    self.classes()[&c.class_name].methods[name].offset
                 }
             } else {
                 panic!()
             };
             self.call_virtual(offset);
         } else {
-            let slot = if let Some(EnvSlot::Func(f)) = self.storage_env.as_ref().unwrap().get(name)
-            {
+            let slot = if let Some(EnvSlot::Func(f)) = self.storage_env().get(name) {
                 f
             } else {
                 panic!()
@@ -829,7 +836,7 @@ impl<'a> Emitter<'a> {
         // cdqe
         self.emit(&[0x48, 0x98]);
         self.emit_pop_rsi();
-        let element_type = if let Some(ValueType::ListValueType(l)) = &expr.list.inferred_type {
+        let element_type = if let ValueType::ListValueType(l) = expr.list.get_type() {
             &*l.element_type
         } else {
             panic!()
@@ -871,8 +878,8 @@ impl<'a> Emitter<'a> {
         // mov rsi,rax
         self.emit(&[0x48, 0x89, 0xC6]);
 
-        let slot = if let Some(ValueType::ClassValueType(c)) = &expr.object.inferred_type {
-            &self.classes.as_ref().unwrap()[&c.class_name].attributes[&expr.member.name]
+        let slot = if let ValueType::ClassValueType(c) = expr.object.get_type() {
+            &self.classes()[&c.class_name].attributes[&expr.member.name]
         } else {
             panic!()
         };
@@ -909,7 +916,7 @@ impl<'a> Emitter<'a> {
         self.emit(&[0; 4]);
 
         self.emit_expression(&expr.then_expr);
-        self.emit_coerce(&expr.then_expr.inferred_type.as_ref().unwrap(), target_type);
+        self.emit_coerce(&expr.then_expr.get_type(), target_type);
 
         // jmp
         self.emit(&[0xe9]);
@@ -919,7 +926,7 @@ impl<'a> Emitter<'a> {
         self.code[pos_if..pos_if + 4].copy_from_slice(&(if_delta as u32).to_le_bytes());
 
         self.emit_expression(&expr.else_expr);
-        self.emit_coerce(&expr.else_expr.inferred_type.as_ref().unwrap(), target_type);
+        self.emit_coerce(&expr.else_expr.get_type(), target_type);
 
         let else_delta = self.pos() - pos_else - 4;
         self.code[pos_else..pos_else + 4].copy_from_slice(&(else_delta as u32).to_le_bytes());
@@ -984,7 +991,7 @@ impl<'a> Emitter<'a> {
 
         for (i, element) in expr.elements.iter().enumerate() {
             self.emit_expression(element);
-            self.emit_coerce(element.inferred_type.as_ref().unwrap(), element_type);
+            self.emit_coerce(element.get_type(), element_type);
             // mov rdi,[rsp]
             self.emit(&[0x48, 0x8B, 0x3C, 0x24]);
             if element_type == &*TYPE_INT {
@@ -1006,13 +1013,12 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn emit_load_var(&mut self, identifier: &Identifier, target_type: &ValueType) {
-        let (offset, level) = if let Some(EnvSlot::Var(v, _)) =
-            self.storage_env.as_ref().unwrap().get(&identifier.name)
-        {
-            (v.offset, v.level)
-        } else {
-            panic!()
-        };
+        let (offset, level) =
+            if let Some(EnvSlot::Var(v, _)) = self.storage_env().get(&identifier.name) {
+                (v.offset, v.level)
+            } else {
+                panic!()
+            };
 
         if level == 0 {
             if target_type == &*TYPE_INT {
@@ -1066,7 +1072,7 @@ impl<'a> Emitter<'a> {
     pub fn emit_expression(&mut self, expression: &Expr) {
         match &expression.content {
             ExprContent::Identifier(identifier) => {
-                self.emit_load_var(identifier, expression.inferred_type.as_ref().unwrap());
+                self.emit_load_var(identifier, expression.get_type());
             }
             ExprContent::NoneLiteral(_) => {
                 self.emit_none_literal();
@@ -1096,12 +1102,12 @@ impl<'a> Emitter<'a> {
                 }
             }
             ExprContent::BinaryExpr(expr) => {
-                self.emit_binary_expr(expr, expression.inferred_type.as_ref().unwrap());
+                self.emit_binary_expr(expr, expression.get_type());
             }
             ExprContent::CallExpr(expr) => {
                 self.emit_call_expr(
                     &expr.args,
-                    &expr.function.inferred_type,
+                    expr.function.get_type(),
                     &expr.function.name,
                     false,
                 );
@@ -1111,20 +1117,18 @@ impl<'a> Emitter<'a> {
                 let args: Vec<Expr> = std::iter::once(method.object.clone())
                     .chain(expr.args.iter().cloned())
                     .collect();
-                self.emit_call_expr(&args, &method.inferred_type, &method.member.name, true);
+                self.emit_call_expr(&args, method.get_type(), &method.member.name, true);
             }
             ExprContent::IndexExpr(expr) => {
-                if expr.list.inferred_type.as_ref().unwrap() == &*TYPE_STR {
+                if expr.list.get_type() == &*TYPE_STR {
                     self.emit_str_index(&*expr);
                 } else {
                     self.emit_list_index(&*expr);
                 }
             }
-            ExprContent::IfExpr(expr) => {
-                self.emit_if_expr(expr, expression.inferred_type.as_ref().unwrap())
-            }
+            ExprContent::IfExpr(expr) => self.emit_if_expr(expr, expression.get_type()),
             ExprContent::ListExpr(expr) => {
-                self.emit_list_expr(expr, expression.inferred_type.as_ref().unwrap());
+                self.emit_list_expr(expr, expression.get_type());
             }
             ExprContent::MemberExpr(expr) => {
                 self.emit_member_expr(expr);
@@ -1162,12 +1166,11 @@ impl<'a> Emitter<'a> {
     ) {
         // rax: value to assign
 
-        let (offset, level) =
-            if let Some(EnvSlot::Var(v, _)) = self.storage_env.as_ref().unwrap().get(name) {
-                (v.offset, v.level)
-            } else {
-                panic!()
-            };
+        let (offset, level) = if let Some(EnvSlot::Var(v, _)) = self.storage_env().get(name) {
+            (v.offset, v.level)
+        } else {
+            panic!()
+        };
 
         self.emit_coerce(source_type, target_type);
         if level == 0 {
@@ -1228,12 +1231,12 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn emit_assign(&mut self, stmt: &AssignStmt) {
-        let source_type = stmt.value.inferred_type.as_ref().unwrap();
+        let source_type = stmt.value.get_type();
         self.emit_expression(&stmt.value);
         self.emit_push_rax();
 
         for target in &stmt.targets {
-            let target_type = target.inferred_type.as_ref().unwrap();
+            let target_type = target.get_type();
             match &target.content {
                 ExprContent::Identifier(identifier) => {
                     // mov rax,[rsp]
@@ -1307,10 +1310,8 @@ impl<'a> Emitter<'a> {
                     self.emit_check_none();
                     self.emit_push_rax();
 
-                    let slot = if let Some(ValueType::ClassValueType(c)) =
-                        &expr.object.inferred_type
-                    {
-                        &self.classes.as_ref().unwrap()[&c.class_name].attributes[&expr.member.name]
+                    let slot = if let ValueType::ClassValueType(c) = expr.object.get_type() {
+                        &self.classes()[&c.class_name].attributes[&expr.member.name]
                     } else {
                         panic!()
                     };
@@ -1379,7 +1380,7 @@ impl<'a> Emitter<'a> {
         self.emit_push_rax();
 
         //// Compute the element
-        let iterable_type = stmt.iterable.inferred_type.as_ref().unwrap();
+        let iterable_type = stmt.iterable.get_type();
         let source_type = if iterable_type == &*TYPE_STR {
             // mov rsi,1
             self.emit(&[0x48, 0xc7, 0xc6, 0x01, 0x00, 0x00, 0x00]);
@@ -1416,7 +1417,7 @@ impl<'a> Emitter<'a> {
         };
 
         //// Assign the element
-        let target_type = stmt.identifier.inferred_type.as_ref().unwrap();
+        let target_type = stmt.identifier.get_type();
         self.emit_assign_identifier(&stmt.identifier.name, source_type, target_type);
 
         //// Execute the loop body
@@ -1446,9 +1447,7 @@ impl<'a> Emitter<'a> {
             Stmt::ExprStmt(e) => {
                 lines.push((self.pos(), e.base().location.start.row));
                 self.emit_expression(&e.expr);
-                if e.expr.inferred_type.as_ref().unwrap() != &*TYPE_INT
-                    && e.expr.inferred_type.as_ref().unwrap() != &*TYPE_BOOL
-                {
+                if e.expr.get_type() != &*TYPE_INT && e.expr.get_type() != &*TYPE_BOOL {
                     self.emit_drop();
                 }
             }
@@ -1497,22 +1496,18 @@ impl<'a> Emitter<'a> {
         }
 
         let target_type = ValueType::from_annotation(&decl.var.type_);
-        self.emit_coerce(decl.value.inferred_type.as_ref().unwrap(), &target_type);
+        self.emit_coerce(decl.value.get_type(), &target_type);
         self.emit_push_rax();
     }
 
     pub fn emit_global_var_init(&mut self, decl: &VarDef) {
-        let offset = if let Some(EnvSlot::Var(v, _)) = self
-            .storage_env
-            .as_ref()
-            .unwrap()
-            .get(&decl.var.identifier.name)
-        {
-            assert!(v.level == 0);
-            v.offset
-        } else {
-            panic!()
-        };
+        let offset =
+            if let Some(EnvSlot::Var(v, _)) = self.storage_env().get(&decl.var.identifier.name) {
+                assert!(v.level == 0);
+                v.offset
+            } else {
+                panic!()
+            };
 
         match &decl.value.content {
             LiteralContent::NoneLiteral(_) => {
@@ -1530,7 +1525,7 @@ impl<'a> Emitter<'a> {
         }
 
         let target_type = ValueType::from_annotation(&decl.var.type_);
-        self.emit_coerce(decl.value.inferred_type.as_ref().unwrap(), &target_type);
+        self.emit_coerce(decl.value.get_type(), &target_type);
 
         if target_type == *TYPE_INT {
             // mov [rip+{}],eax
@@ -1550,17 +1545,13 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn emit_global_var_drop(&mut self, decl: &VarDef) {
-        let offset = if let Some(EnvSlot::Var(v, _)) = self
-            .storage_env
-            .as_ref()
-            .unwrap()
-            .get(&decl.var.identifier.name)
-        {
-            assert!(v.level == 0);
-            v.offset
-        } else {
-            panic!()
-        };
+        let offset =
+            if let Some(EnvSlot::Var(v, _)) = self.storage_env().get(&decl.var.identifier.name) {
+                assert!(v.level == 0);
+                v.offset
+            } else {
+                panic!()
+            };
 
         let target_type = ValueType::from_annotation(&decl.var.type_);
         if target_type != *TYPE_INT && target_type != *TYPE_BOOL {
@@ -2074,7 +2065,7 @@ fn add_class(
     );
     for declaration in &c.declarations {
         if let Declaration::VarDef(v) = declaration {
-            let source_type = v.value.inferred_type.clone().unwrap();
+            let source_type = v.value.get_type().clone();
             let target_type = ValueType::from_annotation(&v.var.type_);
             let size = if target_type == *TYPE_INT {
                 4
