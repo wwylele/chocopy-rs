@@ -1,6 +1,6 @@
 use crate::location::*;
 use enum_dispatch::*;
-use lazy_static::*;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 
@@ -755,29 +755,41 @@ pub struct WhileStmt {
 
 impl_node!(WhileStmt);
 
-lazy_static! {
-    pub static ref TYPE_OBJECT: ValueType = ValueType::ClassValueType(ClassValueType {
+pub static TYPE_OBJECT: Lazy<ValueType> = Lazy::new(|| {
+    ValueType::ClassValueType(ClassValueType {
         class_name: "object".to_owned(),
-    });
-    pub static ref TYPE_NONE: ValueType = ValueType::ClassValueType(ClassValueType {
+    })
+});
+pub static TYPE_NONE: Lazy<ValueType> = Lazy::new(|| {
+    ValueType::ClassValueType(ClassValueType {
         class_name: "<None>".to_owned(),
-    });
-    pub static ref TYPE_EMPTY: ValueType = ValueType::ClassValueType(ClassValueType {
+    })
+});
+pub static TYPE_EMPTY: Lazy<ValueType> = Lazy::new(|| {
+    ValueType::ClassValueType(ClassValueType {
         class_name: "<Empty>".to_owned(),
-    });
-    pub static ref TYPE_STR: ValueType = ValueType::ClassValueType(ClassValueType {
+    })
+});
+pub static TYPE_STR: Lazy<ValueType> = Lazy::new(|| {
+    ValueType::ClassValueType(ClassValueType {
         class_name: "str".to_owned(),
-    });
-    pub static ref TYPE_INT: ValueType = ValueType::ClassValueType(ClassValueType {
+    })
+});
+pub static TYPE_INT: Lazy<ValueType> = Lazy::new(|| {
+    ValueType::ClassValueType(ClassValueType {
         class_name: "int".to_owned(),
-    });
-    pub static ref TYPE_BOOL: ValueType = ValueType::ClassValueType(ClassValueType {
+    })
+});
+pub static TYPE_BOOL: Lazy<ValueType> = Lazy::new(|| {
+    ValueType::ClassValueType(ClassValueType {
         class_name: "bool".to_owned(),
-    });
-    pub static ref TYPE_NONE_LIST: ValueType = ValueType::ListValueType(ListValueType {
-        element_type: Box::new(TYPE_NONE.clone())
-    });
-}
+    })
+});
+pub static TYPE_NONE_LIST: Lazy<ValueType> = Lazy::new(|| {
+    ValueType::ListValueType(ListValueType {
+        element_type: Box::new(TYPE_NONE.clone()),
+    })
+});
 
 #[cfg(test)]
 mod tests {
