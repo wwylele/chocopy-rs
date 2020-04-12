@@ -39,6 +39,11 @@ impl ClassEnv {
     pub fn new() -> ClassEnv {
         let mut class_env = ClassEnv(HashMap::new());
         class_env.add_basic_type("object");
+        class_env.add_basic_type("str");
+        class_env.add_basic_type("int");
+        class_env.add_basic_type("bool");
+        class_env.add_basic_type("<None>");
+        class_env.add_basic_type("<Empty>");
         class_env
     }
 
@@ -50,12 +55,14 @@ impl ClassEnv {
     ) {
         let class_name = &class_def.name.name;
         let super_name = &class_def.super_class.name;
-        let super_class = if let Some(super_class) = self.0.get(super_name) {
+        let super_class = if let "int" | "str" | "bool" = super_name.as_str() {
+            let msg = error_super_special(super_name);
+            class_def.super_class.add_error(errors, msg);
+            self.0.get("object").unwrap()
+        } else if let Some(super_class) = self.0.get(super_name) {
             super_class
         } else {
-            let msg = if let "int" | "str" | "bool" = super_name.as_str() {
-                error_super_special
-            } else if id_set.contains(super_name) {
+            let msg = if id_set.contains(super_name) {
                 error_super_not_class
             } else {
                 error_super_undef
@@ -148,14 +155,6 @@ impl ClassEnv {
                 items,
             },
         );
-    }
-
-    pub fn complete_basic_types(&mut self) {
-        self.add_basic_type("str");
-        self.add_basic_type("int");
-        self.add_basic_type("bool");
-        self.add_basic_type("<None>");
-        self.add_basic_type("<Empty>");
     }
 
     pub fn is_compatible(&self, sub_class: &ValueType, super_class: &ValueType) -> bool {

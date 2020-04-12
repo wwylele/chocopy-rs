@@ -180,8 +180,6 @@ pub fn check(mut ast: Program) -> Program {
         }
     }
 
-    classes.complete_basic_types();
-
     // Pass B
     // semantic rules: 11(global/class variable)
     // collects global variables
