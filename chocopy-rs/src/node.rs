@@ -366,14 +366,6 @@ pub struct FuncIdentifier {
     pub name: String,
 }
 
-impl FuncIdentifier {
-    pub fn get_type(&self) -> &FuncType {
-        self.inferred_type
-            .as_ref()
-            .expect("Type should have been inferred")
-    }
-}
-
 impl_node!(FuncIdentifier);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -565,14 +557,6 @@ pub struct TypedMemberExpr {
     pub base: NodeBase,
     pub object: Expr,
     pub member: UntypedIdentifier,
-}
-
-impl TypedMemberExpr {
-    pub fn get_type(&self) -> &FuncType {
-        self.inferred_type
-            .as_ref()
-            .expect("Type should have been inferred")
-    }
 }
 
 impl_node!(TypedMemberExpr);
