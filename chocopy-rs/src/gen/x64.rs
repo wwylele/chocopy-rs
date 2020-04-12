@@ -737,7 +737,7 @@ impl<'a> Emitter<'a> {
     pub fn emit_call_expr(
         &mut self,
         args: &[Expr],
-        func_type: &FuncType,
+        func_type: &Option<FuncType>,
         name: &str,
         virtual_call: bool,
     ) {
@@ -746,7 +746,7 @@ impl<'a> Emitter<'a> {
         for (i, arg) in args.iter().enumerate() {
             self.emit_expression(arg);
 
-            let param_type = &func_type.parameters[i];
+            let param_type = &func_type.as_ref().unwrap().parameters[i];
 
             self.emit_coerce(arg.get_type(), param_type);
 
@@ -1107,7 +1107,7 @@ impl<'a> Emitter<'a> {
             ExprContent::CallExpr(expr) => {
                 self.emit_call_expr(
                     &expr.args,
-                    expr.function.get_type(),
+                    &expr.function.inferred_type,
                     &expr.function.name,
                     false,
                 );
@@ -1117,7 +1117,7 @@ impl<'a> Emitter<'a> {
                 let args: Vec<Expr> = std::iter::once(method.object.clone())
                     .chain(expr.args.iter().cloned())
                     .collect();
-                self.emit_call_expr(&args, method.get_type(), &method.member.name, true);
+                self.emit_call_expr(&args, &method.inferred_type, &method.member.name, true);
             }
             ExprContent::IndexExpr(expr) => {
                 if expr.list.get_type() == &*TYPE_STR {
