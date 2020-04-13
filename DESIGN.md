@@ -2,11 +2,11 @@
 
 ## Parser
 
-Both lexer and parser are made from scratch using ChocoPy-specific algorithm instead of general purpose lexing and parsing algorithm.
+Both lexer and parser are hand-written.
 
 The lexer is written as a "generator". Generator is not available in stable rust yet, so it is emulated by an async pipe instead.
 
-The parser is written in top-down style. Each `parse_xxx(...)` function roughly corresponds to the non-terminal `xxx` in the grammer. Operator precedence is implemented by specifying unambiguous grammer with expression "levels". Each `parse_expr`_n_`(...)` handles only operators in the _n_-th level.
+The parser is a recursive descent parser. Each `parse_xxx(...)` function roughly corresponds to the non-terminal `xxx` in the grammer. Left recursion is implemented using loop instead of actual recursive functions. Operator precedence is implemented by specifying unambiguous grammer with expression "levels". Each `parse_expr`_n_`(...)` handles only operators in the _n_-th level. The longest look-ahead is k = 2 that happens in distinguish variable declarations and statements.
 
 ## Semantic analysis
 
