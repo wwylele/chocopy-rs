@@ -51,6 +51,18 @@ pub trait Node {
     }
 }
 
+impl<T> Node for Box<T>
+where
+    T: Node,
+{
+    fn base(&self) -> &NodeBase {
+        (**self).base()
+    }
+    fn base_mut(&mut self) -> &mut NodeBase {
+        (**self).base_mut()
+    }
+}
+
 macro_rules! impl_node {
     ($type:ty) => {
         impl Node for $type {
