@@ -361,9 +361,9 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     let end = self.prev_pos().unwrap_or(start);
                     let base = NodeBase::from_positions(start, end);
                     expr = match expr.content {
-                        ExprContent::Identifier(function) => Expr::CallExpr(CallExpr {
+                        ExprContent::Variable(function) => Expr::CallExpr(CallExpr {
                             base,
-                            function: FuncIdentifier {
+                            function: Function {
                                 inferred_type: None,
                                 base: function.base,
                                 name: function.name,
@@ -373,7 +373,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                         ExprContent::MemberExpr(method) => {
                             Expr::MethodCallExpr(Box::new(MethodCallExpr {
                                 base,
-                                method: TypedMemberExpr {
+                                method: Method {
                                     inferred_type: None,
                                     base: method.base,
                                     object: method.object,
@@ -414,7 +414,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                 Token::Dot => {
                     let token = self.take().await;
                     let member = if let Token::Identifier(name) = token.token {
-                        UntypedIdentifier {
+                        Identifier {
                             base: NodeBase::from_location(token.location),
                             name,
                         }
@@ -450,7 +450,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         let end = self.prev_pos().unwrap_or(start);
         let base = NodeBase::from_positions(start, end);
         let expr = match token.token {
-            Token::Identifier(name) => Expr::Identifier(Identifier { base, name }),
+            Token::Identifier(name) => Expr::Variable(Variable { base, name }),
             Token::None => Expr::NoneLiteral(NoneLiteral { base }),
             Token::True => Expr::BooleanLiteral(BooleanLiteral { base, value: true }),
             Token::False => Expr::BooleanLiteral(BooleanLiteral { base, value: false }),
@@ -527,7 +527,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
             let token = self.take().await;
             match token.token {
                 Token::Assign => match expr_list.last().map(|e| &e.content) {
-                    Some(ExprContent::Identifier(_))
+                    Some(ExprContent::Variable(_))
                     | Some(ExprContent::MemberExpr(_))
                     | Some(ExprContent::IndexExpr(_)) => (),
                     _ => {
@@ -685,7 +685,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
         let token = self.take().await;
         let identifier = if let Token::Identifier(name) = token.token {
-            TypedIdentifier {
+            ForTarget {
                 inferred_type: None,
                 base: NodeBase::from_location(token.location),
                 name,
@@ -933,7 +933,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
         let token = self.take().await;
         let name = if let Token::Identifier(name) = token.token {
-            UntypedIdentifier {
+            Identifier {
                 base: NodeBase::from_location(token.location),
                 name,
             }
@@ -950,7 +950,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
         let token = self.take().await;
         let super_class = if let Token::Identifier(name) = token.token {
-            UntypedIdentifier {
+            Identifier {
                 base: NodeBase::from_location(token.location),
                 name,
             }
@@ -1033,7 +1033,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
                     let start = head.location.start;
                     let token = self.take().await;
                     let variable = if let Token::Identifier(name) = token.token {
-                        UntypedIdentifier {
+                        Identifier {
                             base: NodeBase::from_location(token.location),
                             name,
                         }
@@ -1103,7 +1103,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
 
             let token = self.take().await;
             let name = if let Token::Identifier(name) = token.token {
-                UntypedIdentifier {
+                Identifier {
                     base: NodeBase::from_location(token.location),
                     name,
                 }
@@ -1334,7 +1334,7 @@ impl<Ft: Future<Output = ComplexToken>, F: FnMut() -> Ft> BufferedReceiver<F> {
         // Parse "ID : type"
         let token = self.take().await;
         let identifier = if let Token::Identifier(name) = token.token {
-            UntypedIdentifier {
+            Identifier {
                 base: NodeBase::from_location(token.location),
                 name,
             }

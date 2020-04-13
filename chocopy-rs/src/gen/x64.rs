@@ -1012,7 +1012,7 @@ impl<'a> Emitter<'a> {
         self.emit_pop_rax();
     }
 
-    pub fn emit_load_var(&mut self, identifier: &Identifier, target_type: &ValueType) {
+    pub fn emit_load_var(&mut self, identifier: &Variable, target_type: &ValueType) {
         let (offset, level) =
             if let Some(EnvSlot::Var(v, _)) = self.storage_env().get(&identifier.name) {
                 (v.offset, v.level)
@@ -1071,7 +1071,7 @@ impl<'a> Emitter<'a> {
 
     pub fn emit_expression(&mut self, expression: &Expr) {
         match &expression.content {
-            ExprContent::Identifier(identifier) => {
+            ExprContent::Variable(identifier) => {
                 self.emit_load_var(identifier, expression.get_type());
             }
             ExprContent::NoneLiteral(_) => {
@@ -1238,7 +1238,7 @@ impl<'a> Emitter<'a> {
         for target in &stmt.targets {
             let target_type = target.get_type();
             match &target.content {
-                ExprContent::Identifier(identifier) => {
+                ExprContent::Variable(identifier) => {
                     // mov rax,[rsp]
                     self.emit(&[0x48, 0x8B, 0x04, 0x24]);
                     if source_type != &*TYPE_INT && source_type != &*TYPE_BOOL {

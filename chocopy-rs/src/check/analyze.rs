@@ -18,7 +18,7 @@ impl Expr {
             ExprContent::IntegerLiteral(s) => s.analyze(errors, o, m),
             ExprContent::BooleanLiteral(s) => s.analyze(errors, o, m),
             ExprContent::CallExpr(s) => s.analyze(errors, o, m),
-            ExprContent::Identifier(s) => s.analyze(errors, o, m),
+            ExprContent::Variable(s) => s.analyze(errors, o, m),
             ExprContent::IfExpr(s) => s.analyze(errors, o, m),
             ExprContent::IndexExpr(s) => s.analyze(errors, o, m),
             ExprContent::ListExpr(s) => s.analyze(errors, o, m),
@@ -52,7 +52,7 @@ impl Literal {
 }
 
 // Only for variable
-impl Identifier {
+impl Variable {
     pub fn analyze(
         &mut self,
         errors: &mut Vec<CompilerError>,
@@ -83,7 +83,7 @@ impl AssignStmt {
         // We don't do `for target in &mut self.targets` because of mut ref conflict
         for i in 0..self.targets.len() {
             let left: ValueType = self.targets[i].analyze(errors, o, m);
-            if let ExprContent::Identifier(Identifier { name, .. }) = &self.targets[i].content {
+            if let ExprContent::Variable(Variable { name, .. }) = &self.targets[i].content {
                 if let Some(EnvSlot::Var(_, Assignable(false))) = o.get(name) {
                     let msg = error_nonlocal_assign(name);
                     self.targets[i].add_error(errors, msg);

@@ -136,7 +136,7 @@ impl_node!(BooleanLiteral);
 pub struct CallExpr {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub function: FuncIdentifier,
+    pub function: Function,
     pub args: Vec<Expr>,
 }
 
@@ -147,9 +147,9 @@ impl_node!(CallExpr);
 pub struct ClassDef {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub name: UntypedIdentifier,
+    pub name: Identifier,
     #[serde(rename = "superClass")]
-    pub super_class: UntypedIdentifier,
+    pub super_class: Identifier,
     pub declarations: Vec<Declaration>,
 }
 
@@ -207,7 +207,7 @@ pub enum Declaration {
 }
 
 impl Declaration {
-    pub fn name_mut(&mut self) -> &mut UntypedIdentifier {
+    pub fn name_mut(&mut self) -> &mut Identifier {
         match self {
             Declaration::ClassDef(ClassDef { name, .. }) => name,
             Declaration::FuncDef(FuncDef { name, .. }) => name,
@@ -281,7 +281,7 @@ impl Expr {
     expr_init!(IntegerLiteral, IntegerLiteral);
     expr_init!(BooleanLiteral, BooleanLiteral);
     expr_init!(CallExpr, CallExpr);
-    expr_init!(Identifier, Identifier);
+    expr_init!(Variable, Variable);
     expr_init!(IfExpr, Box<IfExpr>);
     expr_init!(IndexExpr, Box<IndexExpr>);
     expr_init!(ListExpr, ListExpr);
@@ -300,7 +300,8 @@ pub enum ExprContent {
     IntegerLiteral(IntegerLiteral),
     BooleanLiteral(BooleanLiteral),
     CallExpr(CallExpr),
-    Identifier(Identifier),
+    #[serde(rename = "Identifier")]
+    Variable(Variable),
     IfExpr(Box<IfExpr>),
     IndexExpr(Box<IndexExpr>),
     ListExpr(ListExpr),
@@ -326,7 +327,7 @@ impl_node!(ExprStmt);
 pub struct ForStmt {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub identifier: TypedIdentifier,
+    pub identifier: ForTarget,
     pub iterable: Expr,
     pub body: Vec<Stmt>,
 }
@@ -338,7 +339,7 @@ impl_node!(ForStmt);
 pub struct FuncDef {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub name: UntypedIdentifier,
+    pub name: Identifier,
     pub params: Vec<TypedVar>,
     #[serde(rename = "returnType")]
     pub return_type: TypeAnnotation,
@@ -358,7 +359,7 @@ pub struct FuncType {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind", rename = "Identifier")]
-pub struct FuncIdentifier {
+pub struct Function {
     #[serde(rename = "inferredType", skip_serializing_if = "Option::is_none")]
     pub inferred_type: Option<FuncType>,
     #[serde(flatten)]
@@ -366,20 +367,30 @@ pub struct FuncIdentifier {
     pub name: String,
 }
 
-impl_node!(FuncIdentifier);
+impl_node!(Function);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct GlobalDecl {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub variable: UntypedIdentifier,
+    pub variable: Identifier,
 }
 
 impl_node!(GlobalDecl);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
+pub struct Variable {
+    #[serde(flatten)]
+    pub base: NodeBase,
+    pub name: String,
+}
+
+impl_node!(Variable);
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[serde(tag = "kind")]
 pub struct Identifier {
     #[serde(flatten)]
     pub base: NodeBase,
@@ -387,16 +398,6 @@ pub struct Identifier {
 }
 
 impl_node!(Identifier);
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(tag = "kind", rename = "Identifier")]
-pub struct UntypedIdentifier {
-    #[serde(flatten)]
-    pub base: NodeBase,
-    pub name: String,
-}
-
-impl_node!(UntypedIdentifier);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
@@ -543,30 +544,30 @@ pub struct MemberExpr {
     #[serde(flatten)]
     pub base: NodeBase,
     pub object: Expr,
-    pub member: UntypedIdentifier,
+    pub member: Identifier,
 }
 
 impl_node!(MemberExpr);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(rename = "MemberExpr", tag = "kind")]
-pub struct TypedMemberExpr {
+pub struct Method {
     #[serde(rename = "inferredType", skip_serializing_if = "Option::is_none")]
     pub inferred_type: Option<FuncType>,
     #[serde(flatten)]
     pub base: NodeBase,
     pub object: Expr,
-    pub member: UntypedIdentifier,
+    pub member: Identifier,
 }
 
-impl_node!(TypedMemberExpr);
+impl_node!(Method);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct MethodCallExpr {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub method: TypedMemberExpr,
+    pub method: Method,
     pub args: Vec<Expr>,
 }
 
@@ -586,7 +587,7 @@ impl_node!(NoneLiteral);
 pub struct NonLocalDecl {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub variable: UntypedIdentifier,
+    pub variable: Identifier,
 }
 
 impl_node!(NonLocalDecl);
@@ -654,7 +655,7 @@ impl TypeAnnotation {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind", rename = "Identifier")]
-pub struct TypedIdentifier {
+pub struct ForTarget {
     #[serde(rename = "inferredType", skip_serializing_if = "Option::is_none")]
     pub inferred_type: Option<ValueType>,
     #[serde(flatten)]
@@ -662,7 +663,7 @@ pub struct TypedIdentifier {
     pub name: String,
 }
 
-impl TypedIdentifier {
+impl ForTarget {
     pub fn get_type(&self) -> &ValueType {
         self.inferred_type
             .as_ref()
@@ -670,14 +671,14 @@ impl TypedIdentifier {
     }
 }
 
-impl_node!(TypedIdentifier);
+impl_node!(ForTarget);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind")]
 pub struct TypedVar {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub identifier: UntypedIdentifier,
+    pub identifier: Identifier,
     #[serde(rename = "type")]
     pub type_: TypeAnnotation,
 }
@@ -802,7 +803,7 @@ mod tests {
                 base: NodeBase::new(0, 0, 0, 0),
                 var: TypedVar {
                     base: NodeBase::new(0, 0, 0, 0),
-                    identifier: UntypedIdentifier {
+                    identifier: Identifier {
                         base: NodeBase::new(0, 0, 0, 0),
                         name: "a".to_owned(),
                     },
