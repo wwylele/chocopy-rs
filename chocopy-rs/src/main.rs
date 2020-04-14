@@ -38,14 +38,14 @@ fn check_error(file: &str, ast: &Program) -> bool {
                 line = lines.next().map(|s| s.replace('\t', " "));
                 current_row = row;
             }
-            println!("{}, {}: {}", start.row, start.col, error.message);
+            eprintln!("{}, {}: {}", start.row, start.col, error.message);
             if let Some(line) = &line {
-                println!("    | {}", line);
-                print!("    | ");
+                eprintln!("    | {}", line);
+                eprint!("    | ");
                 for _ in 0..std::cmp::max(start.col as i64 - 1, 0) {
-                    print!(" ");
+                    eprint!(" ");
                 }
-                println!("^");
+                eprintln!("^");
             }
         }
         false
@@ -60,12 +60,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     opts.optflag("h", "help", "print this help menu");
     opts.optflag("a", "ast", "output bare AST");
     opts.optflag("t", "typed", "output typed AST");
-    opts.optflag("n", "no-link", "output object file without linking");
+    opts.optflag("o", "obj", "output object file without linking");
 
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(f) => {
-            println!("Failed to parse the arguments: {}", f);
+            eprintln!("Failed to parse the arguments: {}", f);
             print_usage(&program, opts);
             return Ok(());
         }
@@ -79,12 +79,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let input = if let Some(input) = matches.free.get(0) {
         input
     } else {
-        println!("Please specifiy source file");
+        eprintln!("Please specifiy source file");
         return Ok(());
     };
 
-    let mut ast = parse::process(input)?;
-    ast.errors.sort();
+    let ast = parse::process(input)?;
 
     if matches.opt_present("ast") {
         println!("{}", serde_json::to_string_pretty(&ast).unwrap());
@@ -95,8 +94,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let mut ast = check::check(ast);
-    ast.errors.sort();
+    let ast = check::check(ast);
 
     if matches.opt_present("typed") {
         println!("{}", serde_json::to_string_pretty(&ast).unwrap());
@@ -110,11 +108,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output = if let Some(output) = matches.free.get(1) {
         output
     } else {
-        println!("Please specifiy output path");
+        eprintln!("Please specifiy output path");
         return Ok(());
     };
 
-    gen::gen(input, ast, output, matches.opt_present("n"))?;
+    gen::gen(input, ast, output, matches.opt_present("o"))?;
 
     Ok(())
 }

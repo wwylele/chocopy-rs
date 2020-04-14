@@ -315,6 +315,7 @@ pub fn check(mut ast: Program) -> Program {
         base: NodeBase::new(0, 0, 0, 0),
         errors,
     };
+    ast.errors.sort();
     ast
 }
 
@@ -347,8 +348,7 @@ mod tests {
                 let typed_string = String::from_utf8(std::fs::read(typed_file).unwrap()).unwrap();
                 let ast = serde_json::from_str::<Program>(&ast_string).unwrap();
                 let mut typed = serde_json::from_str::<Program>(&typed_string).unwrap();
-                let mut result = check(ast);
-                result.errors.sort();
+                let result = check(ast);
                 typed.errors.sort();
                 if result == typed {
                     println!("\x1b[32mOK\x1b[0m");

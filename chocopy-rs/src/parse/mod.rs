@@ -26,10 +26,12 @@ pub fn process(path: &str) -> Result<Program, Box<dyn std::error::Error>> {
 
     let (put_token, get_token) = pipe::create_pipe();
 
-    let ((), ast) = block_on(join(
+    let ((), mut ast) = block_on(join(
         lexer::lex(get_char, put_token),
         parser::parse(get_token),
     ));
+
+    ast.errors.sort();
 
     Ok(ast)
 }
