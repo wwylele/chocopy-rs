@@ -6,7 +6,9 @@ use crate::local_env::*;
 use crate::node::*;
 use std::collections::HashMap;
 use std::convert::*;
+use std::ffi::OsStr;
 use std::io::Write;
+use std::path::*;
 use target_lexicon::*;
 
 const BOOL_PROTOTYPE: &'static str = "bool.$proto";
@@ -201,22 +203,39 @@ impl std::fmt::Display for ToolChainError {
 
 impl std::error::Error for ToolChainError {}
 
+#[derive(Debug)]
+struct PathError;
+
+impl std::fmt::Display for PathError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Illegal path")
+    }
+}
+
+impl std::error::Error for PathError {}
+
+fn windows_path_escape(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let path = path.to_str().ok_or(PathError)?;
+
+    // TODO: actually escape the path
+    // For now we just forbid suspicious strings.
+    if path
+        .find(|c| matches!(c, '\"' | '\'' | '^') || c.is_control())
+        .is_some()
+        || path.ends_with('\\')
+    {
+        return Err(PathError.into());
+    }
+
+    Ok(path.to_owned())
+}
+
 pub fn gen(
     source_path: &str,
     ast: Program,
     path: &str,
     no_link: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let obj_path = if no_link {
-        let obj_path = std::path::Path::new(path);
-        obj_path.to_owned()
-    } else {
-        let mut obj_path = std::env::temp_dir();
-        let obj_name = format!("chocopy-{}.o", rand::random::<u32>());
-        obj_path.push(obj_name.clone());
-        obj_path
-    };
-
     let current_dir_buf = std::env::current_dir();
     let current_dir = current_dir_buf
         .as_ref()
@@ -442,6 +461,16 @@ pub fn gen(
         }
     }
 
+    let obj_path = if no_link {
+        let obj_path = Path::new(path);
+        obj_path.to_owned()
+    } else {
+        let mut obj_path = std::env::temp_dir();
+        let obj_name = format!("chocopy-{}.o", rand::random::<u32>());
+        obj_path.push(obj_name.clone());
+        obj_path
+    };
+
     let mut obj_file = std::fs::File::create(&obj_path)?;
     obj_file.write_all(&obj.write()?)?;
     drop(obj_file);
@@ -460,7 +489,7 @@ pub fn gen(
 
     let ld_output = match PLATFORM {
         Platform::Windows => {
-            let vcvarsall = (|| -> Option<std::path::PathBuf> {
+            let vcvarsall = (|| -> Option<PathBuf> {
                 let linker = cc::windows_registry::find_tool("x86_64-pc-windows-msvc", "link.exe")?;
                 let mut vcvarsall = linker.path();
                 vcvarsall = vcvarsall.parent()?;
@@ -479,6 +508,12 @@ pub fn gen(
             })()
             .ok_or(ToolChainError)?;
 
+            // We need to execute vcvarsall.bat, then link.exe with the
+            // inherited environment variables.
+            // However, the syntax for chained execution in `cmd` is not in the
+            // standard escaping format, and rust std::process::Command doesn't
+            // support it. To work around this, we make a temporary batch file
+            // with the commands we want, and execute that batch file.
             let batch_content = format!(
                 "@echo off
 call \"{}\" amd64
@@ -486,30 +521,32 @@ link /NOLOGO /NXCOMPAT /OPT:REF,NOICF \
 \"{}\" \"{}\" /OUT:\"{}\" \
 kernel32.lib advapi32.lib ws2_32.lib userenv.lib vcruntime.lib ucrt.lib msvcrt.lib \
 /SUBSYSTEM:CONSOLE",
-                vcvarsall.as_os_str().to_str().unwrap(),
-                obj_path.as_os_str().to_str().unwrap(),
-                lib_path.as_os_str().to_str().unwrap(),
-                path
+                windows_path_escape(&vcvarsall)?,
+                windows_path_escape(&obj_path)?,
+                windows_path_escape(&lib_path)?,
+                windows_path_escape(Path::new(path))?
             );
 
-            let bat_name = format!("chocopy-temp-{}.bat", rand::random::<u32>());
+            let mut bat_path = std::env::temp_dir();
+            let bat_name = format!("chocopy-{}.bat", rand::random::<u32>());
+            bat_path.push(bat_name);
 
-            std::fs::write(&bat_name, batch_content)?;
+            std::fs::write(&bat_path, batch_content)?;
 
             let ld_output = std::process::Command::new("cmd")
-                .args(&["/c", &bat_name])
+                .args(&[OsStr::new("/c"), bat_path.as_os_str()])
                 .output()?;
-            std::fs::remove_file(&bat_name)?;
+            std::fs::remove_file(&bat_path)?;
             ld_output
         }
         Platform::Linux => std::process::Command::new("gcc")
             .args(&[
-                "-o",
-                path,
-                obj_path.to_str().unwrap(),
-                lib_path.to_str().unwrap(),
-                "-pthread",
-                "-ldl",
+                OsStr::new("-o"),
+                OsStr::new(path),
+                obj_path.as_os_str(),
+                lib_path.as_os_str(),
+                OsStr::new("-pthread"),
+                OsStr::new("-ldl"),
             ])
             .output()?,
     };
