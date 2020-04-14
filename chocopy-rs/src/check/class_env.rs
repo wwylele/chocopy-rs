@@ -55,7 +55,7 @@ impl ClassEnv {
     ) {
         let class_name = &class_def.name.name;
         let super_name = &class_def.super_class.name;
-        let super_class = if let "int" | "str" | "bool" = super_name.as_str() {
+        let super_class = if matches!(super_name.as_str(), "int" | "str" | "bool") {
             let msg = error_super_special(super_name);
             class_def.super_class.add_error(errors, msg);
             self.0.get("object").unwrap()

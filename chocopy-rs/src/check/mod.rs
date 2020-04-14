@@ -129,11 +129,10 @@ fn check_func(
 
     // semantic rule: 9
     if let TypeAnnotation::ClassType(c) = &f.return_type {
-        if let "int" | "str" | "bool" = c.class_name.as_str() {
-            if !always_return(&f.statements) {
-                let msg = error_return(&f.name.name);
-                f.name.add_error(errors, msg);
-            }
+        if matches!(c.class_name.as_str(), "int" | "str" | "bool") && !always_return(&f.statements)
+        {
+            let msg = error_return(&f.name.name);
+            f.name.add_error(errors, msg);
         }
     }
 

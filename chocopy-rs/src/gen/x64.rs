@@ -762,7 +762,10 @@ impl<'a> Emitter<'a> {
 
         if virtual_call {
             let offset = if let ValueType::ClassValueType(c) = args[0].get_type() {
-                if let "int" | "bool" | "str" | "<None>" | "<Empty>" = c.class_name.as_str() {
+                if matches!(
+                    c.class_name.as_str(),
+                    "int" | "bool" | "str" | "<None>" | "<Empty>"
+                ) {
                     assert!(name == "__init__");
                     16
                 } else {
