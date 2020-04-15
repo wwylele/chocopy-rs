@@ -61,6 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     opts.optflag("a", "ast", "output bare AST");
     opts.optflag("t", "typed", "output typed AST");
     opts.optflag("o", "obj", "output object file without linking");
+    opts.optflag("s", "static", "Link against library statically if possible");
 
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
@@ -112,7 +113,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     };
 
-    gen::gen(input, ast, output, matches.opt_present("o"))?;
+    gen::gen(
+        input,
+        ast,
+        output,
+        matches.opt_present("o"),
+        matches.opt_present("s"),
+    )?;
 
     Ok(())
 }

@@ -30,6 +30,9 @@ These are not needed if you only need chocopy-rs to produce AST JSON or object f
 # compile source file input.py to executable output.exe
 chocopy-rs input.py output.exe
 
+# same as above, but link against static library
+chocopy-rs input.py output.exe --static
+
 # compile source file input.py to object file output.o
 chocopy-rs input.py output.o --obj
 
