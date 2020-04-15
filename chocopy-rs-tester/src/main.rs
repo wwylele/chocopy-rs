@@ -124,7 +124,9 @@ fn main() {
 
     let args: Vec<_> = std::env::args().collect();
     let dir = args.get(1).expect("Path required");
-    let python = args.get(2).map(|s| s.as_str()) == Some("--python");
+    let option = args.get(2).map(|s| s.as_str());
+    let python = option == Some("--python");
+    let static_lib = option == Some("--static");
     let python_command;
     if python {
         python_command = Some(args.get(3).map(|s| s.as_str()).unwrap_or("python"));
@@ -183,7 +185,11 @@ fn main() {
             print!("Case {} ---- ", case);
 
             let command = if !python {
-                std::process::Command::new(&exe_path)
+                let mut command = std::process::Command::new(&exe_path);
+                if static_lib {
+                    command.arg("--static");
+                }
+                command
             } else {
                 let mut p = std::process::Command::new(python_command.unwrap());
                 p.arg(&file_path);

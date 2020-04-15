@@ -235,6 +235,7 @@ pub fn gen(
     ast: Program,
     path: &str,
     no_link: bool,
+    static_lib: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let current_dir_buf = std::env::current_dir();
     let current_dir = current_dir_buf
@@ -488,6 +489,12 @@ pub fn gen(
             })()
             .ok_or(ToolChainError)?;
 
+            let libs = if static_lib {
+                "libvcruntime.lib libucrt.lib libcmt.lib"
+            } else {
+                "vcruntime.lib ucrt.lib msvcrt.lib"
+            };
+
             // We need to execute vcvarsall.bat, then link.exe with the
             // inherited environment variables.
             // However, the syntax for chained execution in `cmd` is not in the
@@ -499,12 +506,13 @@ pub fn gen(
 call \"{}\" amd64
 link /NOLOGO /NXCOMPAT /OPT:REF,NOICF \
 \"{}\" \"{}\" /OUT:\"{}\" \
-kernel32.lib advapi32.lib ws2_32.lib userenv.lib vcruntime.lib ucrt.lib msvcrt.lib \
+kernel32.lib advapi32.lib ws2_32.lib userenv.lib {} \
 /SUBSYSTEM:CONSOLE",
                 windows_path_escape(&vcvarsall)?,
                 windows_path_escape(&obj_path)?,
                 windows_path_escape(&lib_path)?,
-                windows_path_escape(Path::new(path))?
+                windows_path_escape(Path::new(path))?,
+                libs
             );
 
             let mut bat_path = std::env::temp_dir();
@@ -519,16 +527,21 @@ kernel32.lib advapi32.lib ws2_32.lib userenv.lib vcruntime.lib ucrt.lib msvcrt.l
             std::fs::remove_file(&bat_path)?;
             ld_output
         }
-        Platform::Linux => std::process::Command::new("gcc")
-            .args(&[
+        Platform::Linux => {
+            let mut command = std::process::Command::new("gcc");
+            command.args(&[
                 OsStr::new("-o"),
                 OsStr::new(path),
                 obj_path.as_os_str(),
                 lib_path.as_os_str(),
                 OsStr::new("-pthread"),
                 OsStr::new("-ldl"),
-            ])
-            .output()?,
+            ]);
+            if static_lib {
+                command.arg("-static");
+            }
+            command.output()?
+        }
     };
 
     if !ld_output.status.success() {

@@ -27,5 +27,9 @@ jobs:
       if: runner.os == 'Linux'
     - name: Run integration tests
       run: cargo run --package chocopy-rs-tester -- chocopy-rs/test/pa3
+    - name: Run integration tests (static)
+      run: cargo run --package chocopy-rs-tester -- chocopy-rs/test/pa3 --static
     - name: Run official integration tests
       run: cargo run --package chocopy-rs-tester -- chocopy-rs/test/original/pa3
+    - name: Run official integration tests (static)
+      run: cargo run --package chocopy-rs-tester -- chocopy-rs/test/original/pa3 --static
