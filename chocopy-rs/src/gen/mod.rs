@@ -383,26 +383,14 @@ pub fn gen(
         };
         for link in &chunk.links {
             let to = obj.symbol_id(link.to.as_bytes()).unwrap();
-            let to_symbol = obj.symbol(to);
 
             let (size, kind, encoding, addend) = if from_text {
-                if to_symbol.kind == object::SymbolKind::Data {
-                    (
-                        32,
-                        object::RelocationKind::Relative,
-                        object::RelocationEncoding::X86RipRelative,
-                        -4,
-                    )
-                } else if to_symbol.kind == object::SymbolKind::Text {
-                    (
-                        32,
-                        object::RelocationKind::PltRelative,
-                        object::RelocationEncoding::X86RipRelative,
-                        -4,
-                    )
-                } else {
-                    panic!()
-                }
+                (
+                    32,
+                    object::RelocationKind::Relative,
+                    object::RelocationEncoding::X86RipRelative,
+                    -4,
+                )
             } else {
                 (
                     64,
