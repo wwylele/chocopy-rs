@@ -376,30 +376,22 @@ pub fn gen(
 
     for chunk in &code_set.chunks {
         let (from, from_offset) = section_map[&chunk.name];
-        let from_text = if let ChunkExtra::Procedure(_) = chunk.extra {
-            true
+        let size;
+        let kind;
+        let encoding;
+        let addend;
+        if let ChunkExtra::Procedure(_) = chunk.extra {
+            size = 32;
+            kind = object::RelocationKind::Relative;
+            encoding = object::RelocationEncoding::X86RipRelative;
+            addend = -4;
         } else {
-            false
+            size = 64;
+            kind = object::RelocationKind::Absolute;
+            encoding = object::RelocationEncoding::Generic;
+            addend = 0;
         };
         for link in &chunk.links {
-            let to = obj.symbol_id(link.to.as_bytes()).unwrap();
-
-            let (size, kind, encoding, addend) = if from_text {
-                (
-                    32,
-                    object::RelocationKind::Relative,
-                    object::RelocationEncoding::X86RipRelative,
-                    -4,
-                )
-            } else {
-                (
-                    64,
-                    object::RelocationKind::Absolute,
-                    object::RelocationEncoding::Generic,
-                    0,
-                )
-            };
-
             obj.add_relocation(
                 from,
                 object::write::Relocation {
@@ -407,7 +399,7 @@ pub fn gen(
                     size,
                     kind,
                     encoding,
-                    symbol: to,
+                    symbol: obj.symbol_id(link.to.as_bytes()).unwrap(),
                     addend,
                 },
             )?;

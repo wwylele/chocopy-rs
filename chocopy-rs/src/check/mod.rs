@@ -184,16 +184,20 @@ pub fn check(mut ast: Program) -> Program {
     // collects global variables
     let mut globals = HashSet::new();
     for decl in &mut ast.declarations {
-        if let Declaration::VarDef(v) = decl {
-            check_var_def(v, &mut errors, &classes);
-            let name = &v.var.identifier.name;
-            globals.insert(name.clone());
-        } else if let Declaration::ClassDef(c) = decl {
-            for decl in &mut c.declarations {
-                if let Declaration::VarDef(v) = decl {
-                    check_var_def(v, &mut errors, &classes);
+        match decl {
+            Declaration::VarDef(v) => {
+                check_var_def(v, &mut errors, &classes);
+                let name = &v.var.identifier.name;
+                globals.insert(name.clone());
+            }
+            Declaration::ClassDef(c) => {
+                for decl in &mut c.declarations {
+                    if let Declaration::VarDef(v) = decl {
+                        check_var_def(v, &mut errors, &classes);
+                    }
                 }
             }
+            _ => (),
         }
     }
 
@@ -264,41 +268,46 @@ pub fn check(mut ast: Program) -> Program {
     // semantic rules: 1(function), 2, 3, 9, 11(function)
     // collects global environment
     for decl in &mut ast.declarations {
-        if let Declaration::FuncDef(f) = decl {
-            check_func(f, &mut errors, &classes, &globals, &HashSet::new());
-            global_env.insert(
-                f.name.name.clone(),
-                LocalSlot::Func(FuncType {
-                    parameters: f
-                        .params
-                        .iter()
-                        .map(|tv| ValueType::from_annotation(&tv.type_))
-                        .collect(),
-                    return_type: ValueType::from_annotation(&f.return_type),
-                }),
-            );
-        } else if let Declaration::ClassDef(c) = decl {
-            for decl in &mut c.declarations {
-                if let Declaration::FuncDef(f) = decl {
-                    check_func(f, &mut errors, &classes, &globals, &HashSet::new())
-                }
-            }
-            let name = &c.name.name;
-            global_env.insert(
-                name.clone(),
-                LocalSlot::Func(FuncType {
-                    parameters: vec![],
-                    return_type: ValueType::ClassValueType(ClassValueType {
-                        class_name: name.clone(),
+        match decl {
+            Declaration::FuncDef(f) => {
+                check_func(f, &mut errors, &classes, &globals, &HashSet::new());
+                global_env.insert(
+                    f.name.name.clone(),
+                    LocalSlot::Func(FuncType {
+                        parameters: f
+                            .params
+                            .iter()
+                            .map(|tv| ValueType::from_annotation(&tv.type_))
+                            .collect(),
+                        return_type: ValueType::from_annotation(&f.return_type),
                     }),
-                }),
-            );
-        } else if let Declaration::VarDef(v) = decl {
-            let name = &v.var.identifier.name;
-            global_env.insert(
-                name.clone(),
-                LocalSlot::Var(ValueType::from_annotation(&v.var.type_)),
-            );
+                );
+            }
+            Declaration::ClassDef(c) => {
+                for decl in &mut c.declarations {
+                    if let Declaration::FuncDef(f) = decl {
+                        check_func(f, &mut errors, &classes, &globals, &HashSet::new())
+                    }
+                }
+                let name = &c.name.name;
+                global_env.insert(
+                    name.clone(),
+                    LocalSlot::Func(FuncType {
+                        parameters: vec![],
+                        return_type: ValueType::ClassValueType(ClassValueType {
+                            class_name: name.clone(),
+                        }),
+                    }),
+                );
+            }
+            Declaration::VarDef(v) => {
+                let name = &v.var.identifier.name;
+                global_env.insert(
+                    name.clone(),
+                    LocalSlot::Var(ValueType::from_annotation(&v.var.type_)),
+                );
+            }
+            _ => panic!(),
         }
     }
 

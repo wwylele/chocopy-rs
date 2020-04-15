@@ -1384,7 +1384,8 @@ impl<'a> Emitter<'a> {
 
         //// Compute the element
         let iterable_type = stmt.iterable.get_type();
-        let source_type = if iterable_type == &*TYPE_STR {
+        let source_type;
+        if iterable_type == &*TYPE_STR {
             // mov rsi,1
             self.emit(&[0x48, 0xc7, 0xc6, 0x01, 0x00, 0x00, 0x00]);
             self.call_builtin_alloc(STR_PROTOTYPE);
@@ -1396,7 +1397,8 @@ impl<'a> Emitter<'a> {
             self.emit(&[0x45, 0x8A, 0x54, 0x33, 0x18]);
             // mov [rax+24],r10b
             self.emit(&[0x44, 0x88, 0x50, 0x18]);
-            &*TYPE_STR
+
+            source_type = &*TYPE_STR;
         } else {
             let element_type = if let ValueType::ListValueType(l) = iterable_type {
                 &*l.element_type
@@ -1416,8 +1418,8 @@ impl<'a> Emitter<'a> {
                 self.emit_clone();
             }
 
-            element_type
-        };
+            source_type = element_type;
+        }
 
         //// Assign the element
         let target_type = stmt.identifier.get_type();
@@ -1617,37 +1619,41 @@ fn gen_function(
     let mut local_offset = if level == 0 { -8 } else { -16 };
 
     for declaration in &function.declarations {
-        if let Declaration::VarDef(v) = declaration {
-            let name = &v.var.identifier.name;
-            let offset = local_offset;
-            local_offset -= 8;
-            locals.insert(
-                name.clone(),
-                LocalSlot::Var(VarSlot {
-                    offset,
-                    level: level + 1,
-                }),
-            );
-            let local_type = ValueType::from_annotation(&v.var.type_);
-            if local_type != *TYPE_INT && local_type != *TYPE_BOOL {
-                clean_up_list.push(offset);
-            }
+        match declaration {
+            Declaration::VarDef(v) => {
+                let name = &v.var.identifier.name;
+                let offset = local_offset;
+                local_offset -= 8;
+                locals.insert(
+                    name.clone(),
+                    LocalSlot::Var(VarSlot {
+                        offset,
+                        level: level + 1,
+                    }),
+                );
+                let local_type = ValueType::from_annotation(&v.var.type_);
+                if local_type != *TYPE_INT && local_type != *TYPE_BOOL {
+                    clean_up_list.push(offset);
+                }
 
-            locals_debug.push(VarDebug {
-                offset,
-                line: v.base().location.start.row,
-                name: name.clone(),
-                var_type: TypeDebug::from_annotation(&v.var.type_),
-            })
-        } else if let Declaration::FuncDef(f) = declaration {
-            let name = &f.name.name;
-            locals.insert(
-                name.clone(),
-                LocalSlot::Func(FuncSlot {
-                    link_name: link_name.clone() + "." + name,
-                    level: level + 1,
-                }),
-            );
+                locals_debug.push(VarDebug {
+                    offset,
+                    line: v.base().location.start.row,
+                    name: name.clone(),
+                    var_type: TypeDebug::from_annotation(&v.var.type_),
+                })
+            }
+            Declaration::FuncDef(f) => {
+                let name = &f.name.name;
+                locals.insert(
+                    name.clone(),
+                    LocalSlot::Func(FuncSlot {
+                        link_name: link_name.clone() + "." + name,
+                        level: level + 1,
+                    }),
+                );
+            }
+            _ => (),
         }
     }
 
@@ -2067,74 +2073,78 @@ fn add_class(
         }),
     );
     for declaration in &c.declarations {
-        if let Declaration::VarDef(v) = declaration {
-            let source_type = v.value.get_type().clone();
-            let target_type = ValueType::from_annotation(&v.var.type_);
-            let size = if target_type == *TYPE_INT {
-                4
-            } else if target_type == *TYPE_BOOL {
-                1
-            } else {
-                8
-            };
-            class_slot.object_size += (size - class_slot.object_size % size) % size;
-            let offset = class_slot.object_size + 16;
-            let name = &v.var.identifier.name;
-            class_slot.attributes.insert(
-                name.clone(),
-                AttributeSlot {
-                    offset,
-                    source_type,
-                    target_type,
-                    init: v.value.content.clone(),
-                },
-            );
-            class_slot.object_size += size;
-
-            class_debug.attributes.push(VarDebug {
-                offset: offset as i32,
-                line: v.base().location.start.row,
-                name: name.clone(),
-                var_type: TypeDebug::from_annotation(&v.var.type_),
-            });
-        } else if let Declaration::FuncDef(f) = declaration {
-            let method_name = &f.name.name;
-            let link_name = class_name.clone() + "." + method_name;
-            if let Some(method) = class_slot.methods.get_mut(method_name) {
-                method.link_name = link_name;
-
-                let self_type = TypeDebug::from_annotation(&f.params[0].type_);
-                class_debug
-                    .methods
-                    .get_mut(&method.offset)
-                    .unwrap()
-                    .1
-                    .params[0] = self_type;
-            } else {
-                let offset = class_slot.prototype_size;
-                class_slot
-                    .methods
-                    .insert(method_name.clone(), MethodSlot { offset, link_name });
-                class_slot.prototype_size += 8;
-
-                let params = f
-                    .params
-                    .iter()
-                    .map(|tv| TypeDebug::from_annotation(&tv.type_))
-                    .collect();
-                let return_type = TypeDebug::from_annotation(&f.return_type);
-
-                class_debug.methods.insert(
-                    offset,
-                    (
-                        method_name.clone(),
-                        MethodDebug {
-                            params,
-                            return_type,
-                        },
-                    ),
+        match declaration {
+            Declaration::VarDef(v) => {
+                let source_type = v.value.get_type().clone();
+                let target_type = ValueType::from_annotation(&v.var.type_);
+                let size = if target_type == *TYPE_INT {
+                    4
+                } else if target_type == *TYPE_BOOL {
+                    1
+                } else {
+                    8
+                };
+                class_slot.object_size += (size - class_slot.object_size % size) % size;
+                let offset = class_slot.object_size + 16;
+                let name = &v.var.identifier.name;
+                class_slot.attributes.insert(
+                    name.clone(),
+                    AttributeSlot {
+                        offset,
+                        source_type,
+                        target_type,
+                        init: v.value.content.clone(),
+                    },
                 );
+                class_slot.object_size += size;
+
+                class_debug.attributes.push(VarDebug {
+                    offset: offset as i32,
+                    line: v.base().location.start.row,
+                    name: name.clone(),
+                    var_type: TypeDebug::from_annotation(&v.var.type_),
+                });
             }
+            Declaration::FuncDef(f) => {
+                let method_name = &f.name.name;
+                let link_name = class_name.clone() + "." + method_name;
+                if let Some(method) = class_slot.methods.get_mut(method_name) {
+                    method.link_name = link_name;
+
+                    let self_type = TypeDebug::from_annotation(&f.params[0].type_);
+                    class_debug
+                        .methods
+                        .get_mut(&method.offset)
+                        .unwrap()
+                        .1
+                        .params[0] = self_type;
+                } else {
+                    let offset = class_slot.prototype_size;
+                    class_slot
+                        .methods
+                        .insert(method_name.clone(), MethodSlot { offset, link_name });
+                    class_slot.prototype_size += 8;
+
+                    let params = f
+                        .params
+                        .iter()
+                        .map(|tv| TypeDebug::from_annotation(&tv.type_))
+                        .collect();
+                    let return_type = TypeDebug::from_annotation(&f.return_type);
+
+                    class_debug.methods.insert(
+                        offset,
+                        (
+                            method_name.clone(),
+                            MethodDebug {
+                                params,
+                                return_type,
+                            },
+                        ),
+                    );
+                }
+            }
+            _ => panic!(),
         }
     }
     class_debug.size = class_slot.object_size;
@@ -2191,44 +2201,49 @@ pub(super) fn gen_code_set(ast: Program) -> CodeSet {
         },
     );
     for declaration in &ast.declarations {
-        if let Declaration::VarDef(v) = declaration {
-            let name = &v.var.identifier.name;
-            let target_type = ValueType::from_annotation(&v.var.type_);
-            let size = if target_type == *TYPE_INT {
-                4
-            } else if target_type == *TYPE_BOOL {
-                1
-            } else {
-                8
-            };
-            global_offset += (size - global_offset % size) % size;
-            globals.insert(
-                name.clone(),
-                LocalSlot::Var(VarSlot {
+        match declaration {
+            Declaration::VarDef(v) => {
+                let name = &v.var.identifier.name;
+                let target_type = ValueType::from_annotation(&v.var.type_);
+                let size = if target_type == *TYPE_INT {
+                    4
+                } else if target_type == *TYPE_BOOL {
+                    1
+                } else {
+                    8
+                };
+                global_offset += (size - global_offset % size) % size;
+                globals.insert(
+                    name.clone(),
+                    LocalSlot::Var(VarSlot {
+                        offset: global_offset,
+                        level: 0,
+                    }),
+                );
+
+                globals_debug.push(VarDebug {
                     offset: global_offset,
-                    level: 0,
-                }),
-            );
+                    line: v.base().location.start.row,
+                    name: name.clone(),
+                    var_type: TypeDebug::from_annotation(&v.var.type_),
+                });
 
-            globals_debug.push(VarDebug {
-                offset: global_offset,
-                line: v.base().location.start.row,
-                name: name.clone(),
-                var_type: TypeDebug::from_annotation(&v.var.type_),
-            });
-
-            global_offset += size;
-        } else if let Declaration::FuncDef(f) = declaration {
-            let name = &f.name.name;
-            globals.insert(
-                name.clone(),
-                LocalSlot::Func(FuncSlot {
-                    link_name: name.clone(),
-                    level: 0,
-                }),
-            );
-        } else if let Declaration::ClassDef(c) = declaration {
-            add_class(&mut globals, &mut classes, &mut classes_debug, c)
+                global_offset += size;
+            }
+            Declaration::FuncDef(f) => {
+                let name = &f.name.name;
+                globals.insert(
+                    name.clone(),
+                    LocalSlot::Func(FuncSlot {
+                        link_name: name.clone(),
+                        level: 0,
+                    }),
+                );
+            }
+            Declaration::ClassDef(c) => {
+                add_class(&mut globals, &mut classes, &mut classes_debug, c)
+            }
+            _ => panic!(),
         }
     }
 
@@ -2255,20 +2270,24 @@ pub(super) fn gen_code_set(ast: Program) -> CodeSet {
     let mut chunks = vec![gen_main(&ast, &mut storage_env, &classes)];
 
     for declaration in &ast.declarations {
-        if let Declaration::FuncDef(f) = declaration {
-            chunks.append(&mut gen_function(&f, &mut storage_env, &classes, 0, None));
-        } else if let Declaration::ClassDef(c) = declaration {
-            for declaration in &c.declarations {
-                if let Declaration::FuncDef(f) = declaration {
-                    chunks.append(&mut gen_function(
-                        &f,
-                        &mut storage_env,
-                        &classes,
-                        0,
-                        Some(&c.name.name),
-                    ));
+        match declaration {
+            Declaration::FuncDef(f) => {
+                chunks.append(&mut gen_function(&f, &mut storage_env, &classes, 0, None));
+            }
+            Declaration::ClassDef(c) => {
+                for declaration in &c.declarations {
+                    if let Declaration::FuncDef(f) = declaration {
+                        chunks.append(&mut gen_function(
+                            &f,
+                            &mut storage_env,
+                            &classes,
+                            0,
+                            Some(&c.name.name),
+                        ));
+                    }
                 }
             }
+            _ => (),
         }
     }
 

@@ -83,18 +83,22 @@ impl AssignStmt {
         // We don't do `for target in &mut self.targets` because of mut ref conflict
         for i in 0..self.targets.len() {
             let left: ValueType = self.targets[i].analyze(errors, o, m);
-            if let ExprContent::Variable(Variable { name, .. }) = &self.targets[i].content {
-                if let Some(EnvSlot::Var(_, Assignable(false))) = o.get(name) {
-                    let msg = error_nonlocal_assign(name);
-                    self.targets[i].add_error(errors, msg);
+            match &self.targets[i].content {
+                ExprContent::Variable(Variable { name, .. }) => {
+                    if let Some(EnvSlot::Var(_, Assignable(false))) = o.get(name) {
+                        let msg = error_nonlocal_assign(name);
+                        self.targets[i].add_error(errors, msg);
+                    }
                 }
-            } else if let ExprContent::IndexExpr(index_expr) = &self.targets[i].content {
-                if index_expr.list.get_type() == &*TYPE_STR
-                    && self.targets[i].base().error_msg.is_none()
-                {
-                    let msg = error_str_index_assign();
-                    self.targets[i].add_error(errors, msg);
+                ExprContent::IndexExpr(index_expr) => {
+                    if index_expr.list.get_type() == &*TYPE_STR
+                        && self.targets[i].base().error_msg.is_none()
+                    {
+                        let msg = error_str_index_assign();
+                        self.targets[i].add_error(errors, msg);
+                    }
                 }
+                _ => (),
             }
 
             if !m.is_compatible(&right, &left) && self.base.error_msg.is_none() {
