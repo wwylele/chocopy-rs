@@ -1940,6 +1940,15 @@ fn gen_len() -> Chunk {
 
 fn gen_input() -> Chunk {
     let mut code = Emitter::new("input", None, None, vec![], 0);
+    match PLATFORM {
+        Platform::Windows => code.emit(&[0x48, 0x8D, 0x0D]), // lea rcx,[rip+{}]
+        Platform::Linux => code.emit(&[0x48, 0x8D, 0x3D]),   // lea rdi,[rip+{}]
+    }
+    code.links.push(ChunkLink {
+        pos: code.pos(),
+        to: STR_PROTOTYPE.to_owned(),
+    });
+    code.emit(&[0; 4]);
     code.prepare_call(PLATFORM.stack_reserve());
     code.call(BUILTIN_INPUT);
     code.end_proc();
@@ -1957,7 +1966,7 @@ fn gen_input() -> Chunk {
 fn gen_print() -> Chunk {
     let mut code = Emitter::new("print", None, None, vec![], 0);
     match PLATFORM {
-        Platform::Windows => code.emit(&[0x48, 0x8B, 0x4C, 0x24, 0x10]), //  mov rcx,[rsp+16]
+        Platform::Windows => code.emit(&[0x48, 0x8B, 0x4C, 0x24, 0x10]), // mov rcx,[rsp+16]
         Platform::Linux => code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]),   // mov rdi,[rsp+16]
     }
     code.prepare_call(PLATFORM.stack_reserve());
@@ -2152,6 +2161,28 @@ fn add_class(
     classes_debug.insert(class_name.clone(), class_debug);
 }
 
+fn gen_special_proto(name: &str, size: i32, tag: i32, dtor: &str) -> Chunk {
+    let mut code = vec![0; 24];
+    code[0..4].copy_from_slice(&size.to_le_bytes());
+    code[4..8].copy_from_slice(&tag.to_le_bytes());
+    let links = vec![
+        ChunkLink {
+            pos: 8,
+            to: dtor.to_owned(),
+        },
+        ChunkLink {
+            pos: 16,
+            to: "object.__init__".to_owned(),
+        },
+    ];
+    Chunk {
+        name: name.to_owned(),
+        code,
+        links,
+        extra: ChunkExtra::Data,
+    }
+}
+
 pub(super) fn gen_code_set(ast: Program) -> CodeSet {
     let mut globals = HashMap::new();
     let mut classes = HashMap::new();
@@ -2321,6 +2352,28 @@ pub(super) fn gen_code_set(ast: Program) -> CodeSet {
     chunks.push(gen_len());
     chunks.push(gen_input());
     chunks.push(gen_print());
+
+    chunks.push(gen_special_proto(INT_PROTOTYPE, 4, 1, "object.$dtor"));
+    chunks.push(gen_special_proto(BOOL_PROTOTYPE, 1, 2, "object.$dtor"));
+    chunks.push(gen_special_proto(STR_PROTOTYPE, -1, 3, "object.$dtor"));
+    chunks.push(gen_special_proto(
+        INT_LIST_PROTOTYPE,
+        -4,
+        -1,
+        "object.$dtor",
+    ));
+    chunks.push(gen_special_proto(
+        BOOL_LIST_PROTOTYPE,
+        -1,
+        -1,
+        "object.$dtor",
+    ));
+    chunks.push(gen_special_proto(
+        OBJECT_LIST_PROTOTYPE,
+        -8,
+        -1,
+        "[object].$dtor",
+    ));
 
     CodeSet {
         chunks,
