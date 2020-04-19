@@ -2296,7 +2296,8 @@ pub(super) fn gen_code_set(ast: Program) -> CodeSet {
         chunks.push(gen_dtor(&class_name, &class_slot));
 
         let mut prototype = vec![0; class_slot.prototype_size as usize];
-        prototype[0..8].copy_from_slice(&(class_slot.object_size as u64).to_le_bytes());
+        prototype[0..4].copy_from_slice(&class_slot.object_size.to_le_bytes());
+        // prototype[4..8] is type tag fill with 0
         let links = class_slot
             .methods
             .iter()

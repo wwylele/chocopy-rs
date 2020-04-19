@@ -89,6 +89,7 @@ fn dwarf_add_array_type(
 pub(super) struct Dwarf {
     dwarf: DwarfUnit,
     size_t_id: UnitEntryId,
+    int_t_id: UnitEntryId,
     char_id: UnitEntryId,
     default_prototype_id: UnitEntryId,
     default_prototype_ptr_id: UnitEntryId,
@@ -141,9 +142,11 @@ impl Dwarf {
         compile_unit.set(DW_AT_producer, AttributeValue::StringRef(producer));
 
         let size_t_id = dwarf_add_base_type(&mut dwarf, "$size_t", DW_ATE_signed, 8);
+        let int_t_id = dwarf_add_base_type(&mut dwarf, "$int_t", DW_ATE_signed, 4);
         let char_id = dwarf_add_base_type(&mut dwarf, "$char", DW_ATE_signed, 1);
         let default_prototype_id = dwarf_add_struct_type(&mut dwarf, "object.$prototype", 24);
-        dwarf_add_member(&mut dwarf, default_prototype_id, "$size", size_t_id, 0);
+        dwarf_add_member(&mut dwarf, default_prototype_id, "$size", int_t_id, 0);
+        dwarf_add_member(&mut dwarf, default_prototype_id, "$tag", int_t_id, 4);
 
         let default_prototype_ptr_id =
             dwarf_add_pointer_type(&mut dwarf, None, default_prototype_id);
@@ -151,6 +154,7 @@ impl Dwarf {
         Dwarf {
             dwarf,
             size_t_id,
+            int_t_id,
             char_id,
             default_prototype_id,
             default_prototype_ptr_id,
@@ -333,7 +337,8 @@ impl Dwarf {
             ((class_debug.methods.len() + 2) * 8) as u64,
         );
 
-        dwarf_add_member(&mut self.dwarf, prototype_id, "$size", self.size_t_id, 0);
+        dwarf_add_member(&mut self.dwarf, prototype_id, "$size", self.int_t_id, 0);
+        dwarf_add_member(&mut self.dwarf, prototype_id, "$tag", self.int_t_id, 4);
 
         let dtor_type = self.add_method_type(MethodDebug {
             return_type: TypeDebug::class_type("<None>"),
