@@ -5,55 +5,23 @@ use std::sync::atomic::*;
 
 static ALLOC_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-#[repr(C)]
-pub struct Prototype {
-    size: i64,
-    dtor: unsafe extern "C" fn(*mut u8),
-    ctor: unsafe extern "C" fn(),
-    // followed by other method pointers
+#[allow(unused)]
+#[repr(i32)]
+enum TypeTag {
+    Other = 0,
+    Int = 1,
+    Bool = 2,
+    Str = 3,
+    List = -1,
 }
 
-#[export_name = "bool.$proto"]
-pub static BOOL_PROTOTYPE: Prototype = Prototype {
-    size: 1,
-    dtor: dtor_noop,
-    ctor: object_init,
-};
-
-#[export_name = "int.$proto"]
-pub static INT_PROTOTYPE: Prototype = Prototype {
-    size: 4,
-    dtor: dtor_noop,
-    ctor: object_init,
-};
-
-#[export_name = "str.$proto"]
-pub static STR_PROTOTYPE: Prototype = Prototype {
-    size: -1,
-    dtor: dtor_noop,
-    ctor: object_init,
-};
-
-#[export_name = "[bool].$proto"]
-pub static BOOL_LIST_PROTOTYPE: Prototype = Prototype {
-    size: -1,
-    dtor: dtor_noop,
-    ctor: object_init,
-};
-
-#[export_name = "[int].$proto"]
-pub static INT_LIST_PROTOTYPE: Prototype = Prototype {
-    size: -4,
-    dtor: dtor_noop,
-    ctor: object_init,
-};
-
-#[export_name = "[object].$proto"]
-pub static OBJECT_LIST_PROTOTYPE: Prototype = Prototype {
-    size: -8,
-    dtor: dtor_list,
-    ctor: object_init,
-};
+#[repr(C)]
+pub struct Prototype {
+    size: i32,
+    tag: TypeTag,
+    dtor: unsafe extern "C" fn(*mut u8),
+    // followed by other method pointers
+}
 
 #[repr(C)]
 pub struct Object {
@@ -78,9 +46,8 @@ fn align_up(size: usize) -> usize {
     }
 }
 
-extern "C" fn dtor_noop(_: *mut u8) {}
-
-unsafe extern "C" fn dtor_list(pointer: *mut u8) {
+#[export_name = "[object].$dtor"]
+pub unsafe extern "C" fn dtor_list(pointer: *mut u8) {
     let object = pointer as *mut ArrayObject;
     let len = (*object).len;
     let elements = object.offset(1) as *mut *mut Object;
@@ -94,15 +61,6 @@ unsafe extern "C" fn dtor_list(pointer: *mut u8) {
         }
     }
 }
-
-#[cfg(not(test))]
-extern "C" {
-    #[link_name = "object.__init__"]
-    fn object_init();
-}
-
-#[cfg(test)]
-extern "C" fn object_init() {}
 
 #[export_name = "$alloc_obj"]
 pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mut u8 {
@@ -147,11 +105,7 @@ pub unsafe extern "C" fn len(pointer: *mut u8) -> i32 {
     }
     let object = pointer as *mut ArrayObject;
     let prototype = (*object).object.prototype;
-    if prototype != &BOOL_LIST_PROTOTYPE as *const Prototype
-        && prototype != &INT_LIST_PROTOTYPE as *const Prototype
-        && prototype != &OBJECT_LIST_PROTOTYPE as *const Prototype
-        && prototype != &STR_PROTOTYPE as *const Prototype
-    {
+    if !matches!((*prototype).tag, TypeTag::Str | TypeTag::List) {
         invalid_arg();
     }
     let len = (*object).len as i32;
@@ -169,27 +123,32 @@ pub unsafe extern "C" fn print(pointer: *mut u8) -> *mut u8 {
     }
     let object = pointer as *mut Object;
     let prototype = (*object).prototype;
-    if prototype == &INT_PROTOTYPE as *const Prototype {
-        println!("{}", *(object.offset(1) as *const i32));
-    } else if prototype == &BOOL_PROTOTYPE as *const Prototype {
-        println!(
-            "{}",
-            if *(object.offset(1) as *const bool) {
-                "True"
-            } else {
-                "False"
-            }
-        );
-    } else if prototype == &STR_PROTOTYPE as *const Prototype {
-        let object = object as *mut ArrayObject;
-        let slice = std::str::from_utf8(std::slice::from_raw_parts(
-            object.offset(1) as *const u8,
-            (*object).len as usize,
-        ))
-        .unwrap();
-        println!("{}", slice);
-    } else {
-        invalid_arg();
+    match (*prototype).tag {
+        TypeTag::Int => {
+            println!("{}", *(object.offset(1) as *const i32));
+        }
+        TypeTag::Bool => {
+            println!(
+                "{}",
+                if *(object.offset(1) as *const bool) {
+                    "True"
+                } else {
+                    "False"
+                }
+            );
+        }
+        TypeTag::Str => {
+            let object = object as *mut ArrayObject;
+            let slice = std::str::from_utf8(std::slice::from_raw_parts(
+                object.offset(1) as *const u8,
+                (*object).len as usize,
+            ))
+            .unwrap();
+            println!("{}", slice);
+        }
+        _ => {
+            invalid_arg();
+        }
     }
 
     (*object).ref_count -= 1;
@@ -200,7 +159,7 @@ pub unsafe extern "C" fn print(pointer: *mut u8) -> *mut u8 {
 }
 
 #[export_name = "$input"]
-pub unsafe extern "C" fn input() -> *mut u8 {
+pub unsafe extern "C" fn input(str_proto: *const Prototype) -> *mut u8 {
     let mut input = String::new();
     std::io::stdin().read_line(&mut input).unwrap();
     let input = input.as_bytes();
@@ -212,7 +171,7 @@ pub unsafe extern "C" fn input() -> *mut u8 {
         len -= 1;
     }
     let len = len as u64;
-    let pointer = alloc_obj(&STR_PROTOTYPE as *const Prototype, len);
+    let pointer = alloc_obj(str_proto, len);
     std::ptr::copy_nonoverlapping(
         input.as_ptr(),
         pointer.offset(size_of::<ArrayObject>() as isize),

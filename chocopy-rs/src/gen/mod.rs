@@ -253,26 +253,6 @@ pub fn gen(
     };
     let mut obj = object::write::Object::new(binary_format, Architecture::X86_64);
 
-    let import_prototype = |obj: &mut object::write::Object, name: &str| {
-        obj.add_symbol(object::write::Symbol {
-            name: name.into(),
-            value: 0,
-            size: 0,
-            kind: object::SymbolKind::Data,
-            scope: object::SymbolScope::Linkage,
-            weak: false,
-            section: object::write::SymbolSection::Common,
-            flags: object::SymbolFlags::None,
-        })
-    };
-
-    import_prototype(&mut obj, BOOL_PROTOTYPE);
-    import_prototype(&mut obj, INT_PROTOTYPE);
-    import_prototype(&mut obj, STR_PROTOTYPE);
-    import_prototype(&mut obj, BOOL_LIST_PROTOTYPE);
-    import_prototype(&mut obj, INT_LIST_PROTOTYPE);
-    import_prototype(&mut obj, OBJECT_LIST_PROTOTYPE);
-
     let import_function = |obj: &mut object::write::Object, name: &str| {
         obj.add_symbol(object::write::Symbol {
             name: name.into(),
@@ -295,6 +275,7 @@ pub fn gen(
     import_function(&mut obj, BUILTIN_LEN);
     import_function(&mut obj, BUILTIN_PRINT);
     import_function(&mut obj, BUILTIN_INPUT);
+    import_function(&mut obj, "[object].$dtor");
 
     let code_set = x64::gen_code_set(ast);
 
@@ -328,7 +309,7 @@ pub fn gen(
     for chunk in &code_set.chunks {
         dwarf.add_chunk(&chunk);
         if let ChunkExtra::Procedure(_) = chunk.extra {
-            let scope = if chunk.name == BUILTIN_CHOCOPY_MAIN || chunk.name == "object.__init__" {
+            let scope = if chunk.name == BUILTIN_CHOCOPY_MAIN {
                 object::SymbolScope::Linkage
             } else {
                 object::SymbolScope::Compilation

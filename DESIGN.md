@@ -55,11 +55,11 @@ Array-like objects (`str` and `[T]`) has a 16-byte `$len` attribute after the ob
 
 For each type with name `C` (including all primitive types), the global symbol `C.$proto` points to a _prototype_ object of that class. All objects of type `C` also has its `$proto` attribute pointed to this prototype object. Prototype objects in chocopy-rs serve a combined purpose of two things in the implementation guide: the type tag and the dispatch table. Note that the original purpose of prototype described in the implementation guide is **not** included in the prototype here. Please refer the next section _Constructors_ for this.
 
-A prototype object starts with a 8-byte signed integer `$size` that describes the memory layout of objects of type `C`. When it is a positive number, it is the object size without the object header. When it is a negative number, it indicates `C` is an array-like type and the value without the sign is the size of one element.
+A prototype object starts with a 4-byte signed integer `$size` that describes the memory layout of objects of type `C`. When it is a positive number, it is the object size without the object header. When it is a negative number, it indicates `C` is an array-like type and the value without the sign is the size of one element.
 
-Since `[int]` and `[bool]` are stored packed, and thus their `C.$proto.$size` will be different from the one for `[T]` where `T` is not unwrapped, `[int]`, `[bool]`, and `[T]` have their own prototype object, which effectively means these three types have different type tag, contrary to the implementation guide where all list types share same type tag.
+Following `$size` is a 4-byte signed integer `$tag` for type tag. The type tag value follows the same convention in the implementation guide, except that all user-defined classes use value 0 for the tag.
 
-Following `$size` is the list of function pointers to methods. The first function pointer `$dtor` points to the destructor, the second function pointer points to the `__init__` method, and so on for other user-defined methods.
+Following `$tag` is the list of function pointers to methods. The first function pointer `$dtor` points to the destructor, the second function pointer points to the `__init__` method, and so on for other user-defined methods.
 
 #### Constructors
 
