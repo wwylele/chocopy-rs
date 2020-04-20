@@ -4,6 +4,7 @@ mod x64;
 
 use crate::local_env::*;
 use crate::node::*;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::convert::*;
 use std::ffi::OsStr;
@@ -151,7 +152,7 @@ struct MethodDebug {
 struct ClassDebug {
     size: u32,
     attributes: Vec<VarDebug>,
-    methods: HashMap<u32, (String, MethodDebug)>,
+    methods: BTreeMap<u32, (String, MethodDebug)>,
 }
 
 impl ClassDebug {
