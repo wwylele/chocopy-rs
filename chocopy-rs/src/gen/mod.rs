@@ -95,11 +95,16 @@ struct VarDebug {
     var_type: TypeDebug,
 }
 
+struct LineMap {
+    code_pos: usize,
+    line_number: u32,
+}
+
 struct ProcedureDebug {
     decl_line: u32,
     artificial: bool,
     parent: Option<String>,
-    lines: Vec<(usize, u32)>,
+    lines: Vec<LineMap>,
     return_type: TypeDebug,
     params: Vec<VarDebug>,
     locals: Vec<VarDebug>,

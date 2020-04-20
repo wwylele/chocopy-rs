@@ -935,7 +935,7 @@ impl<'a> Emitter<'a> {
         self.code[pos_else..pos_else + 4].copy_from_slice(&(else_delta as u32).to_le_bytes());
     }
 
-    pub fn emit_if_stmt(&mut self, stmt: &IfStmt, lines: &mut Vec<(usize, u32)>) {
+    pub fn emit_if_stmt(&mut self, stmt: &IfStmt, lines: &mut Vec<LineMap>) {
         self.emit_expression(&stmt.condition);
         // test al,al
         self.emit(&[0x84, 0xC0]);
@@ -1139,7 +1139,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    pub fn emit_while_stmt(&mut self, stmt: &WhileStmt, lines: &mut Vec<(usize, u32)>) {
+    pub fn emit_while_stmt(&mut self, stmt: &WhileStmt, lines: &mut Vec<LineMap>) {
         let pos_start = self.pos();
         self.emit_expression(&stmt.condition);
         // test al,al
@@ -1360,7 +1360,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    pub fn emit_for_stmt(&mut self, stmt: &ForStmt, lines: &mut Vec<(usize, u32)>) {
+    pub fn emit_for_stmt(&mut self, stmt: &ForStmt, lines: &mut Vec<LineMap>) {
         //// Compute the iterable
         self.emit_expression(&stmt.iterable);
         self.emit_check_none();
@@ -1447,33 +1447,31 @@ impl<'a> Emitter<'a> {
         self.emit_drop();
     }
 
-    pub fn emit_statement(&mut self, statement: &Stmt, lines: &mut Vec<(usize, u32)>) {
+    pub fn emit_statement(&mut self, statement: &Stmt, lines: &mut Vec<LineMap>) {
+        lines.push(LineMap {
+            code_pos: self.pos(),
+            line_number: statement.base().location.start.row,
+        });
         match statement {
             Stmt::ExprStmt(e) => {
-                lines.push((self.pos(), e.base().location.start.row));
                 self.emit_expression(&e.expr);
                 if e.expr.get_type() != &*TYPE_INT && e.expr.get_type() != &*TYPE_BOOL {
                     self.emit_drop();
                 }
             }
             Stmt::AssignStmt(stmt) => {
-                lines.push((self.pos(), stmt.base().location.start.row));
                 self.emit_assign(stmt);
             }
             Stmt::IfStmt(stmt) => {
-                lines.push((self.pos(), stmt.base().location.start.row));
                 self.emit_if_stmt(stmt, lines);
             }
             Stmt::WhileStmt(stmt) => {
-                lines.push((self.pos(), stmt.base().location.start.row));
                 self.emit_while_stmt(stmt, lines);
             }
             Stmt::ForStmt(stmt) => {
-                lines.push((self.pos(), stmt.base().location.start.row));
                 self.emit_for_stmt(stmt, lines);
             }
             Stmt::ReturnStmt(stmt) => {
-                lines.push((self.pos(), stmt.base().location.start.row));
                 if let Some(value) = &stmt.value {
                     self.emit_expression(value)
                 } else {
@@ -1677,7 +1675,10 @@ fn gen_function(
         }
     }
 
-    let mut lines = vec![(0, function.base().location.start.row)];
+    let mut lines = vec![LineMap {
+        code_pos: 0,
+        line_number: function.base().location.start.row,
+    }];
 
     for statement in &function.statements {
         code.emit_statement(statement, &mut lines);

@@ -437,9 +437,9 @@ impl Dwarf {
                     addend: 0,
                 }));
 
-                for &(code_pos, line) in &procedure_debug.lines {
-                    line_program.row().address_offset = code_pos as u64;
-                    line_program.row().line = line as u64;
+                for line_map in &procedure_debug.lines {
+                    line_program.row().address_offset = line_map.code_pos as u64;
+                    line_program.row().line = line_map.line_number as u64;
                     line_program.generate_row();
                 }
 
