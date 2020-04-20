@@ -44,7 +44,6 @@ struct Emitter<'a> {
     links: Vec<ChunkLink>,
     rsp_offset: usize, // offsets relative to rbp
     rsp_call_restore: Vec<usize>,
-    strings: Vec<(usize, String)>,
 }
 
 impl Platform {
@@ -75,7 +74,6 @@ impl<'a> Emitter<'a> {
             links: vec![],
             rsp_offset: 0,
             rsp_call_restore: vec![],
-            strings: vec![],
         }
     }
 
@@ -131,13 +129,17 @@ impl<'a> Emitter<'a> {
         self.rsp_offset -= spill;
     }
 
-    pub fn call(&mut self, name: &str) {
-        self.emit(&[0xe8]);
+    pub fn emit_link(&mut self, name: impl Into<String>, offset: i32) {
         self.links.push(ChunkLink {
             pos: self.pos(),
-            to: name.to_owned(),
+            to: ChunkLinkTarget::Symbol(name.into()),
         });
-        self.emit(&[0x00, 0x00, 0x00, 0x00]);
+        self.emit(&offset.to_le_bytes());
+    }
+
+    pub fn call(&mut self, name: &str) {
+        self.emit(&[0xe8]);
+        self.emit_link(name, 0);
         self.after_call();
     }
 
@@ -152,14 +154,7 @@ impl<'a> Emitter<'a> {
         self.after_call();
     }
 
-    pub fn finalize(mut self, procedure_debug: ProcedureDebug) -> Chunk {
-        for (pos, s) in &self.strings {
-            let dest = self.pos();
-            self.code.extend_from_slice(s.as_bytes());
-            let delta = (dest - *pos - 4) as u32;
-            self.code[*pos..*pos + 4].copy_from_slice(&delta.to_le_bytes());
-        }
-
+    pub fn finalize(self, procedure_debug: ProcedureDebug) -> Chunk {
         Chunk {
             name: self.name,
             code: self.code,
@@ -246,11 +241,7 @@ impl<'a> Emitter<'a> {
                 self.emit(&[0x48, 0x8D, 0x3D]);
             }
         }
-        self.links.push(ChunkLink {
-            pos: self.pos(),
-            to: prototype.to_owned(),
-        });
-        self.emit(&[0; 4]);
+        self.emit_link(prototype, 0);
         self.prepare_call(PLATFORM.stack_reserve());
         self.call(BUILTIN_ALLOC_OBJ);
     }
@@ -353,7 +344,10 @@ impl<'a> Emitter<'a> {
             self.emit(&[0x48, 0x8D, 0x78, 0x18]);
             // lea rsi,[rip+{STR}]
             self.emit(&[0x48, 0x8d, 0x35]);
-            self.strings.push((self.pos(), s.to_owned()));
+            self.links.push(ChunkLink {
+                pos: self.pos(),
+                to: ChunkLinkTarget::Data(s.into()),
+            });
             self.emit(&[0; 4]);
             // mov rcx,{len}
             self.emit(&[0x48, 0xc7, 0xc1]);
@@ -1027,27 +1021,15 @@ impl<'a> Emitter<'a> {
             if target_type == &*TYPE_INT {
                 // mov eax,[rip+{}]
                 self.emit(&[0x8B, 0x05]);
-                self.links.push(ChunkLink {
-                    pos: self.pos(),
-                    to: GLOBAL_SECTION.to_owned(),
-                });
-                self.emit(&offset.to_le_bytes());
+                self.emit_link(GLOBAL_SECTION, offset);
             } else if target_type == &*TYPE_BOOL {
                 // mov al,[rip+{}]
                 self.emit(&[0x8A, 0x05]);
-                self.links.push(ChunkLink {
-                    pos: self.pos(),
-                    to: GLOBAL_SECTION.to_owned(),
-                });
-                self.emit(&offset.to_le_bytes());
+                self.emit_link(GLOBAL_SECTION, offset);
             } else {
                 // mov rax,[rip+{}]
                 self.emit(&[0x48, 0x8B, 0x05]);
-                self.links.push(ChunkLink {
-                    pos: self.pos(),
-                    to: GLOBAL_SECTION.to_owned(),
-                });
-                self.emit(&offset.to_le_bytes());
+                self.emit_link(GLOBAL_SECTION, offset);
                 self.emit_clone();
             }
         } else {
@@ -1187,21 +1169,13 @@ impl<'a> Emitter<'a> {
                 self.emit_push_rax();
                 // mov rax,[rip+{}]
                 self.emit(&[0x48, 0x8B, 0x05]);
-                self.links.push(ChunkLink {
-                    pos: self.pos(),
-                    to: GLOBAL_SECTION.to_owned(),
-                });
-                self.emit(&offset.to_le_bytes());
+                self.emit_link(GLOBAL_SECTION, offset);
                 self.emit_drop();
                 self.emit_pop_rax();
                 // mov [rip+{}],rax
                 self.emit(&[0x48, 0x89, 0x05]);
             }
-            self.links.push(ChunkLink {
-                pos: self.pos(),
-                to: GLOBAL_SECTION.to_owned(),
-            });
-            self.emit(&offset.to_le_bytes());
+            self.emit_link(GLOBAL_SECTION, offset);
         } else {
             if level == self.level + 1 {
                 // lea rdi,[rbp+{}]
@@ -1540,11 +1514,7 @@ impl<'a> Emitter<'a> {
             // mov [rip+{}],rax
             self.emit(&[0x48, 0x89, 0x05]);
         }
-        self.links.push(ChunkLink {
-            pos: self.pos(),
-            to: GLOBAL_SECTION.to_owned(),
-        });
-        self.emit(&offset.to_le_bytes());
+        self.emit_link(GLOBAL_SECTION, offset);
     }
 
     pub fn emit_global_var_drop(&mut self, decl: &VarDef) {
@@ -1560,11 +1530,7 @@ impl<'a> Emitter<'a> {
         if target_type != *TYPE_INT && target_type != *TYPE_BOOL {
             // mov rax,[rip+{}]
             self.emit(&[0x48, 0x8B, 0x05]);
-            self.links.push(ChunkLink {
-                pos: self.pos(),
-                to: GLOBAL_SECTION.to_owned(),
-            });
-            self.emit(&offset.to_le_bytes());
+            self.emit_link(GLOBAL_SECTION, offset);
             self.emit_drop();
         }
     }
@@ -1736,11 +1702,7 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
             code.emit(&[0x48, 0x8D, 0x3D]);
         }
     }
-    code.links.push(ChunkLink {
-        pos: code.pos(),
-        to: class_name.to_owned() + ".$proto",
-    });
-    code.emit(&[0; 4]);
+    code.emit_link(class_name.to_owned() + ".$proto", 0);
 
     code.call(BUILTIN_ALLOC_OBJ);
     code.emit_push_rax();
@@ -1945,11 +1907,7 @@ fn gen_input() -> Chunk {
         Platform::Windows => code.emit(&[0x48, 0x8D, 0x0D]), // lea rcx,[rip+{}]
         Platform::Linux => code.emit(&[0x48, 0x8D, 0x3D]),   // lea rdi,[rip+{}]
     }
-    code.links.push(ChunkLink {
-        pos: code.pos(),
-        to: STR_PROTOTYPE.to_owned(),
-    });
-    code.emit(&[0; 4]);
+    code.emit_link(STR_PROTOTYPE, 0);
     code.prepare_call(PLATFORM.stack_reserve());
     code.call(BUILTIN_INPUT);
     code.end_proc();
@@ -2169,11 +2127,11 @@ fn gen_special_proto(name: &str, size: i32, tag: i32, dtor: &str) -> Chunk {
     let links = vec![
         ChunkLink {
             pos: 8,
-            to: dtor.to_owned(),
+            to: ChunkLinkTarget::Symbol(dtor.to_owned()),
         },
         ChunkLink {
             pos: 16,
-            to: "object.__init__".to_owned(),
+            to: ChunkLinkTarget::Symbol("object.__init__".to_owned()),
         },
     ];
     Chunk {
@@ -2335,7 +2293,7 @@ pub(super) fn gen_code_set(ast: Program) -> CodeSet {
             .iter()
             .map(|(_, method)| ChunkLink {
                 pos: method.offset as usize,
-                to: method.link_name.clone(),
+                to: ChunkLinkTarget::Symbol(method.link_name.clone()),
             })
             .collect();
         chunks.push(Chunk {

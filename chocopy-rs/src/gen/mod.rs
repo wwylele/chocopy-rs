@@ -123,9 +123,14 @@ enum ChunkExtra {
     Data,
 }
 
+enum ChunkLinkTarget {
+    Symbol(String),
+    Data(Vec<u8>),
+}
+
 struct ChunkLink {
     pos: usize,
-    to: String,
+    to: ChunkLinkTarget,
 }
 
 struct Chunk {
@@ -362,6 +367,8 @@ pub fn gen(
         }
     }
 
+    let mut data_id = 0;
+
     for chunk in &code_set.chunks {
         let (from, from_offset) = section_map[&chunk.name];
         let size;
@@ -380,6 +387,30 @@ pub fn gen(
             addend = 0;
         };
         for link in &chunk.links {
+            let symbol = match &link.to {
+                ChunkLinkTarget::Symbol(symbol) => obj.symbol_id(symbol.as_bytes()).unwrap(),
+                ChunkLinkTarget::Data(data) => {
+                    let name = format!("$str{}", data_id);
+                    data_id += 1;
+                    let (id, offset) = obj.add_subsection(
+                        object::write::StandardSection::ReadOnlyData,
+                        name.as_bytes(),
+                        &data,
+                        1,
+                    );
+
+                    obj.add_symbol(object::write::Symbol {
+                        name: name.into(),
+                        value: offset,
+                        size: 0,
+                        kind: object::SymbolKind::Data,
+                        scope: object::SymbolScope::Compilation,
+                        weak: false,
+                        section: object::write::SymbolSection::Section(id),
+                        flags: object::SymbolFlags::None,
+                    })
+                }
+            };
             obj.add_relocation(
                 from,
                 object::write::Relocation {
@@ -387,7 +418,7 @@ pub fn gen(
                     size,
                     kind,
                     encoding,
-                    symbol: obj.symbol_id(link.to.as_bytes()).unwrap(),
+                    symbol,
                     addend,
                 },
             )?;
