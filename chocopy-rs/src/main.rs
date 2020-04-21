@@ -16,29 +16,11 @@ fn print_usage(program: &str, opts: Options) {
     print!("{}", opts.usage(&brief));
 }
 
-fn check_error(file: &str, ast: &Ast) -> bool {
-    let errors = &ast.program().errors.errors().errors;
+fn check_error(file: &str, ast: &Program) -> bool {
+    let errors = &ast.errors.errors;
     if errors.is_empty() {
         true
     } else {
-        let mut errors: Vec<_> = errors
-            .iter()
-            .map(|e| {
-                let Error::CompilerError(c) = e;
-                c
-            })
-            .collect();
-        errors.sort_by_key(|e| {
-            let CompilerError {
-                base:
-                    NodeBase {
-                        location: Location { start, .. },
-                        ..
-                    },
-                ..
-            } = e;
-            (start.row, start.col)
-        });
         let file = File::open(file).unwrap();
         let mut lines = BufReader::new(file)
             .lines()
@@ -56,14 +38,14 @@ fn check_error(file: &str, ast: &Ast) -> bool {
                 line = lines.next().map(|s| s.replace('\t', " "));
                 current_row = row;
             }
-            println!("{}, {}: {}", start.row, start.col, error.message);
+            eprintln!("{}, {}: {}", start.row, start.col, error.message);
             if let Some(line) = &line {
-                println!("    | {}", line);
-                print!("    | ");
+                eprintln!("    | {}", line);
+                eprint!("    | ");
                 for _ in 0..std::cmp::max(start.col as i64 - 1, 0) {
-                    print!(" ");
+                    eprint!(" ");
                 }
-                println!("^");
+                eprintln!("^");
             }
         }
         false
@@ -78,12 +60,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     opts.optflag("h", "help", "print this help menu");
     opts.optflag("a", "ast", "output bare AST");
     opts.optflag("t", "typed", "output typed AST");
-    opts.optflag("n", "no-link", "output object file without linking");
+    opts.optflag("o", "obj", "output object file without linking");
+    opts.optflag("s", "static", "Link against library statically if possible");
 
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(f) => {
-            println!("Failed to parse the arguments: {}", f);
+            eprintln!("Failed to parse the arguments: {}", f);
             print_usage(&program, opts);
             return Ok(());
         }
@@ -97,7 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let input = if let Some(input) = matches.free.get(0) {
         input
     } else {
-        println!("Please specifiy source file");
+        eprintln!("Please specifiy source file");
         return Ok(());
     };
 
@@ -126,11 +109,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output = if let Some(output) = matches.free.get(1) {
         output
     } else {
-        println!("Please specifiy output path");
+        eprintln!("Please specifiy output path");
         return Ok(());
     };
 
-    gen::gen(input, ast, output, matches.opt_present("n"))?;
+    gen::gen(
+        input,
+        ast,
+        output,
+        matches.opt_present("o"),
+        matches.opt_present("s"),
+    )?;
 
     Ok(())
 }

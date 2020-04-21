@@ -128,8 +128,7 @@ async fn lex_string<
             }
             // normal char
             c @ ' '..='~' => {
-                if let 'a'..='z' | 'A'..='Z' | '_' | '0'..='9' = c {
-                } else {
+                if !matches!(c, 'a'..='z' | 'A'..='Z' | '_' | '0'..='9') {
                     is_id = false;
                 }
                 s.push(c);
@@ -149,7 +148,7 @@ async fn lex_string<
         reader.next().await;
     }
     let end = reader.previous_position();
-    if let Some('0'..='9') | None = s.chars().next() {
+    if matches!(s.chars().next(), Some('0'..='9') | None) {
         is_id = false;
     }
     put_token(

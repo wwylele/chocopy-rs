@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 use std::convert::*;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, PartialOrd, Ord)]
 pub struct Position {
     pub row: u32,
     pub col: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, PartialOrd, Ord)]
 #[serde(from = "[u32; 4]", into = "[u32; 4]")]
 pub struct Location {
     pub start: Position,

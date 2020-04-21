@@ -1,5 +1,5 @@
 use crate::location::*;
-use lazy_static::*;
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -75,8 +75,8 @@ pub enum Token {
     Eof,
 }
 
-lazy_static! {
-    pub static ref KEYWORDS: HashMap<&'static str, Token> = vec![
+pub static KEYWORDS: Lazy<HashMap<&'static str, Token>> = Lazy::new(|| {
+    vec![
         ("False", Token::False),
         ("None", Token::None),
         ("True", Token::True),
@@ -114,14 +114,17 @@ lazy_static! {
         ("yield", Token::Yield),
     ]
     .into_iter()
-    .collect();
-    pub static ref OPERATORS: HashMap<char, HashMap<char, Token>> = vec![
+    .collect()
+});
+
+pub static OPERATORS: Lazy<HashMap<char, HashMap<char, Token>>> = Lazy::new(|| {
+    vec![
         ('+', vec![('\0', Token::Plus)].into_iter().collect()),
         (
             '-',
             vec![('\0', Token::Minus), ('>', Token::Arrow)]
                 .into_iter()
-                .collect()
+                .collect(),
         ),
         ('*', vec![('\0', Token::Multiply)].into_iter().collect()),
         ('/', vec![('/', Token::Divide)].into_iter().collect()),
@@ -130,19 +133,19 @@ lazy_static! {
             '<',
             vec![('\0', Token::Less), ('=', Token::LessEqual)]
                 .into_iter()
-                .collect()
+                .collect(),
         ),
         (
             '>',
             vec![('\0', Token::Greater), ('=', Token::GreaterEqual)]
                 .into_iter()
-                .collect()
+                .collect(),
         ),
         (
             '=',
             vec![('\0', Token::Assign), ('=', Token::Equal)]
                 .into_iter()
-                .collect()
+                .collect(),
         ),
         ('!', vec![('=', Token::NotEqual)].into_iter().collect()),
         ('(', vec![('\0', Token::LeftPar)].into_iter().collect()),
@@ -154,8 +157,8 @@ lazy_static! {
         ('.', vec![('\0', Token::Dot)].into_iter().collect()),
     ]
     .into_iter()
-    .collect();
-}
+    .collect()
+});
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ComplexToken {

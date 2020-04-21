@@ -2,7 +2,7 @@ use super::*;
 
 struct FuncSlot {
     link_name: String,
-    level: u32, // 0 = global function
+    level: u32, // 0 = global function / method
 }
 
 struct VarSlot {
@@ -36,15 +36,14 @@ struct ClassSlot {
 
 struct Emitter<'a> {
     name: String,
-    storage_env: Option<&'a mut StorageEnv>,
+    storage_env: Option<&'a StorageEnv>,
     classes: Option<&'a HashMap<String, ClassSlot>>,
-    clean_up_list: &'a [i32], // offsets relative to rbp
+    clean_up_list: Vec<i32>, // offsets relative to rbp
     level: u32,
     code: Vec<u8>,
     links: Vec<ChunkLink>,
-    rsp_aligned: bool,
-    rsp_call_restore: Vec<(usize, bool)>,
-    strings: Vec<(usize, String)>,
+    rsp_offset: usize, // offsets relative to rbp
+    rsp_call_restore: Vec<usize>,
 }
 
 impl Platform {
@@ -59,9 +58,9 @@ impl Platform {
 impl<'a> Emitter<'a> {
     pub fn new(
         name: &str,
-        storage_env: Option<&'a mut StorageEnv>,
+        storage_env: Option<&'a StorageEnv>,
         classes: Option<&'a HashMap<String, ClassSlot>>,
-        clean_up_list: &'a [i32],
+        clean_up_list: Vec<i32>,
         level: u32,
     ) -> Emitter<'a> {
         Emitter {
@@ -73,10 +72,17 @@ impl<'a> Emitter<'a> {
             // push rbp; mov rbp,rsp
             code: vec![0x55, 0x48, 0x89, 0xe5],
             links: vec![],
-            rsp_aligned: true,
+            rsp_offset: 0,
             rsp_call_restore: vec![],
-            strings: vec![],
         }
+    }
+
+    pub fn storage_env(&self) -> &'a StorageEnv {
+        self.storage_env.as_ref().unwrap()
+    }
+
+    pub fn classes(&self) -> &'a HashMap<String, ClassSlot> {
+        self.classes.as_ref().unwrap()
     }
 
     pub fn emit(&mut self, instruction: &[u8]) {
@@ -90,7 +96,7 @@ impl<'a> Emitter<'a> {
     pub fn end_proc(&mut self) {
         if !self.clean_up_list.is_empty() {
             self.emit_push_rax();
-            for &offset in self.clean_up_list {
+            for offset in self.clean_up_list.clone() {
                 // mov rax,[rbp+{}]
                 self.emit(&[0x48, 0x8B, 0x85]);
                 self.emit(&offset.to_le_bytes());
@@ -104,32 +110,36 @@ impl<'a> Emitter<'a> {
 
     pub fn prepare_call(&mut self, stack_reserve: usize) {
         let mut spill = stack_reserve;
-        if self.rsp_aligned != (spill % 2 == 0) {
+        if (self.rsp_offset / 8) % 2 != spill % 2 {
             spill += 1;
         }
         spill *= 8;
         // sub rsp,{spill}
         self.emit(&[0x48, 0x81, 0xEC]);
         self.emit(&(spill as u32).to_le_bytes());
-        self.rsp_call_restore.push((spill, self.rsp_aligned));
-        self.rsp_aligned = true;
+        self.rsp_call_restore.push(spill);
+        self.rsp_offset += spill;
     }
 
     pub fn after_call(&mut self) {
-        let (spill, rsp_aligned) = self.rsp_call_restore.pop().unwrap();
+        let spill = self.rsp_call_restore.pop().unwrap();
         // add rsp,{spill}
         self.emit(&[0x48, 0x81, 0xC4]);
         self.emit(&(spill as u32).to_le_bytes());
-        self.rsp_aligned = rsp_aligned;
+        self.rsp_offset -= spill;
+    }
+
+    pub fn emit_link(&mut self, name: impl Into<String>, offset: i32) {
+        self.links.push(ChunkLink {
+            pos: self.pos(),
+            to: ChunkLinkTarget::Symbol(name.into()),
+        });
+        self.emit(&offset.to_le_bytes());
     }
 
     pub fn call(&mut self, name: &str) {
         self.emit(&[0xe8]);
-        self.links.push(ChunkLink {
-            pos: self.pos(),
-            to: name.to_owned(),
-        });
-        self.emit(&[0x00, 0x00, 0x00, 0x00]);
+        self.emit_link(name, 0);
         self.after_call();
     }
 
@@ -144,14 +154,7 @@ impl<'a> Emitter<'a> {
         self.after_call();
     }
 
-    pub fn finalize(mut self, procedure_debug: ProcedureDebug) -> Chunk {
-        for (pos, s) in &self.strings {
-            let dest = self.pos();
-            self.code.extend_from_slice(s.as_bytes());
-            let delta = (dest - *pos - 4) as u32;
-            self.code[*pos..*pos + 4].copy_from_slice(&delta.to_le_bytes());
-        }
-
+    pub fn finalize(self, procedure_debug: ProcedureDebug) -> Chunk {
         Chunk {
             name: self.name,
             code: self.code,
@@ -162,67 +165,67 @@ impl<'a> Emitter<'a> {
 
     pub fn emit_push_rax(&mut self) {
         self.emit(&[0x50]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset += 8;
     }
 
     pub fn emit_push_rcx(&mut self) {
         self.emit(&[0x51]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset += 8;
     }
 
     pub fn emit_push_rdx(&mut self) {
         self.emit(&[0x52]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset += 8;
     }
 
     pub fn emit_push_rsi(&mut self) {
         self.emit(&[0x56]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset += 8;
     }
 
     pub fn emit_push_rdi(&mut self) {
         self.emit(&[0x57]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset += 8;
     }
 
     pub fn emit_push_r10(&mut self) {
         self.emit(&[0x41, 0x52]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset += 8;
     }
 
     pub fn emit_push_r11(&mut self) {
         self.emit(&[0x41, 0x53]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset += 8;
     }
 
     pub fn emit_pop_rax(&mut self) {
         self.emit(&[0x58]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset -= 8;
     }
 
     pub fn emit_pop_rcx(&mut self) {
         self.emit(&[0x59]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset -= 8;
     }
 
     pub fn emit_pop_rsi(&mut self) {
         self.emit(&[0x5e]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset -= 8;
     }
 
     pub fn emit_pop_rdi(&mut self) {
         self.emit(&[0x5f]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset -= 8;
     }
 
     pub fn emit_pop_r10(&mut self) {
         self.emit(&[0x41, 0x5A]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset -= 8;
     }
 
     pub fn emit_pop_r11(&mut self) {
         self.emit(&[0x41, 0x5B]);
-        self.rsp_aligned = !self.rsp_aligned;
+        self.rsp_offset -= 8;
     }
 
     pub fn call_builtin_alloc(&mut self, prototype: &str) {
@@ -238,11 +241,7 @@ impl<'a> Emitter<'a> {
                 self.emit(&[0x48, 0x8D, 0x3D]);
             }
         }
-        self.links.push(ChunkLink {
-            pos: self.pos(),
-            to: prototype.to_owned(),
-        });
-        self.emit(&[0; 4]);
+        self.emit_link(prototype, 0);
         self.prepare_call(PLATFORM.stack_reserve());
         self.call(BUILTIN_ALLOC_OBJ);
     }
@@ -345,7 +344,10 @@ impl<'a> Emitter<'a> {
             self.emit(&[0x48, 0x8D, 0x78, 0x18]);
             // lea rsi,[rip+{STR}]
             self.emit(&[0x48, 0x8d, 0x35]);
-            self.strings.push((self.pos(), s.to_owned()));
+            self.links.push(ChunkLink {
+                pos: self.pos(),
+                to: ChunkLinkTarget::Data(s.into()),
+            });
             self.emit(&[0; 4]);
             // mov rcx,{len}
             self.emit(&[0x48, 0xc7, 0xc1]);
@@ -503,11 +505,13 @@ impl<'a> Emitter<'a> {
         };
 
         self.emit_expression(&expr.left);
+        self.emit_check_none();
         // mov rsi,QWORD PTR [rax+0x10]
         self.emit(&[0x48, 0x8B, 0x70, 0x10]);
         self.emit_push_rax();
         self.emit_push_rsi();
         self.emit_expression(&expr.right);
+        self.emit_check_none();
         self.emit_pop_rsi();
         // add rsi,QWORD PTR [rax+0x10]
         self.emit(&[0x48, 0x03, 0x70, 0x10]);
@@ -519,7 +523,7 @@ impl<'a> Emitter<'a> {
 
         // mov rsi,[rsp+16]
         self.emit(&[0x48, 0x8B, 0x74, 0x24, 0x10]);
-        let source_element = if let Some(ValueType::ListValueType(l)) = &expr.left.inferred_type {
+        let source_element = if let ValueType::ListValueType(l) = expr.left.get_type() {
             &*l.element_type
         } else {
             panic!()
@@ -528,7 +532,7 @@ impl<'a> Emitter<'a> {
 
         // mov rsi,[rsp+8]
         self.emit(&[0x48, 0x8B, 0x74, 0x24, 0x08]);
-        let source_element = if let Some(ValueType::ListValueType(l)) = &expr.right.inferred_type {
+        let source_element = if let ValueType::ListValueType(l) = expr.right.get_type() {
             &*l.element_type
         } else {
             panic!()
@@ -598,7 +602,7 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn emit_binary_expr(&mut self, expr: &BinaryExpr, target_type: &ValueType) {
-        let left_type = expr.left.inferred_type.as_ref().unwrap();
+        let left_type = expr.left.get_type();
         if expr.operator == BinaryOp::Add && left_type == &*TYPE_STR {
             self.emit_string_add(expr);
         } else if expr.operator == BinaryOp::Add && left_type != &*TYPE_INT {
@@ -727,7 +731,7 @@ impl<'a> Emitter<'a> {
     pub fn emit_call_expr(
         &mut self,
         args: &[Expr],
-        func_type: &Option<FuncTypeWrapper>,
+        func_type: &Option<FuncType>,
         name: &str,
         virtual_call: bool,
     ) {
@@ -736,9 +740,9 @@ impl<'a> Emitter<'a> {
         for (i, arg) in args.iter().enumerate() {
             self.emit_expression(arg);
 
-            let param_type = &func_type.as_ref().unwrap().func_type().parameters[i];
+            let param_type = &func_type.as_ref().unwrap().parameters[i];
 
-            self.emit_coerce(arg.inferred_type.as_ref().unwrap(), param_type);
+            self.emit_coerce(arg.get_type(), param_type);
 
             if i == 0 && virtual_call {
                 self.emit_check_none();
@@ -751,20 +755,22 @@ impl<'a> Emitter<'a> {
         }
 
         if virtual_call {
-            let offset = if let Some(ValueType::ClassValueType(c)) = &args[0].inferred_type {
-                if let "int" | "bool" | "str" | "<None>" | "<Empty>" = c.class_name.as_str() {
+            let offset = if let ValueType::ClassValueType(c) = args[0].get_type() {
+                if matches!(
+                    c.class_name.as_str(),
+                    "int" | "bool" | "str" | "<None>" | "<Empty>"
+                ) {
                     assert!(name == "__init__");
                     16
                 } else {
-                    self.classes.as_ref().unwrap()[&c.class_name].methods[name].offset
+                    self.classes()[&c.class_name].methods[name].offset
                 }
             } else {
                 panic!()
             };
             self.call_virtual(offset);
         } else {
-            let slot = if let Some(EnvSlot::Func(f)) = self.storage_env.as_ref().unwrap().get(name)
-            {
+            let slot = if let Some(EnvSlot::Func(f)) = self.storage_env().get(name) {
                 f
             } else {
                 panic!()
@@ -827,7 +833,7 @@ impl<'a> Emitter<'a> {
         // cdqe
         self.emit(&[0x48, 0x98]);
         self.emit_pop_rsi();
-        let element_type = if let Some(ValueType::ListValueType(l)) = &expr.list.inferred_type {
+        let element_type = if let ValueType::ListValueType(l) = expr.list.get_type() {
             &*l.element_type
         } else {
             panic!()
@@ -869,8 +875,8 @@ impl<'a> Emitter<'a> {
         // mov rsi,rax
         self.emit(&[0x48, 0x89, 0xC6]);
 
-        let slot = if let Some(ValueType::ClassValueType(c)) = &expr.object.inferred_type {
-            &self.classes.as_ref().unwrap()[&c.class_name].attributes[&expr.member.id().name]
+        let slot = if let ValueType::ClassValueType(c) = expr.object.get_type() {
+            &self.classes()[&c.class_name].attributes[&expr.member.name]
         } else {
             panic!()
         };
@@ -907,7 +913,7 @@ impl<'a> Emitter<'a> {
         self.emit(&[0; 4]);
 
         self.emit_expression(&expr.then_expr);
-        self.emit_coerce(&expr.then_expr.inferred_type.as_ref().unwrap(), target_type);
+        self.emit_coerce(&expr.then_expr.get_type(), target_type);
 
         // jmp
         self.emit(&[0xe9]);
@@ -917,13 +923,13 @@ impl<'a> Emitter<'a> {
         self.code[pos_if..pos_if + 4].copy_from_slice(&(if_delta as u32).to_le_bytes());
 
         self.emit_expression(&expr.else_expr);
-        self.emit_coerce(&expr.else_expr.inferred_type.as_ref().unwrap(), target_type);
+        self.emit_coerce(&expr.else_expr.get_type(), target_type);
 
         let else_delta = self.pos() - pos_else - 4;
         self.code[pos_else..pos_else + 4].copy_from_slice(&(else_delta as u32).to_le_bytes());
     }
 
-    pub fn emit_if_stmt(&mut self, stmt: &IfStmt, lines: &mut Vec<(usize, u32)>) {
+    pub fn emit_if_stmt(&mut self, stmt: &IfStmt, lines: &mut Vec<LineMap>) {
         self.emit_expression(&stmt.condition);
         // test al,al
         self.emit(&[0x84, 0xC0]);
@@ -982,7 +988,7 @@ impl<'a> Emitter<'a> {
 
         for (i, element) in expr.elements.iter().enumerate() {
             self.emit_expression(element);
-            self.emit_coerce(element.inferred_type.as_ref().unwrap(), element_type);
+            self.emit_coerce(element.get_type(), element_type);
             // mov rdi,[rsp]
             self.emit(&[0x48, 0x8B, 0x3C, 0x24]);
             if element_type == &*TYPE_INT {
@@ -1003,40 +1009,27 @@ impl<'a> Emitter<'a> {
         self.emit_pop_rax();
     }
 
-    pub fn emit_load_var(&mut self, identifier: &Identifier, target_type: &ValueType) {
-        let (offset, level) = if let Some(EnvSlot::Var(v, _)) =
-            self.storage_env.as_ref().unwrap().get(&identifier.name)
-        {
-            (v.offset, v.level)
-        } else {
-            panic!()
-        };
+    pub fn emit_load_var(&mut self, identifier: &Variable, target_type: &ValueType) {
+        let (offset, level) =
+            if let Some(EnvSlot::Var(v, _)) = self.storage_env().get(&identifier.name) {
+                (v.offset, v.level)
+            } else {
+                panic!()
+            };
 
         if level == 0 {
             if target_type == &*TYPE_INT {
                 // mov eax,[rip+{}]
                 self.emit(&[0x8B, 0x05]);
-                self.links.push(ChunkLink {
-                    pos: self.pos(),
-                    to: GLOBAL_SECTION.to_owned(),
-                });
-                self.emit(&offset.to_le_bytes());
+                self.emit_link(GLOBAL_SECTION, offset);
             } else if target_type == &*TYPE_BOOL {
                 // mov al,[rip+{}]
                 self.emit(&[0x8A, 0x05]);
-                self.links.push(ChunkLink {
-                    pos: self.pos(),
-                    to: GLOBAL_SECTION.to_owned(),
-                });
-                self.emit(&offset.to_le_bytes());
+                self.emit_link(GLOBAL_SECTION, offset);
             } else {
                 // mov rax,[rip+{}]
                 self.emit(&[0x48, 0x8B, 0x05]);
-                self.links.push(ChunkLink {
-                    pos: self.pos(),
-                    to: GLOBAL_SECTION.to_owned(),
-                });
-                self.emit(&offset.to_le_bytes());
+                self.emit_link(GLOBAL_SECTION, offset);
                 self.emit_clone();
             }
         } else {
@@ -1063,8 +1056,8 @@ impl<'a> Emitter<'a> {
 
     pub fn emit_expression(&mut self, expression: &Expr) {
         match &expression.content {
-            ExprContent::Identifier(identifier) => {
-                self.emit_load_var(identifier, expression.inferred_type.as_ref().unwrap());
+            ExprContent::Variable(identifier) => {
+                self.emit_load_var(identifier, expression.get_type());
             }
             ExprContent::NoneLiteral(_) => {
                 self.emit_none_literal();
@@ -1094,35 +1087,33 @@ impl<'a> Emitter<'a> {
                 }
             }
             ExprContent::BinaryExpr(expr) => {
-                self.emit_binary_expr(expr, expression.inferred_type.as_ref().unwrap());
+                self.emit_binary_expr(expr, expression.get_type());
             }
             ExprContent::CallExpr(expr) => {
                 self.emit_call_expr(
                     &expr.args,
-                    &expr.function.id().inferred_type,
-                    &expr.function.id().name,
+                    &expr.function.inferred_type,
+                    &expr.function.name,
                     false,
                 );
             }
             ExprContent::MethodCallExpr(expr) => {
-                let method = expr.method.member();
+                let method = &expr.method;
                 let args: Vec<Expr> = std::iter::once(method.object.clone())
                     .chain(expr.args.iter().cloned())
                     .collect();
-                self.emit_call_expr(&args, &method.inferred_type, &method.member.id().name, true);
+                self.emit_call_expr(&args, &method.inferred_type, &method.member.name, true);
             }
             ExprContent::IndexExpr(expr) => {
-                if expr.list.inferred_type.as_ref().unwrap() == &*TYPE_STR {
+                if expr.list.get_type() == &*TYPE_STR {
                     self.emit_str_index(&*expr);
                 } else {
                     self.emit_list_index(&*expr);
                 }
             }
-            ExprContent::IfExpr(expr) => {
-                self.emit_if_expr(expr, expression.inferred_type.as_ref().unwrap())
-            }
+            ExprContent::IfExpr(expr) => self.emit_if_expr(expr, expression.get_type()),
             ExprContent::ListExpr(expr) => {
-                self.emit_list_expr(expr, expression.inferred_type.as_ref().unwrap());
+                self.emit_list_expr(expr, expression.get_type());
             }
             ExprContent::MemberExpr(expr) => {
                 self.emit_member_expr(expr);
@@ -1130,7 +1121,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    pub fn emit_while_stmt(&mut self, stmt: &WhileStmt, lines: &mut Vec<(usize, u32)>) {
+    pub fn emit_while_stmt(&mut self, stmt: &WhileStmt, lines: &mut Vec<LineMap>) {
         let pos_start = self.pos();
         self.emit_expression(&stmt.condition);
         // test al,al
@@ -1160,12 +1151,11 @@ impl<'a> Emitter<'a> {
     ) {
         // rax: value to assign
 
-        let (offset, level) =
-            if let Some(EnvSlot::Var(v, _)) = self.storage_env.as_ref().unwrap().get(name) {
-                (v.offset, v.level)
-            } else {
-                panic!()
-            };
+        let (offset, level) = if let Some(EnvSlot::Var(v, _)) = self.storage_env().get(name) {
+            (v.offset, v.level)
+        } else {
+            panic!()
+        };
 
         self.emit_coerce(source_type, target_type);
         if level == 0 {
@@ -1179,21 +1169,13 @@ impl<'a> Emitter<'a> {
                 self.emit_push_rax();
                 // mov rax,[rip+{}]
                 self.emit(&[0x48, 0x8B, 0x05]);
-                self.links.push(ChunkLink {
-                    pos: self.pos(),
-                    to: GLOBAL_SECTION.to_owned(),
-                });
-                self.emit(&offset.to_le_bytes());
+                self.emit_link(GLOBAL_SECTION, offset);
                 self.emit_drop();
                 self.emit_pop_rax();
                 // mov [rip+{}],rax
                 self.emit(&[0x48, 0x89, 0x05]);
             }
-            self.links.push(ChunkLink {
-                pos: self.pos(),
-                to: GLOBAL_SECTION.to_owned(),
-            });
-            self.emit(&offset.to_le_bytes());
+            self.emit_link(GLOBAL_SECTION, offset);
         } else {
             if level == self.level + 1 {
                 // lea rdi,[rbp+{}]
@@ -1226,14 +1208,14 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn emit_assign(&mut self, stmt: &AssignStmt) {
-        let source_type = stmt.value.inferred_type.as_ref().unwrap();
+        let source_type = stmt.value.get_type();
         self.emit_expression(&stmt.value);
         self.emit_push_rax();
 
         for target in &stmt.targets {
-            let target_type = target.inferred_type.as_ref().unwrap();
+            let target_type = target.get_type();
             match &target.content {
-                ExprContent::Identifier(identifier) => {
+                ExprContent::Variable(identifier) => {
                     // mov rax,[rsp]
                     self.emit(&[0x48, 0x8B, 0x04, 0x24]);
                     if source_type != &*TYPE_INT && source_type != &*TYPE_BOOL {
@@ -1305,13 +1287,11 @@ impl<'a> Emitter<'a> {
                     self.emit_check_none();
                     self.emit_push_rax();
 
-                    let slot =
-                        if let Some(ValueType::ClassValueType(c)) = &expr.object.inferred_type {
-                            &self.classes.as_ref().unwrap()[&c.class_name].attributes
-                                [&expr.member.id().name]
-                        } else {
-                            panic!()
-                        };
+                    let slot = if let ValueType::ClassValueType(c) = expr.object.get_type() {
+                        &self.classes()[&c.class_name].attributes[&expr.member.name]
+                    } else {
+                        panic!()
+                    };
 
                     if slot.target_type != *TYPE_INT && slot.target_type != *TYPE_BOOL {
                         // mov rax,[rax+{}]
@@ -1354,11 +1334,12 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    pub fn emit_for_stmt(&mut self, stmt: &ForStmt, lines: &mut Vec<(usize, u32)>) {
+    pub fn emit_for_stmt(&mut self, stmt: &ForStmt, lines: &mut Vec<LineMap>) {
         //// Compute the iterable
         self.emit_expression(&stmt.iterable);
         self.emit_check_none();
         self.emit_push_rax();
+        self.clean_up_list.push(self.rsp_offset as i32);
         // xor rax,rax
         self.emit(&[0x48, 0x31, 0xC0]);
 
@@ -1376,8 +1357,9 @@ impl<'a> Emitter<'a> {
         self.emit_push_rax();
 
         //// Compute the element
-        let iterable_type = stmt.iterable.inferred_type.as_ref().unwrap();
-        let source_type = if iterable_type == &*TYPE_STR {
+        let iterable_type = stmt.iterable.get_type();
+        let source_type;
+        if iterable_type == &*TYPE_STR {
             // mov rsi,1
             self.emit(&[0x48, 0xc7, 0xc6, 0x01, 0x00, 0x00, 0x00]);
             self.call_builtin_alloc(STR_PROTOTYPE);
@@ -1389,7 +1371,8 @@ impl<'a> Emitter<'a> {
             self.emit(&[0x45, 0x8A, 0x54, 0x33, 0x18]);
             // mov [rax+24],r10b
             self.emit(&[0x44, 0x88, 0x50, 0x18]);
-            &*TYPE_STR
+
+            source_type = &*TYPE_STR;
         } else {
             let element_type = if let ValueType::ListValueType(l) = iterable_type {
                 &*l.element_type
@@ -1409,12 +1392,12 @@ impl<'a> Emitter<'a> {
                 self.emit_clone();
             }
 
-            element_type
-        };
+            source_type = element_type;
+        }
 
         //// Assign the element
-        let target_type = stmt.identifier.id().inferred_type.as_ref().unwrap();
-        self.emit_assign_identifier(&stmt.identifier.id().name, source_type, target_type);
+        let target_type = stmt.identifier.get_type();
+        self.emit_assign_identifier(&stmt.identifier.name, source_type, target_type);
 
         //// Execute the loop body
         for stmt in &stmt.body {
@@ -1433,39 +1416,36 @@ impl<'a> Emitter<'a> {
         self.code[pos_condition..pos_condition + 4].copy_from_slice(&if_delta.to_le_bytes());
 
         //// Drop the iterable
+        self.clean_up_list.pop();
         self.emit_pop_rax();
         self.emit_drop();
     }
 
-    pub fn emit_statement(&mut self, statement: &Stmt, lines: &mut Vec<(usize, u32)>) {
+    pub fn emit_statement(&mut self, statement: &Stmt, lines: &mut Vec<LineMap>) {
+        lines.push(LineMap {
+            code_pos: self.pos(),
+            line_number: statement.base().location.start.row,
+        });
         match statement {
             Stmt::ExprStmt(e) => {
-                lines.push((self.pos(), e.base().location.start.row));
                 self.emit_expression(&e.expr);
-                if e.expr.inferred_type.as_ref().unwrap() != &*TYPE_INT
-                    && e.expr.inferred_type.as_ref().unwrap() != &*TYPE_BOOL
-                {
+                if e.expr.get_type() != &*TYPE_INT && e.expr.get_type() != &*TYPE_BOOL {
                     self.emit_drop();
                 }
             }
             Stmt::AssignStmt(stmt) => {
-                lines.push((self.pos(), stmt.base().location.start.row));
                 self.emit_assign(stmt);
             }
             Stmt::IfStmt(stmt) => {
-                lines.push((self.pos(), stmt.base().location.start.row));
                 self.emit_if_stmt(stmt, lines);
             }
             Stmt::WhileStmt(stmt) => {
-                lines.push((self.pos(), stmt.base().location.start.row));
                 self.emit_while_stmt(stmt, lines);
             }
             Stmt::ForStmt(stmt) => {
-                lines.push((self.pos(), stmt.base().location.start.row));
                 self.emit_for_stmt(stmt, lines);
             }
             Stmt::ReturnStmt(stmt) => {
-                lines.push((self.pos(), stmt.base().location.start.row));
                 if let Some(value) = &stmt.value {
                     self.emit_expression(value)
                 } else {
@@ -1492,23 +1472,19 @@ impl<'a> Emitter<'a> {
             }
         }
 
-        let target_type = ValueType::from_annotation(&decl.var.tv().type_);
-        self.emit_coerce(decl.value.inferred_type.as_ref().unwrap(), &target_type);
+        let target_type = ValueType::from_annotation(&decl.var.type_);
+        self.emit_coerce(decl.value.get_type(), &target_type);
         self.emit_push_rax();
     }
 
     pub fn emit_global_var_init(&mut self, decl: &VarDef) {
-        let offset = if let Some(EnvSlot::Var(v, _)) = self
-            .storage_env
-            .as_ref()
-            .unwrap()
-            .get(&decl.var.tv().identifier.id().name)
-        {
-            assert!(v.level == 0);
-            v.offset
-        } else {
-            panic!()
-        };
+        let offset =
+            if let Some(EnvSlot::Var(v, _)) = self.storage_env().get(&decl.var.identifier.name) {
+                assert!(v.level == 0);
+                v.offset
+            } else {
+                panic!()
+            };
 
         match &decl.value.content {
             LiteralContent::NoneLiteral(_) => {
@@ -1525,8 +1501,8 @@ impl<'a> Emitter<'a> {
             }
         }
 
-        let target_type = ValueType::from_annotation(&decl.var.tv().type_);
-        self.emit_coerce(decl.value.inferred_type.as_ref().unwrap(), &target_type);
+        let target_type = ValueType::from_annotation(&decl.var.type_);
+        self.emit_coerce(decl.value.get_type(), &target_type);
 
         if target_type == *TYPE_INT {
             // mov [rip+{}],eax
@@ -1538,35 +1514,23 @@ impl<'a> Emitter<'a> {
             // mov [rip+{}],rax
             self.emit(&[0x48, 0x89, 0x05]);
         }
-        self.links.push(ChunkLink {
-            pos: self.pos(),
-            to: GLOBAL_SECTION.to_owned(),
-        });
-        self.emit(&offset.to_le_bytes());
+        self.emit_link(GLOBAL_SECTION, offset);
     }
 
     pub fn emit_global_var_drop(&mut self, decl: &VarDef) {
-        let offset = if let Some(EnvSlot::Var(v, _)) = self
-            .storage_env
-            .as_ref()
-            .unwrap()
-            .get(&decl.var.tv().identifier.id().name)
-        {
-            assert!(v.level == 0);
-            v.offset
-        } else {
-            panic!()
-        };
+        let offset =
+            if let Some(EnvSlot::Var(v, _)) = self.storage_env().get(&decl.var.identifier.name) {
+                assert!(v.level == 0);
+                v.offset
+            } else {
+                panic!()
+            };
 
-        let target_type = ValueType::from_annotation(&decl.var.tv().type_);
+        let target_type = ValueType::from_annotation(&decl.var.type_);
         if target_type != *TYPE_INT && target_type != *TYPE_BOOL {
             // mov rax,[rip+{}]
             self.emit(&[0x48, 0x8B, 0x05]);
-            self.links.push(ChunkLink {
-                pos: self.pos(),
-                to: GLOBAL_SECTION.to_owned(),
-            });
-            self.emit(&offset.to_le_bytes());
+            self.emit_link(GLOBAL_SECTION, offset);
             self.emit_drop();
         }
     }
@@ -1580,9 +1544,9 @@ fn gen_function(
     parent: Option<&str>,
 ) -> Vec<Chunk> {
     let link_name = if let Some(parent) = parent {
-        parent.to_owned() + "." + &function.name.id().name
+        parent.to_owned() + "." + &function.name.name
     } else {
-        function.name.id().name.clone()
+        function.name.name.clone()
     };
 
     let mut locals = HashMap::new();
@@ -1593,7 +1557,7 @@ fn gen_function(
     for (i, param) in function.params.iter().enumerate() {
         let offset;
         offset = i as i32 * 8 + 16;
-        let name = &param.tv().identifier.id().name;
+        let name = &param.identifier.name;
         locals.insert(
             name.clone(),
             LocalSlot::Var(VarSlot {
@@ -1601,7 +1565,7 @@ fn gen_function(
                 level: level + 1,
             }),
         );
-        let param_type = ValueType::from_annotation(&param.tv().type_);
+        let param_type = ValueType::from_annotation(&param.type_);
         if param_type != *TYPE_INT && param_type != *TYPE_BOOL {
             clean_up_list.push(offset);
         }
@@ -1610,7 +1574,7 @@ fn gen_function(
             offset,
             line: param.base().location.start.row,
             name: name.clone(),
-            var_type: TypeDebug::from_annotation(&param.tv().type_),
+            var_type: TypeDebug::from_annotation(&param.type_),
         })
     }
 
@@ -1619,37 +1583,41 @@ fn gen_function(
     let mut local_offset = if level == 0 { -8 } else { -16 };
 
     for declaration in &function.declarations {
-        if let Declaration::VarDef(v) = declaration {
-            let name = &v.var.tv().identifier.id().name;
-            let offset = local_offset;
-            local_offset -= 8;
-            locals.insert(
-                name.clone(),
-                LocalSlot::Var(VarSlot {
-                    offset,
-                    level: level + 1,
-                }),
-            );
-            let local_type = ValueType::from_annotation(&v.var.tv().type_);
-            if local_type != *TYPE_INT && local_type != *TYPE_BOOL {
-                clean_up_list.push(offset);
-            }
+        match declaration {
+            Declaration::VarDef(v) => {
+                let name = &v.var.identifier.name;
+                let offset = local_offset;
+                local_offset -= 8;
+                locals.insert(
+                    name.clone(),
+                    LocalSlot::Var(VarSlot {
+                        offset,
+                        level: level + 1,
+                    }),
+                );
+                let local_type = ValueType::from_annotation(&v.var.type_);
+                if local_type != *TYPE_INT && local_type != *TYPE_BOOL {
+                    clean_up_list.push(offset);
+                }
 
-            locals_debug.push(VarDebug {
-                offset,
-                line: v.base().location.start.row,
-                name: name.clone(),
-                var_type: TypeDebug::from_annotation(&v.var.tv().type_),
-            })
-        } else if let Declaration::FuncDef(f) = declaration {
-            let name = &f.name.id().name;
-            locals.insert(
-                name.clone(),
-                LocalSlot::Func(FuncSlot {
-                    link_name: link_name.clone() + "." + name,
-                    level: level + 1,
-                }),
-            );
+                locals_debug.push(VarDebug {
+                    offset,
+                    line: v.base().location.start.row,
+                    name: name.clone(),
+                    var_type: TypeDebug::from_annotation(&v.var.type_),
+                })
+            }
+            Declaration::FuncDef(f) => {
+                let name = &f.name.name;
+                locals.insert(
+                    name.clone(),
+                    LocalSlot::Func(FuncSlot {
+                        link_name: link_name.clone() + "." + name,
+                        level: level + 1,
+                    }),
+                );
+            }
+            _ => (),
         }
     }
 
@@ -1659,7 +1627,7 @@ fn gen_function(
         &link_name,
         Some(handle.inner()),
         Some(classes),
-        &clean_up_list,
+        clean_up_list,
         level,
     );
 
@@ -1673,7 +1641,10 @@ fn gen_function(
         }
     }
 
-    let mut lines = vec![(0, function.base().location.start.row)];
+    let mut lines = vec![LineMap {
+        code_pos: 0,
+        line_number: function.base().location.start.row,
+    }];
 
     for statement in &function.statements {
         code.emit_statement(statement, &mut lines);
@@ -1714,7 +1685,7 @@ fn gen_function(
 }
 
 fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
-    let mut code = Emitter::new(class_name, None, None, &[], 0);
+    let mut code = Emitter::new(class_name, None, None, vec![], 0);
 
     code.prepare_call(PLATFORM.stack_reserve());
     match PLATFORM {
@@ -1731,11 +1702,7 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
             code.emit(&[0x48, 0x8D, 0x3D]);
         }
     }
-    code.links.push(ChunkLink {
-        pos: code.pos(),
-        to: class_name.to_owned() + ".$proto",
-    });
-    code.emit(&[0; 4]);
+    code.emit_link(class_name.to_owned() + ".$proto", 0);
 
     code.call(BUILTIN_ALLOC_OBJ);
     code.emit_push_rax();
@@ -1795,7 +1762,7 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
 }
 
 fn gen_dtor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
-    let mut code = Emitter::new(&(class_name.to_owned() + ".$dtor"), None, None, &[], 0);
+    let mut code = Emitter::new(&(class_name.to_owned() + ".$dtor"), None, None, vec![], 0);
     // Note: This uses C ABI instead of chocopy ABI
     match PLATFORM {
         Platform::Windows => {
@@ -1842,7 +1809,7 @@ fn gen_dtor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
 }
 
 fn gen_int() -> Chunk {
-    let mut code = Emitter::new("int", None, None, &[], 0);
+    let mut code = Emitter::new("int", None, None, vec![], 0);
     code.emit_int_literal(0);
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -1857,7 +1824,7 @@ fn gen_int() -> Chunk {
 }
 
 fn gen_bool() -> Chunk {
-    let mut code = Emitter::new("bool", None, None, &[], 0);
+    let mut code = Emitter::new("bool", None, None, vec![], 0);
     code.emit_bool_literal(false);
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -1872,7 +1839,7 @@ fn gen_bool() -> Chunk {
 }
 
 fn gen_str() -> Chunk {
-    let mut code = Emitter::new("str", None, None, &[], 0);
+    let mut code = Emitter::new("str", None, None, vec![], 0);
     code.emit_string_literal("");
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -1887,7 +1854,7 @@ fn gen_str() -> Chunk {
 }
 
 fn gen_object_init() -> Chunk {
-    let mut code = Emitter::new("object.__init__", None, None, &[], 0);
+    let mut code = Emitter::new("object.__init__", None, None, vec![], 0);
     // mov rax,[rsp+16]
     code.emit(&[0x48, 0x8B, 0x44, 0x24, 0x10]);
     code.emit_drop();
@@ -1910,7 +1877,7 @@ fn gen_object_init() -> Chunk {
 }
 
 fn gen_len() -> Chunk {
-    let mut code = Emitter::new("len", None, None, &[], 0);
+    let mut code = Emitter::new("len", None, None, vec![], 0);
     match PLATFORM {
         Platform::Windows => code.emit(&[0x48, 0x8B, 0x4C, 0x24, 0x10]), //  mov rcx,[rsp+16]
         Platform::Linux => code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]),   // mov rdi,[rsp+16]
@@ -1935,7 +1902,12 @@ fn gen_len() -> Chunk {
 }
 
 fn gen_input() -> Chunk {
-    let mut code = Emitter::new("input", None, None, &[], 0);
+    let mut code = Emitter::new("input", None, None, vec![], 0);
+    match PLATFORM {
+        Platform::Windows => code.emit(&[0x48, 0x8D, 0x0D]), // lea rcx,[rip+{}]
+        Platform::Linux => code.emit(&[0x48, 0x8D, 0x3D]),   // lea rdi,[rip+{}]
+    }
+    code.emit_link(STR_PROTOTYPE, 0);
     code.prepare_call(PLATFORM.stack_reserve());
     code.call(BUILTIN_INPUT);
     code.end_proc();
@@ -1951,9 +1923,9 @@ fn gen_input() -> Chunk {
 }
 
 fn gen_print() -> Chunk {
-    let mut code = Emitter::new("print", None, None, &[], 0);
+    let mut code = Emitter::new("print", None, None, vec![], 0);
     match PLATFORM {
-        Platform::Windows => code.emit(&[0x48, 0x8B, 0x4C, 0x24, 0x10]), //  mov rcx,[rsp+16]
+        Platform::Windows => code.emit(&[0x48, 0x8B, 0x4C, 0x24, 0x10]), // mov rcx,[rsp+16]
         Platform::Linux => code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]),   // mov rdi,[rsp+16]
     }
     code.prepare_call(PLATFORM.stack_reserve());
@@ -1976,7 +1948,7 @@ fn gen_print() -> Chunk {
 }
 
 fn gen_main(
-    ast: &Ast,
+    ast: &Program,
     storage_env: &mut StorageEnv,
     classes: &HashMap<String, ClassSlot>,
 ) -> Chunk {
@@ -1984,7 +1956,7 @@ fn gen_main(
         BUILTIN_CHOCOPY_MAIN,
         Some(storage_env),
         Some(classes),
-        &[],
+        vec![],
         0,
     );
 
@@ -1997,7 +1969,7 @@ fn gen_main(
         main_code.emit_push_rsi();
     }
 
-    for declaration in &ast.program().declarations {
+    for declaration in &ast.declarations {
         if let Declaration::VarDef(v) = declaration {
             main_code.emit_global_var_init(v);
         }
@@ -2005,11 +1977,11 @@ fn gen_main(
 
     let mut lines = vec![];
 
-    for statement in &ast.program().statements {
+    for statement in &ast.statements {
         main_code.emit_statement(statement, &mut lines);
     }
 
-    for declaration in &ast.program().declarations {
+    for declaration in &ast.declarations {
         if let Declaration::VarDef(v) = declaration {
             main_code.emit_global_var_drop(v);
         }
@@ -2038,7 +2010,6 @@ fn gen_main(
 
     main_code.finalize(ProcedureDebug {
         decl_line: ast
-            .program()
             .statements
             .get(0)
             .map_or(1, |s| s.base().location.start.row),
@@ -2057,8 +2028,8 @@ fn add_class(
     classes_debug: &mut HashMap<String, ClassDebug>,
     c: &ClassDef,
 ) {
-    let class_name = &c.name.id().name;
-    let super_name = &c.super_class.id().name;
+    let class_name = &c.name.name;
+    let super_name = &c.super_class.name;
     let mut class_slot = classes.get(super_name).unwrap().clone();
     let mut class_debug = classes_debug.get(super_name).unwrap().clone();
     class_slot.methods.get_mut("$dtor").unwrap().link_name = class_name.clone() + ".$dtor";
@@ -2070,74 +2041,78 @@ fn add_class(
         }),
     );
     for declaration in &c.declarations {
-        if let Declaration::VarDef(v) = declaration {
-            let source_type = v.value.inferred_type.clone().unwrap();
-            let target_type = ValueType::from_annotation(&v.var.tv().type_);
-            let size = if target_type == *TYPE_INT {
-                4
-            } else if target_type == *TYPE_BOOL {
-                1
-            } else {
-                8
-            };
-            class_slot.object_size += (size - class_slot.object_size % size) % size;
-            let offset = class_slot.object_size + 16;
-            let name = &v.var.tv().identifier.id().name;
-            class_slot.attributes.insert(
-                name.clone(),
-                AttributeSlot {
-                    offset,
-                    source_type,
-                    target_type,
-                    init: v.value.content.clone(),
-                },
-            );
-            class_slot.object_size += size;
-
-            class_debug.attributes.push(VarDebug {
-                offset: offset as i32,
-                line: v.base().location.start.row,
-                name: name.clone(),
-                var_type: TypeDebug::from_annotation(&v.var.tv().type_),
-            });
-        } else if let Declaration::FuncDef(f) = declaration {
-            let method_name = &f.name.id().name;
-            let link_name = class_name.clone() + "." + method_name;
-            if let Some(method) = class_slot.methods.get_mut(method_name) {
-                method.link_name = link_name;
-
-                let self_type = TypeDebug::from_annotation(&f.params[0].tv().type_);
-                class_debug
-                    .methods
-                    .get_mut(&method.offset)
-                    .unwrap()
-                    .1
-                    .params[0] = self_type;
-            } else {
-                let offset = class_slot.prototype_size;
-                class_slot
-                    .methods
-                    .insert(method_name.clone(), MethodSlot { offset, link_name });
-                class_slot.prototype_size += 8;
-
-                let params = f
-                    .params
-                    .iter()
-                    .map(|tv| TypeDebug::from_annotation(&tv.tv().type_))
-                    .collect();
-                let return_type = TypeDebug::from_annotation(&f.return_type);
-
-                class_debug.methods.insert(
-                    offset,
-                    (
-                        method_name.clone(),
-                        MethodDebug {
-                            params,
-                            return_type,
-                        },
-                    ),
+        match declaration {
+            Declaration::VarDef(v) => {
+                let source_type = v.value.get_type().clone();
+                let target_type = ValueType::from_annotation(&v.var.type_);
+                let size = if target_type == *TYPE_INT {
+                    4
+                } else if target_type == *TYPE_BOOL {
+                    1
+                } else {
+                    8
+                };
+                class_slot.object_size += (size - class_slot.object_size % size) % size;
+                let offset = class_slot.object_size + 16;
+                let name = &v.var.identifier.name;
+                class_slot.attributes.insert(
+                    name.clone(),
+                    AttributeSlot {
+                        offset,
+                        source_type,
+                        target_type,
+                        init: v.value.content.clone(),
+                    },
                 );
+                class_slot.object_size += size;
+
+                class_debug.attributes.push(VarDebug {
+                    offset: offset as i32,
+                    line: v.base().location.start.row,
+                    name: name.clone(),
+                    var_type: TypeDebug::from_annotation(&v.var.type_),
+                });
             }
+            Declaration::FuncDef(f) => {
+                let method_name = &f.name.name;
+                let link_name = class_name.clone() + "." + method_name;
+                if let Some(method) = class_slot.methods.get_mut(method_name) {
+                    method.link_name = link_name;
+
+                    let self_type = TypeDebug::from_annotation(&f.params[0].type_);
+                    class_debug
+                        .methods
+                        .get_mut(&method.offset)
+                        .unwrap()
+                        .1
+                        .params[0] = self_type;
+                } else {
+                    let offset = class_slot.prototype_size;
+                    class_slot
+                        .methods
+                        .insert(method_name.clone(), MethodSlot { offset, link_name });
+                    class_slot.prototype_size += 8;
+
+                    let params = f
+                        .params
+                        .iter()
+                        .map(|tv| TypeDebug::from_annotation(&tv.type_))
+                        .collect();
+                    let return_type = TypeDebug::from_annotation(&f.return_type);
+
+                    class_debug.methods.insert(
+                        offset,
+                        (
+                            method_name.clone(),
+                            MethodDebug {
+                                params,
+                                return_type,
+                            },
+                        ),
+                    );
+                }
+            }
+            _ => panic!(),
         }
     }
     class_debug.size = class_slot.object_size;
@@ -2145,7 +2120,29 @@ fn add_class(
     classes_debug.insert(class_name.clone(), class_debug);
 }
 
-pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
+fn gen_special_proto(name: &str, size: i32, tag: i32, dtor: &str) -> Chunk {
+    let mut code = vec![0; 24];
+    code[0..4].copy_from_slice(&size.to_le_bytes());
+    code[4..8].copy_from_slice(&tag.to_le_bytes());
+    let links = vec![
+        ChunkLink {
+            pos: 8,
+            to: ChunkLinkTarget::Symbol(dtor.to_owned()),
+        },
+        ChunkLink {
+            pos: 16,
+            to: ChunkLinkTarget::Symbol("object.__init__".to_owned()),
+        },
+    ];
+    Chunk {
+        name: name.to_owned(),
+        code,
+        links,
+        extra: ChunkExtra::Data,
+    }
+}
+
+pub(super) fn gen_code_set(ast: Program) -> CodeSet {
     let mut globals = HashMap::new();
     let mut classes = HashMap::new();
     let mut base_methods = HashMap::new();
@@ -2193,45 +2190,50 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
             .collect(),
         },
     );
-    for declaration in &ast.program().declarations {
-        if let Declaration::VarDef(v) = declaration {
-            let name = &v.var.tv().identifier.id().name;
-            let target_type = ValueType::from_annotation(&v.var.tv().type_);
-            let size = if target_type == *TYPE_INT {
-                4
-            } else if target_type == *TYPE_BOOL {
-                1
-            } else {
-                8
-            };
-            global_offset += (size - global_offset % size) % size;
-            globals.insert(
-                name.clone(),
-                LocalSlot::Var(VarSlot {
+    for declaration in &ast.declarations {
+        match declaration {
+            Declaration::VarDef(v) => {
+                let name = &v.var.identifier.name;
+                let target_type = ValueType::from_annotation(&v.var.type_);
+                let size = if target_type == *TYPE_INT {
+                    4
+                } else if target_type == *TYPE_BOOL {
+                    1
+                } else {
+                    8
+                };
+                global_offset += (size - global_offset % size) % size;
+                globals.insert(
+                    name.clone(),
+                    LocalSlot::Var(VarSlot {
+                        offset: global_offset,
+                        level: 0,
+                    }),
+                );
+
+                globals_debug.push(VarDebug {
                     offset: global_offset,
-                    level: 0,
-                }),
-            );
+                    line: v.base().location.start.row,
+                    name: name.clone(),
+                    var_type: TypeDebug::from_annotation(&v.var.type_),
+                });
 
-            globals_debug.push(VarDebug {
-                offset: global_offset,
-                line: v.base().location.start.row,
-                name: name.clone(),
-                var_type: TypeDebug::from_annotation(&v.var.tv().type_),
-            });
-
-            global_offset += size;
-        } else if let Declaration::FuncDef(f) = declaration {
-            let name = &f.name.id().name;
-            globals.insert(
-                name.clone(),
-                LocalSlot::Func(FuncSlot {
-                    link_name: name.clone(),
-                    level: 0,
-                }),
-            );
-        } else if let Declaration::ClassDef(c) = declaration {
-            add_class(&mut globals, &mut classes, &mut classes_debug, c)
+                global_offset += size;
+            }
+            Declaration::FuncDef(f) => {
+                let name = &f.name.name;
+                globals.insert(
+                    name.clone(),
+                    LocalSlot::Func(FuncSlot {
+                        link_name: name.clone(),
+                        level: 0,
+                    }),
+                );
+            }
+            Declaration::ClassDef(c) => {
+                add_class(&mut globals, &mut classes, &mut classes_debug, c)
+            }
+            _ => panic!(),
         }
     }
 
@@ -2257,21 +2259,25 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
 
     let mut chunks = vec![gen_main(&ast, &mut storage_env, &classes)];
 
-    for declaration in &ast.program().declarations {
-        if let Declaration::FuncDef(f) = declaration {
-            chunks.append(&mut gen_function(&f, &mut storage_env, &classes, 0, None));
-        } else if let Declaration::ClassDef(c) = declaration {
-            for declaration in &c.declarations {
-                if let Declaration::FuncDef(f) = declaration {
-                    chunks.append(&mut gen_function(
-                        &f,
-                        &mut storage_env,
-                        &classes,
-                        0,
-                        Some(&c.name.id().name),
-                    ));
+    for declaration in &ast.declarations {
+        match declaration {
+            Declaration::FuncDef(f) => {
+                chunks.append(&mut gen_function(&f, &mut storage_env, &classes, 0, None));
+            }
+            Declaration::ClassDef(c) => {
+                for declaration in &c.declarations {
+                    if let Declaration::FuncDef(f) = declaration {
+                        chunks.append(&mut gen_function(
+                            &f,
+                            &mut storage_env,
+                            &classes,
+                            0,
+                            Some(&c.name.name),
+                        ));
+                    }
                 }
             }
+            _ => (),
         }
     }
 
@@ -2280,13 +2286,14 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
         chunks.push(gen_dtor(&class_name, &class_slot));
 
         let mut prototype = vec![0; class_slot.prototype_size as usize];
-        prototype[0..8].copy_from_slice(&(class_slot.object_size as u64).to_le_bytes());
+        prototype[0..4].copy_from_slice(&class_slot.object_size.to_le_bytes());
+        // prototype[4..8] is type tag fill with 0
         let links = class_slot
             .methods
             .iter()
             .map(|(_, method)| ChunkLink {
                 pos: method.offset as usize,
-                to: method.link_name.clone(),
+                to: ChunkLinkTarget::Symbol(method.link_name.clone()),
             })
             .collect();
         chunks.push(Chunk {
@@ -2305,9 +2312,31 @@ pub(super) fn gen_code_set(ast: Ast) -> CodeSet {
     chunks.push(gen_input());
     chunks.push(gen_print());
 
+    chunks.push(gen_special_proto(INT_PROTOTYPE, 4, 1, "object.$dtor"));
+    chunks.push(gen_special_proto(BOOL_PROTOTYPE, 1, 2, "object.$dtor"));
+    chunks.push(gen_special_proto(STR_PROTOTYPE, -1, 3, "object.$dtor"));
+    chunks.push(gen_special_proto(
+        INT_LIST_PROTOTYPE,
+        -4,
+        -1,
+        "object.$dtor",
+    ));
+    chunks.push(gen_special_proto(
+        BOOL_LIST_PROTOTYPE,
+        -1,
+        -1,
+        "object.$dtor",
+    ));
+    chunks.push(gen_special_proto(
+        OBJECT_LIST_PROTOTYPE,
+        -8,
+        -1,
+        "[object].$dtor",
+    ));
+
     CodeSet {
         chunks,
-        global_size: global_offset as usize,
+        global_size: global_offset as u64,
         globals_debug,
         classes_debug,
     }

@@ -8,13 +8,11 @@ use class_env::*;
 use error::*;
 use std::collections::{HashMap, HashSet};
 
-fn check_var_def(v: &mut VarDef, errors: &mut Vec<Error>, classes: &ClassEnv) {
-    let tv = v.var.tv_mut();
-    let core_type = tv.type_.core_type_mut();
+fn check_var_def(v: &mut VarDef, errors: &mut Vec<CompilerError>, classes: &ClassEnv) {
+    let core_type = v.var.type_.core_type_mut();
     if !classes.contains(&core_type.class_name) {
         let msg = error_invalid_type(&core_type.class_name);
-        core_type.base_mut().error_msg = Some(msg);
-        errors.push(error_from(core_type));
+        core_type.add_error(errors, msg);
     }
 }
 
@@ -39,7 +37,7 @@ fn always_return(statements: &[Stmt]) -> bool {
 
 fn check_func(
     f: &mut FuncDef,
-    errors: &mut Vec<Error>,
+    errors: &mut Vec<CompilerError>,
     classes: &ClassEnv,
     globals: &HashSet<String>,
     nonlocals: &HashSet<String>,
@@ -49,23 +47,20 @@ fn check_func(
     // Check parameter type, collision and shadowing
     // semantic rule: 1(param), 2(param), 11(param)
     for param in &mut f.params {
-        let core_type = param.tv_mut().type_.core_type_mut();
+        let core_type = param.type_.core_type_mut();
         if !classes.contains(&core_type.class_name) {
             let msg = error_invalid_type(&core_type.class_name);
-            core_type.base_mut().error_msg = Some(msg);
-            errors.push(error_from(core_type));
+            core_type.add_error(errors, msg);
         }
 
-        let id = param.tv_mut().identifier.id_mut();
+        let id = &mut param.identifier;
         if classes.contains(&id.name) {
             let msg = error_shadow(&id.name);
-            id.base_mut().error_msg = Some(msg);
-            errors.push(error_from(id));
+            id.add_error(errors, msg);
         }
         if id_set.contains(&id.name) {
             let msg = error_dup(&id.name);
-            id.base_mut().error_msg = Some(msg);
-            errors.push(error_from(id));
+            id.add_error(errors, msg);
         }
         locals.insert(id.name.clone());
         id_set.insert(id.name.clone());
@@ -76,8 +71,7 @@ fn check_func(
     let core_type = f.return_type.core_type_mut();
     if !classes.contains(&core_type.class_name) {
         let msg = error_invalid_type(&core_type.class_name);
-        core_type.base_mut().error_msg = Some(msg);
-        errors.push(error_from(core_type));
+        core_type.add_error(errors, msg);
     }
 
     let mut nonlocal_remove = HashSet::new();
@@ -86,52 +80,46 @@ fn check_func(
         let name = decl.name_mut();
         if id_set.contains(&name.name) {
             let msg = error_dup(&name.name);
-            name.base_mut().error_msg = Some(msg);
-            errors.push(error_from(name));
+            name.add_error(errors, msg);
         }
         id_set.insert(name.name.clone());
 
         match decl {
             Declaration::VarDef(v) => {
                 let var = &mut v.var;
-                let core_type = var.tv_mut().type_.core_type_mut();
+                let core_type = var.type_.core_type_mut();
                 if !classes.contains(&core_type.class_name) {
                     let msg = error_invalid_type(&core_type.class_name);
-                    core_type.base_mut().error_msg = Some(msg);
-                    errors.push(error_from(core_type));
+                    core_type.add_error(errors, msg);
                 }
 
-                let id = var.tv_mut().identifier.id_mut();
+                let id = &mut var.identifier;
                 if classes.contains(&id.name) {
                     let msg = error_shadow(&id.name);
-                    id.base_mut().error_msg = Some(msg);
-                    errors.push(error_from(id));
+                    id.add_error(errors, msg);
                 }
                 locals.insert(id.name.clone());
             }
             Declaration::FuncDef(f) => {
-                let id = f.name.id_mut();
+                let id = &mut f.name;
                 if classes.contains(&id.name) {
                     let msg = error_shadow(&id.name);
-                    id.base_mut().error_msg = Some(msg);
-                    errors.push(error_from(id));
+                    id.add_error(errors, msg);
                 }
                 nonlocal_remove.insert(id.name.clone());
             }
             Declaration::NonLocalDecl(v) => {
-                let id = v.variable.id_mut();
+                let id = &mut v.variable;
                 if !nonlocals.contains(&id.name) {
                     let msg = error_nonlocal(&id.name);
-                    id.base_mut().error_msg = Some(msg);
-                    errors.push(error_from(id));
+                    id.add_error(errors, msg);
                 }
             }
             Declaration::GlobalDecl(v) => {
-                let id = v.variable.id_mut();
+                let id = &mut v.variable;
                 if !globals.contains(&id.name) {
                     let msg = error_global(&id.name);
-                    id.base_mut().error_msg = Some(msg);
-                    errors.push(error_from(id));
+                    id.add_error(errors, msg);
                 }
                 nonlocal_remove.insert(id.name.clone());
             }
@@ -141,12 +129,10 @@ fn check_func(
 
     // semantic rule: 9
     if let TypeAnnotation::ClassType(c) = &f.return_type {
-        if let "int" | "str" | "bool" = c.class_name.as_str() {
-            if !always_return(&f.statements) {
-                let msg = error_return(&f.name.id().name);
-                f.name.base_mut().error_msg = Some(msg);
-                errors.push(error_from(&f.name));
-            }
+        if matches!(c.class_name.as_str(), "int" | "str" | "bool") && !always_return(&f.statements)
+        {
+            let msg = error_return(&f.name.name);
+            f.name.add_error(errors, msg);
         }
     }
 
@@ -163,7 +149,7 @@ fn check_func(
     }
 }
 
-pub fn check(mut ast: Ast) -> Ast {
+pub fn check(mut ast: Program) -> Program {
     let mut errors = vec![];
 
     let mut id_set = HashSet::new();
@@ -180,13 +166,12 @@ pub fn check(mut ast: Ast) -> Ast {
     // Pass A
     // semantic rule: 1(global/class), 4, 5, 6, 7
     // collects class info
-    for decl in &mut ast.program_mut().declarations {
+    for decl in &mut ast.declarations {
         // Global identifier collision check
         let name = decl.name_mut();
         if !id_set.insert(name.name.clone()) {
             let msg = error_dup(&name.name);
-            name.base_mut().error_msg = Some(msg);
-            errors.push(error_from(name));
+            name.add_error(&mut errors, msg);
         }
 
         if let Declaration::ClassDef(class_def) = decl {
@@ -194,24 +179,25 @@ pub fn check(mut ast: Ast) -> Ast {
         }
     }
 
-    classes.complete_basic_types();
-
     // Pass B
     // semantic rules: 11(global/class variable)
     // collects global variables
     let mut globals = HashSet::new();
-    for decl in &mut ast.program_mut().declarations {
-        if let Declaration::VarDef(v) = decl {
-            check_var_def(v, &mut errors, &classes);
-            let tv = v.var.tv();
-            let name = &tv.identifier.id().name;
-            globals.insert(name.clone());
-        } else if let Declaration::ClassDef(c) = decl {
-            for decl in &mut c.declarations {
-                if let Declaration::VarDef(v) = decl {
-                    check_var_def(v, &mut errors, &classes);
+    for decl in &mut ast.declarations {
+        match decl {
+            Declaration::VarDef(v) => {
+                check_var_def(v, &mut errors, &classes);
+                let name = &v.var.identifier.name;
+                globals.insert(name.clone());
+            }
+            Declaration::ClassDef(c) => {
+                for decl in &mut c.declarations {
+                    if let Declaration::VarDef(v) = decl {
+                        check_var_def(v, &mut errors, &classes);
+                    }
                 }
             }
+            _ => (),
         }
     }
 
@@ -281,43 +267,47 @@ pub fn check(mut ast: Ast) -> Ast {
     // Pass C
     // semantic rules: 1(function), 2, 3, 9, 11(function)
     // collects global environment
-    for decl in &mut ast.program_mut().declarations {
-        if let Declaration::FuncDef(f) = decl {
-            check_func(f, &mut errors, &classes, &globals, &HashSet::new());
-            global_env.insert(
-                f.name.id().name.clone(),
-                LocalSlot::Func(FuncType {
-                    parameters: f
-                        .params
-                        .iter()
-                        .map(|tv| ValueType::from_annotation(&tv.tv().type_))
-                        .collect(),
-                    return_type: ValueType::from_annotation(&f.return_type),
-                }),
-            );
-        } else if let Declaration::ClassDef(c) = decl {
-            for decl in &mut c.declarations {
-                if let Declaration::FuncDef(f) = decl {
-                    check_func(f, &mut errors, &classes, &globals, &HashSet::new())
-                }
-            }
-            let name = &c.name.id().name;
-            global_env.insert(
-                name.clone(),
-                LocalSlot::Func(FuncType {
-                    parameters: vec![],
-                    return_type: ValueType::ClassValueType(ClassValueType {
-                        class_name: name.clone(),
+    for decl in &mut ast.declarations {
+        match decl {
+            Declaration::FuncDef(f) => {
+                check_func(f, &mut errors, &classes, &globals, &HashSet::new());
+                global_env.insert(
+                    f.name.name.clone(),
+                    LocalSlot::Func(FuncType {
+                        parameters: f
+                            .params
+                            .iter()
+                            .map(|tv| ValueType::from_annotation(&tv.type_))
+                            .collect(),
+                        return_type: ValueType::from_annotation(&f.return_type),
                     }),
-                }),
-            );
-        } else if let Declaration::VarDef(v) = decl {
-            let tv = v.var.tv();
-            let name = &tv.identifier.id().name;
-            global_env.insert(
-                name.clone(),
-                LocalSlot::Var(ValueType::from_annotation(&tv.type_)),
-            );
+                );
+            }
+            Declaration::ClassDef(c) => {
+                for decl in &mut c.declarations {
+                    if let Declaration::FuncDef(f) = decl {
+                        check_func(f, &mut errors, &classes, &globals, &HashSet::new())
+                    }
+                }
+                let name = &c.name.name;
+                global_env.insert(
+                    name.clone(),
+                    LocalSlot::Func(FuncType {
+                        parameters: vec![],
+                        return_type: ValueType::ClassValueType(ClassValueType {
+                            class_name: name.clone(),
+                        }),
+                    }),
+                );
+            }
+            Declaration::VarDef(v) => {
+                let name = &v.var.identifier.name;
+                global_env.insert(
+                    name.clone(),
+                    LocalSlot::Var(ValueType::from_annotation(&v.var.type_)),
+                );
+            }
+            _ => panic!(),
         }
     }
 
@@ -326,13 +316,14 @@ pub fn check(mut ast: Ast) -> Ast {
     // and type checking
     if errors.is_empty() {
         let mut env = LocalEnv::new(global_env);
-        ast.program_mut().analyze(&mut errors, &mut env, &classes);
+        ast.analyze(&mut errors, &mut env, &classes);
     }
 
-    ast.program_mut().errors = ErrorInfo::Errors(Errors {
+    ast.errors = Errors {
         base: NodeBase::new(0, 0, 0, 0),
         errors,
-    });
+    };
+    ast.errors.sort();
     ast
 }
 
@@ -363,9 +354,11 @@ mod tests {
                 typed_file.set_file_name(file_name);
                 let ast_string = String::from_utf8(std::fs::read(ast_file).unwrap()).unwrap();
                 let typed_string = String::from_utf8(std::fs::read(typed_file).unwrap()).unwrap();
-                let ast = serde_json::from_str::<Ast>(&ast_string).unwrap();
-                let typed = serde_json::from_str::<Ast>(&typed_string).unwrap();
-                if check(ast) == typed {
+                let ast = serde_json::from_str::<Program>(&ast_string).unwrap();
+                let mut typed = serde_json::from_str::<Program>(&typed_string).unwrap();
+                let result = check(ast);
+                typed.errors.sort();
+                if result == typed {
                     println!("\x1b[32mOK\x1b[0m");
                 } else {
                     println!("\x1b[31mError\x1b[0m");

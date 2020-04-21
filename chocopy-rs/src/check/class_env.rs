@@ -39,29 +39,35 @@ impl ClassEnv {
     pub fn new() -> ClassEnv {
         let mut class_env = ClassEnv(HashMap::new());
         class_env.add_basic_type("object");
+        class_env.add_basic_type("str");
+        class_env.add_basic_type("int");
+        class_env.add_basic_type("bool");
+        class_env.add_basic_type("<None>");
+        class_env.add_basic_type("<Empty>");
         class_env
     }
 
     pub fn add_class(
         &mut self,
         class_def: &mut ClassDef,
-        errors: &mut Vec<Error>,
+        errors: &mut Vec<CompilerError>,
         id_set: &HashSet<String>,
     ) {
-        let class_name = &class_def.name.id().name;
-        let super_name = &class_def.super_class.id().name;
-        let super_class = if let Some(super_class) = self.0.get(super_name) {
+        let class_name = &class_def.name.name;
+        let super_name = &class_def.super_class.name;
+        let super_class = if matches!(super_name.as_str(), "int" | "str" | "bool") {
+            let msg = error_super_special(super_name);
+            class_def.super_class.add_error(errors, msg);
+            self.0.get("object").unwrap()
+        } else if let Some(super_class) = self.0.get(super_name) {
             super_class
         } else {
-            let msg = if let "int" | "str" | "bool" = super_name.as_str() {
-                error_super_special
-            } else if id_set.contains(super_name) {
+            let msg = if id_set.contains(super_name) {
                 error_super_not_class
             } else {
                 error_super_undef
             }(super_name);
-            class_def.super_class.base_mut().error_msg = Some(msg);
-            errors.push(error_from(&class_def.super_class));
+            class_def.super_class.add_error(errors, msg);
             self.0.get("object").unwrap()
         };
 
@@ -77,8 +83,7 @@ impl ClassEnv {
             if !id_set.insert(name_str.clone()) {
                 let msg = error_dup(&name_str);
                 let name = item_decl.name_mut();
-                name.base_mut().error_msg = Some(msg);
-                errors.push(error_from(name));
+                name.add_error(errors, msg);
                 continue;
             }
 
@@ -87,7 +92,7 @@ impl ClassEnv {
                     let parameters: Vec<_> = func
                         .params
                         .iter()
-                        .map(|t| ValueType::from_annotation(&t.tv().type_))
+                        .map(|t| ValueType::from_annotation(&t.type_))
                         .collect();
                     let return_type = ValueType::from_annotation(&func.return_type);
 
@@ -100,8 +105,7 @@ impl ClassEnv {
                         }))
                     {
                         let msg = error_method_self(&name_str);
-                        name.base_mut().error_msg = Some(msg);
-                        errors.push(error_from(name));
+                        name.add_error(errors, msg);
                     }
 
                     let item_type = Type::FuncType(FuncType {
@@ -118,14 +122,12 @@ impl ClassEnv {
                             });
                             if Type::FuncType(old) != item_type {
                                 let msg = error_method_override(&name_str);
-                                name.base_mut().error_msg = Some(msg);
-                                errors.push(error_from(name));
+                                name.add_error(errors, msg);
                             }
                         }
                         _ => {
                             let msg = error_attribute_redefine(&name_str);
-                            name.base_mut().error_msg = Some(msg);
-                            errors.push(error_from(name));
+                            name.add_error(errors, msg);
                         }
                     }
                 }
@@ -134,14 +136,13 @@ impl ClassEnv {
                     if items
                         .insert(
                             name_str.clone(),
-                            Type::ValueType(ValueType::from_annotation(&var.var.tv().type_)),
+                            Type::ValueType(ValueType::from_annotation(&var.var.type_)),
                         )
                         .is_some()
                     {
                         let name = item_decl.name_mut();
                         let msg = error_attribute_redefine(&name_str);
-                        name.base_mut().error_msg = Some(msg);
-                        errors.push(error_from(name));
+                        name.add_error(errors, msg);
                     }
                 }
                 _ => unreachable!(),
@@ -150,18 +151,10 @@ impl ClassEnv {
         self.0.insert(
             class_name.clone(),
             ClassInfo {
-                super_class: class_def.super_class.id().name.clone(),
+                super_class: class_def.super_class.name.clone(),
                 items,
             },
         );
-    }
-
-    pub fn complete_basic_types(&mut self) {
-        self.add_basic_type("str");
-        self.add_basic_type("int");
-        self.add_basic_type("bool");
-        self.add_basic_type("<None>");
-        self.add_basic_type("<Empty>");
     }
 
     pub fn is_compatible(&self, sub_class: &ValueType, super_class: &ValueType) -> bool {

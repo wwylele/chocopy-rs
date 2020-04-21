@@ -1,6 +1,6 @@
 use crate::location::*;
 use enum_dispatch::*;
-use lazy_static::*;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 
@@ -39,6 +39,28 @@ impl NodeBase {
 pub trait Node {
     fn base(&self) -> &NodeBase;
     fn base_mut(&mut self) -> &mut NodeBase;
+
+    fn add_error(&mut self, errors: &mut Vec<CompilerError>, message: String) {
+        let base = self.base_mut();
+        base.error_msg = Some(message.clone());
+        errors.push(CompilerError {
+            base: NodeBase::from_location(base.location),
+            message,
+            syntax: false,
+        })
+    }
+}
+
+impl<T> Node for Box<T>
+where
+    T: Node,
+{
+    fn base(&self) -> &NodeBase {
+        (**self).base()
+    }
+    fn base_mut(&mut self) -> &mut NodeBase {
+        (**self).base_mut()
+    }
 }
 
 macro_rules! impl_node {
@@ -53,24 +75,6 @@ macro_rules! impl_node {
             }
         }
     };
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields, tag = "kind")]
-pub enum Ast {
-    Program(Program),
-}
-
-impl Ast {
-    pub fn program(&self) -> &Program {
-        let Ast::Program(program) = self;
-        program
-    }
-
-    pub fn program_mut(&mut self) -> &mut Program {
-        let Ast::Program(program) = self;
-        program
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -144,7 +148,7 @@ impl_node!(BooleanLiteral);
 pub struct CallExpr {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub function: FuncId,
+    pub function: Function,
     pub args: Vec<Expr>,
 }
 
@@ -155,9 +159,9 @@ impl_node!(CallExpr);
 pub struct ClassDef {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub name: Id,
+    pub name: Identifier,
     #[serde(rename = "superClass")]
-    pub super_class: Id,
+    pub super_class: Identifier,
     pub declarations: Vec<Declaration>,
 }
 
@@ -192,7 +196,7 @@ fn is_not(b: &bool) -> bool {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields)]
+#[serde(tag = "kind")]
 pub struct CompilerError {
     #[serde(flatten)]
     pub base: NodeBase,
@@ -222,42 +226,26 @@ impl Declaration {
             Declaration::GlobalDecl(GlobalDecl { variable, .. }) => variable,
             Declaration::NonLocalDecl(NonLocalDecl { variable, .. }) => variable,
             Declaration::VarDef(VarDef {
-                var: Tv::TypedVar(TypedVar { identifier, .. }),
+                var: TypedVar { identifier, .. },
                 ..
             }) => identifier,
         }
-        .id_mut()
     }
 }
 
-#[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub enum Error {
-    CompilerError(CompilerError),
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields)]
+#[serde(tag = "kind")]
 pub struct Errors {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub errors: Vec<Error>,
+    pub errors: Vec<CompilerError>,
 }
 
 impl_node!(Errors);
 
-#[enum_dispatch(Node)]
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub enum ErrorInfo {
-    Errors(Errors),
-}
-
-impl ErrorInfo {
-    pub fn errors(&self) -> &Errors {
-        let ErrorInfo::Errors(errors) = self;
-        errors
+impl Errors {
+    pub fn sort(&mut self) {
+        self.errors.sort_by_key(|error| error.base().location);
     }
 }
 
@@ -268,6 +256,14 @@ pub struct Expr {
     pub inferred_type: Option<ValueType>,
     #[serde(flatten)]
     pub content: ExprContent,
+}
+
+impl Expr {
+    pub fn get_type(&self) -> &ValueType {
+        self.inferred_type
+            .as_ref()
+            .expect("Type should have been inferred")
+    }
 }
 
 impl Node for Expr {
@@ -297,7 +293,7 @@ impl Expr {
     expr_init!(IntegerLiteral, IntegerLiteral);
     expr_init!(BooleanLiteral, BooleanLiteral);
     expr_init!(CallExpr, CallExpr);
-    expr_init!(Identifier, Identifier);
+    expr_init!(Variable, Variable);
     expr_init!(IfExpr, Box<IfExpr>);
     expr_init!(IndexExpr, Box<IndexExpr>);
     expr_init!(ListExpr, ListExpr);
@@ -316,7 +312,8 @@ pub enum ExprContent {
     IntegerLiteral(IntegerLiteral),
     BooleanLiteral(BooleanLiteral),
     CallExpr(CallExpr),
-    Identifier(Identifier),
+    #[serde(rename = "Identifier")]
+    Variable(Variable),
     IfExpr(Box<IfExpr>),
     IndexExpr(Box<IndexExpr>),
     ListExpr(ListExpr),
@@ -342,7 +339,7 @@ impl_node!(ExprStmt);
 pub struct ForStmt {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub identifier: TypedId,
+    pub identifier: ForTarget,
     pub iterable: Expr,
     pub body: Vec<Stmt>,
 }
@@ -354,8 +351,8 @@ impl_node!(ForStmt);
 pub struct FuncDef {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub name: Id,
-    pub params: Vec<Tv>,
+    pub name: Identifier,
+    pub params: Vec<TypedVar>,
     #[serde(rename = "returnType")]
     pub return_type: TypeAnnotation,
     pub declarations: Vec<Declaration>,
@@ -365,7 +362,7 @@ pub struct FuncDef {
 impl_node!(FuncDef);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields)]
+#[serde(tag = "kind")]
 pub struct FuncType {
     pub parameters: Vec<ValueType>,
     #[serde(rename = "returnType")]
@@ -373,79 +370,39 @@ pub struct FuncType {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub enum FuncTypeWrapper {
-    FuncType(FuncType),
-}
-
-impl FuncTypeWrapper {
-    pub fn func_type(&self) -> &FuncType {
-        let FuncTypeWrapper::FuncType(func_type) = self;
-        func_type
-    }
-}
-
-#[enum_dispatch(Node)]
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub enum FuncId {
-    Identifier(FuncIdentifier),
-}
-
-impl FuncId {
-    pub fn id(&self) -> &FuncIdentifier {
-        let FuncId::Identifier(id) = self;
-        id
-    }
-    pub fn id_mut(&mut self) -> &mut FuncIdentifier {
-        let FuncId::Identifier(id) = self;
-        id
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct FuncIdentifier {
+#[serde(tag = "kind", rename = "Identifier")]
+pub struct Function {
     #[serde(rename = "inferredType", skip_serializing_if = "Option::is_none")]
-    pub inferred_type: Option<FuncTypeWrapper>,
+    pub inferred_type: Option<FuncType>,
     #[serde(flatten)]
     pub base: NodeBase,
     pub name: String,
 }
 
-impl_node!(FuncIdentifier);
+impl_node!(Function);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct GlobalDecl {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub variable: Id,
+    pub variable: Identifier,
 }
 
 impl_node!(GlobalDecl);
 
-#[enum_dispatch(Node)]
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub enum Id {
-    Identifier(Identifier),
-}
-
-impl Id {
-    pub fn id(&self) -> &Identifier {
-        let Id::Identifier(id) = self;
-        id
-    }
-
-    pub fn id_mut(&mut self) -> &mut Identifier {
-        let Id::Identifier(id) = self;
-        id
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
+pub struct Variable {
+    #[serde(flatten)]
+    pub base: NodeBase,
+    pub name: String,
+}
+
+impl_node!(Variable);
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[serde(tag = "kind")]
 pub struct Identifier {
     #[serde(flatten)]
     pub base: NodeBase,
@@ -546,6 +503,14 @@ pub struct Literal {
     pub content: LiteralContent,
 }
 
+impl Literal {
+    pub fn get_type(&self) -> &ValueType {
+        self.inferred_type
+            .as_ref()
+            .expect("Type should have been inferred")
+    }
+}
+
 impl Node for Literal {
     fn base(&self) -> &NodeBase {
         &self.content.base()
@@ -591,41 +556,23 @@ pub struct MemberExpr {
     #[serde(flatten)]
     pub base: NodeBase,
     pub object: Expr,
-    pub member: Id,
+    pub member: Identifier,
 }
 
 impl_node!(MemberExpr);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct TypedMemberExpr {
+#[serde(rename = "MemberExpr", tag = "kind")]
+pub struct Method {
     #[serde(rename = "inferredType", skip_serializing_if = "Option::is_none")]
-    pub inferred_type: Option<FuncTypeWrapper>,
+    pub inferred_type: Option<FuncType>,
     #[serde(flatten)]
     pub base: NodeBase,
     pub object: Expr,
-    pub member: Id,
+    pub member: Identifier,
 }
 
-impl_node!(TypedMemberExpr);
-
-#[enum_dispatch(Node)]
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub enum Method {
-    MemberExpr(TypedMemberExpr),
-}
-
-impl Method {
-    pub fn member(&self) -> &TypedMemberExpr {
-        let Method::MemberExpr(member) = self;
-        member
-    }
-    pub fn member_mut(&mut self) -> &mut TypedMemberExpr {
-        let Method::MemberExpr(member) = self;
-        member
-    }
-}
+impl_node!(Method);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
@@ -652,19 +599,19 @@ impl_node!(NoneLiteral);
 pub struct NonLocalDecl {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub variable: Id,
+    pub variable: Identifier,
 }
 
 impl_node!(NonLocalDecl);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields)]
+#[serde(tag = "kind")]
 pub struct Program {
     #[serde(flatten)]
     pub base: NodeBase,
     pub declarations: Vec<Declaration>,
     pub statements: Vec<Stmt>,
-    pub errors: ErrorInfo,
+    pub errors: Errors,
 }
 
 impl_node!(Program);
@@ -704,25 +651,6 @@ impl_node!(StringLiteral);
 #[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind", deny_unknown_fields)]
-pub enum Tv {
-    TypedVar(TypedVar),
-}
-
-impl Tv {
-    pub fn tv(&self) -> &TypedVar {
-        let Tv::TypedVar(tv) = self;
-        tv
-    }
-
-    pub fn tv_mut(&mut self) -> &mut TypedVar {
-        let Tv::TypedVar(tv) = self;
-        tv
-    }
-}
-
-#[enum_dispatch(Node)]
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(tag = "kind", deny_unknown_fields)]
 pub enum TypeAnnotation {
     ClassType(ClassType),
     ListType(Box<ListType>),
@@ -737,27 +665,9 @@ impl TypeAnnotation {
     }
 }
 
-#[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub enum TypedId {
-    Identifier(TypedIdentifier),
-}
-
-impl TypedId {
-    pub fn id(&self) -> &TypedIdentifier {
-        let TypedId::Identifier(id) = self;
-        id
-    }
-    pub fn id_mut(&mut self) -> &mut TypedIdentifier {
-        let TypedId::Identifier(id) = self;
-        id
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct TypedIdentifier {
+#[serde(tag = "kind", rename = "Identifier")]
+pub struct ForTarget {
     #[serde(rename = "inferredType", skip_serializing_if = "Option::is_none")]
     pub inferred_type: Option<ValueType>,
     #[serde(flatten)]
@@ -765,14 +675,22 @@ pub struct TypedIdentifier {
     pub name: String,
 }
 
-impl_node!(TypedIdentifier);
+impl ForTarget {
+    pub fn get_type(&self) -> &ValueType {
+        self.inferred_type
+            .as_ref()
+            .expect("Type should have been inferred")
+    }
+}
+
+impl_node!(ForTarget);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(deny_unknown_fields)]
+#[serde(tag = "kind")]
 pub struct TypedVar {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub identifier: Id,
+    pub identifier: Identifier,
     #[serde(rename = "type")]
     pub type_: TypeAnnotation,
 }
@@ -833,7 +751,7 @@ impl ValueType {
 pub struct VarDef {
     #[serde(flatten)]
     pub base: NodeBase,
-    pub var: Tv,
+    pub var: TypedVar,
     pub value: Literal,
 }
 
@@ -850,50 +768,62 @@ pub struct WhileStmt {
 
 impl_node!(WhileStmt);
 
-lazy_static! {
-    pub static ref TYPE_OBJECT: ValueType = ValueType::ClassValueType(ClassValueType {
+pub static TYPE_OBJECT: Lazy<ValueType> = Lazy::new(|| {
+    ValueType::ClassValueType(ClassValueType {
         class_name: "object".to_owned(),
-    });
-    pub static ref TYPE_NONE: ValueType = ValueType::ClassValueType(ClassValueType {
+    })
+});
+pub static TYPE_NONE: Lazy<ValueType> = Lazy::new(|| {
+    ValueType::ClassValueType(ClassValueType {
         class_name: "<None>".to_owned(),
-    });
-    pub static ref TYPE_EMPTY: ValueType = ValueType::ClassValueType(ClassValueType {
+    })
+});
+pub static TYPE_EMPTY: Lazy<ValueType> = Lazy::new(|| {
+    ValueType::ClassValueType(ClassValueType {
         class_name: "<Empty>".to_owned(),
-    });
-    pub static ref TYPE_STR: ValueType = ValueType::ClassValueType(ClassValueType {
+    })
+});
+pub static TYPE_STR: Lazy<ValueType> = Lazy::new(|| {
+    ValueType::ClassValueType(ClassValueType {
         class_name: "str".to_owned(),
-    });
-    pub static ref TYPE_INT: ValueType = ValueType::ClassValueType(ClassValueType {
+    })
+});
+pub static TYPE_INT: Lazy<ValueType> = Lazy::new(|| {
+    ValueType::ClassValueType(ClassValueType {
         class_name: "int".to_owned(),
-    });
-    pub static ref TYPE_BOOL: ValueType = ValueType::ClassValueType(ClassValueType {
+    })
+});
+pub static TYPE_BOOL: Lazy<ValueType> = Lazy::new(|| {
+    ValueType::ClassValueType(ClassValueType {
         class_name: "bool".to_owned(),
-    });
-    pub static ref TYPE_NONE_LIST: ValueType = ValueType::ListValueType(ListValueType {
-        element_type: Box::new(TYPE_NONE.clone())
-    });
-}
+    })
+});
+pub static TYPE_NONE_LIST: Lazy<ValueType> = Lazy::new(|| {
+    ValueType::ListValueType(ListValueType {
+        element_type: Box::new(TYPE_NONE.clone()),
+    })
+});
 
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn serialize() {
-        let program = Ast::Program(Program {
+        let program = Program {
             base: NodeBase::new(1, 1, 1, 10),
             declarations: vec![Declaration::VarDef(VarDef {
                 base: NodeBase::new(0, 0, 0, 0),
-                var: Tv::TypedVar(TypedVar {
+                var: TypedVar {
                     base: NodeBase::new(0, 0, 0, 0),
-                    identifier: Id::Identifier(Identifier {
+                    identifier: Identifier {
                         base: NodeBase::new(0, 0, 0, 0),
                         name: "a".to_owned(),
-                    }),
+                    },
                     type_: TypeAnnotation::ClassType(ClassType {
                         base: NodeBase::new(0, 0, 0, 0),
                         class_name: "a".to_owned(),
                     }),
-                }),
+                },
                 value: Literal::BooleanLiteral(BooleanLiteral {
                     base: NodeBase::new(0, 0, 0, 0),
                     value: true,
@@ -922,11 +852,11 @@ mod tests {
                     }),
                 })),
             })],
-            errors: ErrorInfo::Errors(Errors {
+            errors: Errors {
                 base: NodeBase::new(0, 0, 0, 0),
                 errors: vec![],
-            }),
-        });
+            },
+        };
 
         let json = serde_json::to_string_pretty(&program).unwrap();
         let recover = serde_json::from_str(&json).unwrap();

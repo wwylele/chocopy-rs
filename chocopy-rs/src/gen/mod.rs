@@ -4,9 +4,12 @@ mod x64;
 
 use crate::local_env::*;
 use crate::node::*;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::convert::*;
+use std::ffi::OsStr;
 use std::io::Write;
+use std::path::*;
 use target_lexicon::*;
 
 const BOOL_PROTOTYPE: &'static str = "bool.$proto";
@@ -92,11 +95,16 @@ struct VarDebug {
     var_type: TypeDebug,
 }
 
+struct LineMap {
+    code_pos: usize,
+    line_number: u32,
+}
+
 struct ProcedureDebug {
     decl_line: u32,
     artificial: bool,
     parent: Option<String>,
-    lines: Vec<(usize, u32)>,
+    lines: Vec<LineMap>,
     return_type: TypeDebug,
     params: Vec<VarDebug>,
     locals: Vec<VarDebug>,
@@ -115,9 +123,14 @@ enum ChunkExtra {
     Data,
 }
 
+enum ChunkLinkTarget {
+    Symbol(String),
+    Data(Vec<u8>),
+}
+
 struct ChunkLink {
     pos: usize,
-    to: String,
+    to: ChunkLinkTarget,
 }
 
 struct Chunk {
@@ -149,7 +162,7 @@ struct MethodDebug {
 struct ClassDebug {
     size: u32,
     attributes: Vec<VarDebug>,
-    methods: HashMap<u32, (String, MethodDebug)>,
+    methods: BTreeMap<u32, (String, MethodDebug)>,
 }
 
 impl ClassDebug {
@@ -160,7 +173,7 @@ impl ClassDebug {
 
 struct CodeSet {
     chunks: Vec<Chunk>,
-    global_size: usize,
+    global_size: u64,
     globals_debug: Vec<VarDebug>,
     classes_debug: HashMap<String, ClassDebug>,
 }
@@ -201,22 +214,40 @@ impl std::fmt::Display for ToolChainError {
 
 impl std::error::Error for ToolChainError {}
 
+#[derive(Debug)]
+struct PathError;
+
+impl std::fmt::Display for PathError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Illegal path")
+    }
+}
+
+impl std::error::Error for PathError {}
+
+fn windows_path_escape(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let path = path.to_str().ok_or(PathError)?;
+
+    // TODO: actually escape the path
+    // For now we just forbid suspicious strings.
+    if path
+        .find(|c| matches!(c, '\"' | '\'' | '^') || c.is_control())
+        .is_some()
+        || path.ends_with('\\')
+    {
+        return Err(PathError.into());
+    }
+
+    Ok(path.to_owned())
+}
+
 pub fn gen(
     source_path: &str,
-    ast: Ast,
+    ast: Program,
     path: &str,
     no_link: bool,
+    static_lib: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let obj_path = if no_link {
-        let obj_path = std::path::Path::new(path);
-        obj_path.to_owned()
-    } else {
-        let mut obj_path = std::env::temp_dir();
-        let obj_name = format!("chocopy-{}.o", rand::random::<u32>());
-        obj_path.push(obj_name.clone());
-        obj_path
-    };
-
     let current_dir_buf = std::env::current_dir();
     let current_dir = current_dir_buf
         .as_ref()
@@ -232,26 +263,6 @@ pub fn gen(
         Platform::Linux => BinaryFormat::Elf,
     };
     let mut obj = object::write::Object::new(binary_format, Architecture::X86_64);
-
-    let import_prototype = |obj: &mut object::write::Object, name: &str| {
-        obj.add_symbol(object::write::Symbol {
-            name: name.into(),
-            value: 0,
-            size: 0,
-            kind: object::SymbolKind::Data,
-            scope: object::SymbolScope::Linkage,
-            weak: false,
-            section: object::write::SymbolSection::Undefined,
-            flags: object::SymbolFlags::None,
-        })
-    };
-
-    import_prototype(&mut obj, BOOL_PROTOTYPE);
-    import_prototype(&mut obj, INT_PROTOTYPE);
-    import_prototype(&mut obj, STR_PROTOTYPE);
-    import_prototype(&mut obj, BOOL_LIST_PROTOTYPE);
-    import_prototype(&mut obj, INT_LIST_PROTOTYPE);
-    import_prototype(&mut obj, OBJECT_LIST_PROTOTYPE);
 
     let import_function = |obj: &mut object::write::Object, name: &str| {
         obj.add_symbol(object::write::Symbol {
@@ -275,6 +286,7 @@ pub fn gen(
     import_function(&mut obj, BUILTIN_LEN);
     import_function(&mut obj, BUILTIN_PRINT);
     import_function(&mut obj, BUILTIN_INPUT);
+    import_function(&mut obj, "[object].$dtor");
 
     let code_set = x64::gen_code_set(ast);
 
@@ -284,23 +296,20 @@ pub fn gen(
         dwarf.add_class(class_name, classes_debug);
     }
 
-    let (global_section, global_section_offset) = obj.add_subsection(
-        object::write::StandardSection::Data,
-        GLOBAL_SECTION.as_bytes(),
-        &vec![0; code_set.global_size],
-        8,
-    );
+    let bss_section = obj.section_id(object::write::StandardSection::UninitializedData);
 
-    obj.add_symbol(object::write::Symbol {
+    let global_symbol = obj.add_symbol(object::write::Symbol {
         name: GLOBAL_SECTION.into(),
-        value: global_section_offset,
-        size: code_set.global_size as u64,
+        value: 0,
+        size: code_set.global_size,
         kind: object::SymbolKind::Data,
         scope: object::SymbolScope::Compilation,
         weak: false,
-        section: object::write::SymbolSection::Section(global_section),
+        section: object::write::SymbolSection::Undefined,
         flags: object::SymbolFlags::None,
     });
+
+    obj.add_symbol_bss(global_symbol, bss_section, code_set.global_size, 8);
 
     for global_debug in code_set.globals_debug {
         dwarf.add_global(global_debug);
@@ -311,7 +320,7 @@ pub fn gen(
     for chunk in &code_set.chunks {
         dwarf.add_chunk(&chunk);
         if let ChunkExtra::Procedure(_) = chunk.extra {
-            let scope = if chunk.name == BUILTIN_CHOCOPY_MAIN || chunk.name == "object.__init__" {
+            let scope = if chunk.name == BUILTIN_CHOCOPY_MAIN {
                 object::SymbolScope::Linkage
             } else {
                 object::SymbolScope::Compilation
@@ -358,44 +367,50 @@ pub fn gen(
         }
     }
 
+    let mut data_id = 0;
+
     for chunk in &code_set.chunks {
         let (from, from_offset) = section_map[&chunk.name];
-        let from_text = if let ChunkExtra::Procedure(_) = chunk.extra {
-            true
+        let size;
+        let kind;
+        let encoding;
+        let addend;
+        if let ChunkExtra::Procedure(_) = chunk.extra {
+            size = 32;
+            kind = object::RelocationKind::Relative;
+            encoding = object::RelocationEncoding::X86RipRelative;
+            addend = -4;
         } else {
-            false
+            size = 64;
+            kind = object::RelocationKind::Absolute;
+            encoding = object::RelocationEncoding::Generic;
+            addend = 0;
         };
         for link in &chunk.links {
-            let to = obj.symbol_id(link.to.as_bytes()).unwrap();
-            let to_symbol = obj.symbol(to);
+            let symbol = match &link.to {
+                ChunkLinkTarget::Symbol(symbol) => obj.symbol_id(symbol.as_bytes()).unwrap(),
+                ChunkLinkTarget::Data(data) => {
+                    let name = format!("$str{}", data_id);
+                    data_id += 1;
+                    let (id, offset) = obj.add_subsection(
+                        object::write::StandardSection::ReadOnlyData,
+                        name.as_bytes(),
+                        &data,
+                        1,
+                    );
 
-            let (size, kind, encoding, addend) = if from_text {
-                if to_symbol.kind == object::SymbolKind::Data {
-                    (
-                        32,
-                        object::RelocationKind::Relative,
-                        object::RelocationEncoding::X86RipRelative,
-                        -4,
-                    )
-                } else if to_symbol.kind == object::SymbolKind::Text {
-                    (
-                        32,
-                        object::RelocationKind::PltRelative,
-                        object::RelocationEncoding::X86RipRelative,
-                        -4,
-                    )
-                } else {
-                    panic!()
+                    obj.add_symbol(object::write::Symbol {
+                        name: name.into(),
+                        value: offset,
+                        size: 0,
+                        kind: object::SymbolKind::Data,
+                        scope: object::SymbolScope::Compilation,
+                        weak: false,
+                        section: object::write::SymbolSection::Section(id),
+                        flags: object::SymbolFlags::None,
+                    })
                 }
-            } else {
-                (
-                    64,
-                    object::RelocationKind::Absolute,
-                    object::RelocationEncoding::Generic,
-                    0,
-                )
             };
-
             obj.add_relocation(
                 from,
                 object::write::Relocation {
@@ -403,7 +418,7 @@ pub fn gen(
                     size,
                     kind,
                     encoding,
-                    symbol: to,
+                    symbol,
                     addend,
                 },
             )?;
@@ -445,6 +460,16 @@ pub fn gen(
         }
     }
 
+    let obj_path = if no_link {
+        let obj_path = Path::new(path);
+        obj_path.to_owned()
+    } else {
+        let mut obj_path = std::env::temp_dir();
+        let obj_name = format!("chocopy-{}.o", rand::random::<u32>());
+        obj_path.push(obj_name.clone());
+        obj_path
+    };
+
     let mut obj_file = std::fs::File::create(&obj_path)?;
     obj_file.write_all(&obj.write()?)?;
     drop(obj_file);
@@ -463,7 +488,7 @@ pub fn gen(
 
     let ld_output = match PLATFORM {
         Platform::Windows => {
-            let vcvarsall = (|| -> Option<std::path::PathBuf> {
+            let vcvarsall = (|| -> Option<PathBuf> {
                 let linker = cc::windows_registry::find_tool("x86_64-pc-windows-msvc", "link.exe")?;
                 let mut vcvarsall = linker.path();
                 vcvarsall = vcvarsall.parent()?;
@@ -482,39 +507,59 @@ pub fn gen(
             })()
             .ok_or(ToolChainError)?;
 
+            let libs = if static_lib {
+                "libvcruntime.lib libucrt.lib libcmt.lib"
+            } else {
+                "vcruntime.lib ucrt.lib msvcrt.lib"
+            };
+
+            // We need to execute vcvarsall.bat, then link.exe with the
+            // inherited environment variables.
+            // However, the syntax for chained execution in `cmd` is not in the
+            // standard escaping format, and rust std::process::Command doesn't
+            // support it. To work around this, we make a temporary batch file
+            // with the commands we want, and execute that batch file.
             let batch_content = format!(
                 "@echo off
 call \"{}\" amd64
 link /NOLOGO /NXCOMPAT /OPT:REF,NOICF \
 \"{}\" \"{}\" /OUT:\"{}\" \
-kernel32.lib advapi32.lib ws2_32.lib userenv.lib vcruntime.lib ucrt.lib msvcrt.lib \
+kernel32.lib advapi32.lib ws2_32.lib userenv.lib {} \
 /SUBSYSTEM:CONSOLE",
-                vcvarsall.as_os_str().to_str().unwrap(),
-                obj_path.as_os_str().to_str().unwrap(),
-                lib_path.as_os_str().to_str().unwrap(),
-                path
+                windows_path_escape(&vcvarsall)?,
+                windows_path_escape(&obj_path)?,
+                windows_path_escape(&lib_path)?,
+                windows_path_escape(Path::new(path))?,
+                libs
             );
 
-            let bat_name = format!("chocopy-temp-{}.bat", rand::random::<u32>());
+            let mut bat_path = std::env::temp_dir();
+            let bat_name = format!("chocopy-{}.bat", rand::random::<u32>());
+            bat_path.push(bat_name);
 
-            std::fs::write(&bat_name, batch_content)?;
+            std::fs::write(&bat_path, batch_content)?;
 
             let ld_output = std::process::Command::new("cmd")
-                .args(&["/c", &bat_name])
+                .args(&[OsStr::new("/c"), bat_path.as_os_str()])
                 .output()?;
-            std::fs::remove_file(&bat_name)?;
+            std::fs::remove_file(&bat_path)?;
             ld_output
         }
-        Platform::Linux => std::process::Command::new("gcc")
-            .args(&[
-                "-o",
-                path,
-                obj_path.to_str().unwrap(),
-                lib_path.to_str().unwrap(),
-                "-pthread",
-                "-ldl",
-            ])
-            .output()?,
+        Platform::Linux => {
+            let mut command = std::process::Command::new("gcc");
+            command.args(&[
+                OsStr::new("-o"),
+                OsStr::new(path),
+                obj_path.as_os_str(),
+                lib_path.as_os_str(),
+                OsStr::new("-pthread"),
+                OsStr::new("-ldl"),
+            ]);
+            if static_lib {
+                command.arg("-static");
+            }
+            command.output()?
+        }
     };
 
     if !ld_output.status.success() {

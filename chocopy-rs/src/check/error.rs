@@ -110,10 +110,10 @@ pub fn error_index_right(index: &ValueType) -> String {
     format!("Index is of non-integer type `{}`", &index)
 }
 
-pub fn error_attribute(name: &str, class_type: &ValueType) -> String {
+pub fn error_attribute(name: &str, class_name: &str) -> String {
     format!(
         "There is no attribute named `{}` in class `{}`",
-        name, class_type
+        name, class_name
     )
 }
 
@@ -146,13 +146,4 @@ pub fn error_top_return() -> String {
 
 pub fn error_str_index_assign() -> String {
     "`str` is not a list type".to_owned()
-}
-
-pub fn error_from(node: &impl Node) -> Error {
-    let base = node.base();
-    Error::CompilerError(CompilerError {
-        base: NodeBase::from_location(base.location),
-        message: base.error_msg.clone().unwrap(),
-        syntax: false,
-    })
 }
