@@ -50,7 +50,7 @@ impl Platform {
     fn stack_reserve(&self) -> usize {
         match self {
             Platform::Windows => 4,
-            Platform::Linux => 0,
+            Platform::Linux | Platform::Macos => 0,
         }
     }
 }
@@ -236,7 +236,7 @@ impl<'a> Emitter<'a> {
                 // lea rcx,[rip+{_PROTOTYPE}]
                 self.emit(&[0x48, 0x8D, 0x0D]);
             }
-            Platform::Linux => {
+            Platform::Linux | Platform::Macos => {
                 // lea rdi,[rip+{_PROTOTYPE}]
                 self.emit(&[0x48, 0x8D, 0x3D]);
             }
@@ -297,7 +297,7 @@ impl<'a> Emitter<'a> {
             self.prepare_call(PLATFORM.stack_reserve());
             match PLATFORM {
                 Platform::Windows => self.emit(&[0x48, 0x89, 0xc1]), // mov rcx,rax
-                Platform::Linux => self.emit(&[0x48, 0x89, 0xc7]),   // mov rdi,rax
+                Platform::Linux | Platform::Macos => self.emit(&[0x48, 0x89, 0xc7]), // mov rdi,rax
             }
             self.call(BUILTIN_FREE_OBJ);
 
@@ -1695,7 +1695,7 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
             // lea rcx,[rip+{}]
             code.emit(&[0x48, 0x8D, 0x0D]);
         }
-        Platform::Linux => {
+        Platform::Linux | Platform::Macos => {
             // xor rsi,rsi
             code.emit(&[0x48, 0x31, 0xF6]);
             // lea rdi,[rip+{}]
@@ -1770,7 +1770,7 @@ fn gen_dtor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
             code.emit_push_rsi();
             code.emit_push_rdi();
         }
-        Platform::Linux => {
+        Platform::Linux | Platform::Macos => {
             code.emit_push_rdi();
         }
     }
@@ -1789,7 +1789,7 @@ fn gen_dtor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
             code.emit_pop_rdi();
             code.emit_pop_rsi();
         }
-        Platform::Linux => (),
+        Platform::Linux | Platform::Macos => (),
     }
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -1880,7 +1880,7 @@ fn gen_len() -> Chunk {
     let mut code = Emitter::new("len", None, None, vec![], 0);
     match PLATFORM {
         Platform::Windows => code.emit(&[0x48, 0x8B, 0x4C, 0x24, 0x10]), //  mov rcx,[rsp+16]
-        Platform::Linux => code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]),   // mov rdi,[rsp+16]
+        Platform::Linux | Platform::Macos => code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]), // mov rdi,[rsp+16]
     }
     code.prepare_call(PLATFORM.stack_reserve());
     code.call(BUILTIN_LEN);
@@ -1905,7 +1905,7 @@ fn gen_input() -> Chunk {
     let mut code = Emitter::new("input", None, None, vec![], 0);
     match PLATFORM {
         Platform::Windows => code.emit(&[0x48, 0x8D, 0x0D]), // lea rcx,[rip+{}]
-        Platform::Linux => code.emit(&[0x48, 0x8D, 0x3D]),   // lea rdi,[rip+{}]
+        Platform::Linux | Platform::Macos => code.emit(&[0x48, 0x8D, 0x3D]), // lea rdi,[rip+{}]
     }
     code.emit_link(STR_PROTOTYPE, 0);
     code.prepare_call(PLATFORM.stack_reserve());
@@ -1926,7 +1926,7 @@ fn gen_print() -> Chunk {
     let mut code = Emitter::new("print", None, None, vec![], 0);
     match PLATFORM {
         Platform::Windows => code.emit(&[0x48, 0x8B, 0x4C, 0x24, 0x10]), // mov rcx,[rsp+16]
-        Platform::Linux => code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]),   // mov rdi,[rsp+16]
+        Platform::Linux | Platform::Macos => code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]), // mov rdi,[rsp+16]
     }
     code.prepare_call(PLATFORM.stack_reserve());
     code.call(BUILTIN_PRINT);

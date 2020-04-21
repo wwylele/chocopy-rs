@@ -38,6 +38,7 @@ const GLOBAL_SECTION: &'static str = "$global";
 enum Platform {
     Windows,
     Linux,
+    Macos,
 }
 
 #[cfg(target_os = "windows")]
@@ -45,6 +46,9 @@ const PLATFORM: Platform = Platform::Windows;
 
 #[cfg(target_os = "linux")]
 const PLATFORM: Platform = Platform::Linux;
+
+#[cfg(target_os = "macos")]
+const PLATFORM: Platform = Platform::Macos;
 
 #[derive(PartialEq, Eq, Hash, Clone)]
 struct TypeDebug {
@@ -261,6 +265,7 @@ pub fn gen(
     let binary_format = match PLATFORM {
         Platform::Windows => BinaryFormat::Coff,
         Platform::Linux => BinaryFormat::Elf,
+        Platform::Macos => BinaryFormat::Macho,
     };
     let mut obj = object::write::Object::new(binary_format, Architecture::X86_64);
 
@@ -480,7 +485,7 @@ pub fn gen(
 
     let lib_file = match PLATFORM {
         Platform::Windows => "chocopy_rs_std.lib",
-        Platform::Linux => "libchocopy_rs_std.a",
+        Platform::Linux | Platform::Macos => "libchocopy_rs_std.a",
     };
 
     let mut lib_path = std::env::current_exe()?;
@@ -547,6 +552,21 @@ kernel32.lib advapi32.lib ws2_32.lib userenv.lib {} \
         }
         Platform::Linux => {
             let mut command = std::process::Command::new("gcc");
+            command.args(&[
+                OsStr::new("-o"),
+                OsStr::new(path),
+                obj_path.as_os_str(),
+                lib_path.as_os_str(),
+                OsStr::new("-pthread"),
+                OsStr::new("-ldl"),
+            ]);
+            if static_lib {
+                command.arg("-static");
+            }
+            command.output()?
+        }
+        Platform::Macos => {
+            let mut command = std::process::Command::new("clang");
             command.args(&[
                 OsStr::new("-o"),
                 OsStr::new(path),
