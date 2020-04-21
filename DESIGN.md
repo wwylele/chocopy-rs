@@ -53,7 +53,7 @@ Array-like objects (`str` and `[T]`) has a 16-byte `$len` attribute after the ob
 
 #### Prototype objects
 
-For each type with name `C` (including all primitive types), the global symbol `C.$proto` points to a _prototype_ object of that class. All objects of type `C` also has its `$proto` attribute pointed to this prototype object. Prototype objects in chocopy-rs serve a combined purpose of two things in the implementation guide: the type tag and the dispatch table. Note that the original purpose of prototype described in the implementation guide is **not** included in the prototype here. Please refer the next section _Constructors_ for this.
+For each type with name `C` (including all primitive types), the global symbol `C.$proto` points to a _prototype_ object of that class. All objects of type `C` also has its `$proto` attribute pointed to this prototype object. Prototype objects in chocopy-rs share two purposes with prototype objects in the reference implementation: the type tag and the dispatch table. The third purpose of prototype objects in the reference implementation, object initial values, is **not** included in the prototype here. Please refer the next section _Constructors_ for this.
 
 A prototype object starts with a 4-byte signed integer `$size` that describes the memory layout of objects of type `C`. When it is a positive number, it is the object size without the object header. When it is a negative number, it indicates `C` is an array-like type and the value without the sign is the size of one element.
 
@@ -127,8 +127,3 @@ chocopy-rs implements simple garbage collection by reference counting. Just like
 #### Destructors
 
 For each type with name `C`, the global symbol `C.$dtor` (also pointed by `C.$proto.$dtor`) is the destructor for the type. The destructor is called by the standard library when the object is being deallocated. The destructor decreases the reference counter for each of its non-unwrapped, non-None attributes, and recursively deallocate more objects if needed.
-
-
-
-
-
