@@ -667,6 +667,12 @@ impl<'a> Emitter<'a> {
 
                     // xchg eax,r11d
                     self.emit(&[0x41, 0x93]);
+                    // mov ecx,r11d
+                    self.emit(&[0x44, 0x89, 0xD9]);
+                    // xor ecx,eax
+                    self.emit(&[0x31, 0xC1]);
+                    // shr ecx,31
+                    self.emit(&[0xC1, 0xE9, 0x1F]);
                     // cdq
                     self.emit(&[0x99]);
                     // idiv,r11d
@@ -674,6 +680,23 @@ impl<'a> Emitter<'a> {
                     if expr.operator == BinaryOp::Mod {
                         // mov eax,edx
                         self.emit(&[0x89, 0xD0]);
+                        // test edx,edx
+                        self.emit(&[0x85, 0xD2]);
+                        // cmove r11d,edx
+                        self.emit(&[0x44, 0x0F, 0x44, 0xDA]);
+                        // test ecx,ecx
+                        self.emit(&[0x85, 0xC9]);
+                        // cmove r11d,ecx
+                        self.emit(&[0x44, 0x0F, 0x44, 0xD9]);
+                        // add eax,r11d
+                        self.emit(&[0x44, 0x01, 0xD8]);
+                    } else {
+                        // test edx,edx
+                        self.emit(&[0x85, 0xD2]);
+                        // cmove ecx,edx
+                        self.emit(&[0x0F, 0x44, 0xCA]);
+                        // sub eax,ecx
+                        self.emit(&[0x29, 0xC8]);
                     }
                 }
                 BinaryOp::Is => {
