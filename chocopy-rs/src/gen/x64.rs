@@ -55,6 +55,16 @@ impl Platform {
     }
 }
 
+#[must_use]
+struct ForwardJumper {
+    from: usize,
+}
+
+#[must_use]
+struct BackwardJumper {
+    to: usize,
+}
+
 impl<'a> Emitter<'a> {
     pub fn new(
         name: &str,
@@ -91,6 +101,27 @@ impl<'a> Emitter<'a> {
 
     pub fn pos(&self) -> usize {
         self.code.len()
+    }
+
+    pub fn jump_from(&mut self) -> ForwardJumper {
+        let from = self.pos();
+        self.emit(&[0; 4]);
+        ForwardJumper { from }
+    }
+
+    pub fn to_here(&mut self, jump: ForwardJumper) {
+        let from = jump.from;
+        let delta = (self.pos() - from - 4) as u32;
+        self.code[from..from + 4].copy_from_slice(&delta.to_le_bytes());
+    }
+
+    pub fn jump_to(&self) -> BackwardJumper {
+        BackwardJumper { to: self.pos() }
+    }
+
+    pub fn from_here(&mut self, jump: BackwardJumper) {
+        let delta = -((self.pos() - jump.to + 4) as i32);
+        self.emit(&delta.to_le_bytes());
     }
 
     pub fn end_proc(&mut self) {
@@ -251,12 +282,10 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x48, 0x85, 0xC0]);
         // jne
         self.emit(&[0x0F, 0x85]);
-        let pos = self.pos();
-        self.emit(&[0; 4]);
+        let ok = self.jump_from();
         self.prepare_call(PLATFORM.stack_reserve());
         self.call(BUILTIN_NONE_OP);
-        let delta = (self.pos() - pos - 4) as u32;
-        self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
+        self.to_here(ok);
     }
 
     pub fn emit_box_int(&mut self) {
@@ -284,29 +313,23 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x48, 0x85, 0xC0]);
         // je
         self.emit(&[0x0f, 0x84]);
-        let pos = self.pos();
-        self.emit(&[0; 4]);
+        let skip_a = self.jump_from();
         // sub QWORD PTR [rax+8],1
         self.emit(&[0x48, 0x83, 0x68, 0x08, 0x01]);
-        {
-            // jne
-            self.emit(&[0x0f, 0x85]);
-            let pos = self.pos();
-            self.emit(&[0; 4]);
 
-            self.prepare_call(PLATFORM.stack_reserve());
-            match PLATFORM {
-                Platform::Windows => self.emit(&[0x48, 0x89, 0xc1]), // mov rcx,rax
-                Platform::Linux | Platform::Macos => self.emit(&[0x48, 0x89, 0xc7]), // mov rdi,rax
-            }
-            self.call(BUILTIN_FREE_OBJ);
+        // jne
+        self.emit(&[0x0f, 0x85]);
+        let skip_b = self.jump_from();
 
-            let delta = (self.pos() - pos - 4) as u32;
-            self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
+        self.prepare_call(PLATFORM.stack_reserve());
+        match PLATFORM {
+            Platform::Windows => self.emit(&[0x48, 0x89, 0xc1]), // mov rcx,rax
+            Platform::Linux | Platform::Macos => self.emit(&[0x48, 0x89, 0xc7]), // mov rdi,rax
         }
+        self.call(BUILTIN_FREE_OBJ);
 
-        let delta = (self.pos() - pos - 4) as u32;
-        self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
+        self.to_here(skip_b);
+        self.to_here(skip_a);
     }
 
     pub fn emit_clone(&mut self) {
@@ -432,11 +455,10 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x48, 0x85, 0xC9]);
         // je skip
         self.emit(&[0x0F, 0x84]);
-        let pos_skip = self.pos();
-        self.emit(&[0; 4]);
+        let skip = self.jump_from();
         // add rsi,24
         self.emit(&[0x48, 0x83, 0xC6, 0x18]);
-        let pos_loop = self.pos();
+        let loop_pos = self.jump_to();
 
         self.emit_push_rax();
 
@@ -488,11 +510,9 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x48, 0xFF, 0xC9]);
         // jne
         self.emit(&[0x0F, 0x85]);
-        let loop_delta = -((self.pos() - pos_loop + 4) as i32);
-        self.emit(&loop_delta.to_le_bytes());
+        self.from_here(loop_pos);
 
-        let skip_delta = (self.pos() - pos_skip - 4) as u32;
-        self.code[pos_skip..pos_skip + 4].copy_from_slice(&skip_delta.to_le_bytes());
+        self.to_here(skip);
     }
 
     pub fn emit_list_add(&mut self, expr: &BinaryExpr, target_element: &ValueType) {
@@ -627,11 +647,9 @@ impl<'a> Emitter<'a> {
                 // je
                 self.emit(&[0x0f, 0x84]);
             }
-            let pos = self.pos();
-            self.emit(&[0; 4]);
+            let skip = self.jump_from();
             self.emit_expression(&expr.right);
-            let delta = (self.pos() - pos - 4) as u32;
-            self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
+            self.to_here(skip);
         } else {
             self.emit_expression(&expr.left);
             self.emit_push_rax();
@@ -658,13 +676,10 @@ impl<'a> Emitter<'a> {
                     self.emit(&[0x85, 0xC0]);
                     // jne
                     self.emit(&[0x0F, 0x85]);
-                    let pos = self.pos();
-                    self.emit(&[0; 4]);
+                    let ok = self.jump_from();
                     self.prepare_call(PLATFORM.stack_reserve());
                     self.call(BUILTIN_DIV_ZERO);
-                    let delta = (self.pos() - pos - 4) as u32;
-                    self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
-
+                    self.to_here(ok);
                     // xchg eax,r11d
                     self.emit(&[0x41, 0x93]);
                     // mov ecx,r11d
@@ -831,12 +846,10 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x49, 0x3B, 0x73, 0x10]);
         // jb
         self.emit(&[0x0F, 0x82]);
-        let pos = self.pos();
-        self.emit(&[0; 4]);
+        let ok = self.jump_from();
         self.prepare_call(PLATFORM.stack_reserve());
         self.call(BUILTIN_OUT_OF_BOUND);
-        let delta = (self.pos() - pos - 4) as u32;
-        self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
+        self.to_here(ok);
         // mov r10b,[r11+rsi+24]
         self.emit(&[0x45, 0x8A, 0x54, 0x33, 0x18]);
         // mov [rax+24],r10b
@@ -866,12 +879,10 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x48, 0x3B, 0x46, 0x10]);
         // jb
         self.emit(&[0x0F, 0x82]);
-        let pos = self.pos();
-        self.emit(&[0; 4]);
+        let ok = self.jump_from();
         self.prepare_call(PLATFORM.stack_reserve());
         self.call(BUILTIN_OUT_OF_BOUND);
-        let delta = (self.pos() - pos - 4) as u32;
-        self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
+        self.to_here(ok);
 
         if element_type == &*TYPE_INT {
             // mov eax,[rsi+rax*4+24]
@@ -932,24 +943,20 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x84, 0xC0]);
         // je
         self.emit(&[0x0f, 0x84]);
-        let pos_if = self.pos();
-        self.emit(&[0; 4]);
+        let label_else = self.jump_from();
 
         self.emit_expression(&expr.then_expr);
         self.emit_coerce(&expr.then_expr.get_type(), target_type);
 
         // jmp
         self.emit(&[0xe9]);
-        let pos_else = self.pos();
-        self.emit(&[0; 4]);
-        let if_delta = self.pos() - pos_if - 4;
-        self.code[pos_if..pos_if + 4].copy_from_slice(&(if_delta as u32).to_le_bytes());
+        let label_end = self.jump_from();
+        self.to_here(label_else);
 
         self.emit_expression(&expr.else_expr);
         self.emit_coerce(&expr.else_expr.get_type(), target_type);
 
-        let else_delta = self.pos() - pos_else - 4;
-        self.code[pos_else..pos_else + 4].copy_from_slice(&(else_delta as u32).to_le_bytes());
+        self.to_here(label_end);
     }
 
     pub fn emit_if_stmt(&mut self, stmt: &IfStmt, lines: &mut Vec<LineMap>) {
@@ -958,8 +965,7 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x84, 0xC0]);
         // je
         self.emit(&[0x0f, 0x84]);
-        let pos_if = self.pos();
-        self.emit(&[0; 4]);
+        let label_else = self.jump_from();
 
         for stmt in &stmt.then_body {
             self.emit_statement(stmt, lines);
@@ -967,17 +973,14 @@ impl<'a> Emitter<'a> {
 
         // jmp
         self.emit(&[0xe9]);
-        let pos_else = self.pos();
-        self.emit(&[0; 4]);
-        let if_delta = self.pos() - pos_if - 4;
-        self.code[pos_if..pos_if + 4].copy_from_slice(&(if_delta as u32).to_le_bytes());
+        let label_end = self.jump_from();
+        self.to_here(label_else);
 
         for stmt in &stmt.else_body {
             self.emit_statement(stmt, lines);
         }
 
-        let else_delta = self.pos() - pos_else - 4;
-        self.code[pos_else..pos_else + 4].copy_from_slice(&(else_delta as u32).to_le_bytes());
+        self.to_here(label_end);
     }
 
     pub fn emit_list_expr(&mut self, expr: &ListExpr, target_type: &ValueType) {
@@ -1145,14 +1148,13 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn emit_while_stmt(&mut self, stmt: &WhileStmt, lines: &mut Vec<LineMap>) {
-        let pos_start = self.pos();
+        let start = self.jump_to();
         self.emit_expression(&stmt.condition);
         // test al,al
         self.emit(&[0x84, 0xC0]);
         // je
         self.emit(&[0x0f, 0x84]);
-        let pos_condition = self.pos();
-        self.emit(&[0; 4]);
+        let end = self.jump_from();
 
         for stmt in &stmt.body {
             self.emit_statement(stmt, lines);
@@ -1160,10 +1162,8 @@ impl<'a> Emitter<'a> {
 
         // jmp
         self.emit(&[0xe9]);
-        let back_delta = -((self.pos() + 4 - pos_start) as i32);
-        self.emit(&back_delta.to_le_bytes());
-        let if_delta = (self.pos() - pos_condition - 4) as u32;
-        self.code[pos_condition..pos_condition + 4].copy_from_slice(&if_delta.to_le_bytes());
+        self.from_here(start);
+        self.to_here(end);
     }
 
     pub fn emit_assign_identifier(
@@ -1259,12 +1259,10 @@ impl<'a> Emitter<'a> {
                     self.emit(&[0x48, 0x3B, 0x46, 0x10]);
                     // jb
                     self.emit(&[0x0F, 0x82]);
-                    let pos = self.pos();
-                    self.emit(&[0; 4]);
+                    let ok = self.jump_from();
                     self.prepare_call(PLATFORM.stack_reserve());
                     self.call(BUILTIN_OUT_OF_BOUND);
-                    let delta = (self.pos() - pos - 4) as u32;
-                    self.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
+                    self.to_here(ok);
 
                     if target_type == &*TYPE_INT {
                         // lea rsi,[rsi+rax*4+24]
@@ -1366,7 +1364,7 @@ impl<'a> Emitter<'a> {
         // xor rax,rax
         self.emit(&[0x48, 0x31, 0xC0]);
 
-        let pos_start = self.pos();
+        let start = self.jump_to();
         //// Check the index range
         // mov rsi,[rsp]
         self.emit(&[0x48, 0x8B, 0x34, 0x24]);
@@ -1374,8 +1372,7 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x48, 0x3B, 0x46, 0x10]);
         // je
         self.emit(&[0x0f, 0x84]);
-        let pos_condition = self.pos();
-        self.emit(&[0; 4]);
+        let end = self.jump_from();
 
         self.emit_push_rax();
 
@@ -1433,10 +1430,8 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x48, 0xFF, 0xC0]);
         // jmp
         self.emit(&[0xe9]);
-        let back_delta = -((self.pos() + 4 - pos_start) as i32);
-        self.emit(&back_delta.to_le_bytes());
-        let if_delta = (self.pos() - pos_condition - 4) as u32;
-        self.code[pos_condition..pos_condition + 4].copy_from_slice(&if_delta.to_le_bytes());
+        self.from_here(start);
+        self.to_here(end);
 
         //// Drop the iterable
         self.clean_up_list.pop();
@@ -2020,14 +2015,12 @@ fn gen_main(
 
     // je
     main_code.emit(&[0x0f, 0x84]);
-    let pos = main_code.pos();
-    main_code.emit(&[0; 4]);
+    let ok = main_code.jump_from();
 
     main_code.prepare_call(PLATFORM.stack_reserve());
     main_code.call(BUILTIN_BROKEN_STACK);
 
-    let delta = (main_code.pos() - pos - 4) as u32;
-    main_code.code[pos..pos + 4].copy_from_slice(&delta.to_le_bytes());
+    main_code.to_here(ok);
 
     main_code.end_proc();
 
