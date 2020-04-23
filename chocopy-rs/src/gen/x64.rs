@@ -109,6 +109,7 @@ impl<'a> Emitter<'a> {
         ForwardJumper { from }
     }
 
+    #[allow(clippy::wrong_self_convention)] // No it is not a to_type function
     pub fn to_here(&mut self, jump: ForwardJumper) {
         let from = jump.from;
         let delta = (self.pos() - from - 4) as u32;
@@ -362,7 +363,7 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x48, 0xc7, 0xc6]);
         self.emit(&(s.len() as u32).to_le_bytes());
         self.call_builtin_alloc(STR_PROTOTYPE);
-        if s.len() != 0 {
+        if !s.is_empty() {
             // lea rdi,[rax+24]
             self.emit(&[0x48, 0x8D, 0x78, 0x18]);
             // lea rsi,[rip+{STR}]
@@ -1355,6 +1356,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    #[allow(clippy::useless_let_if_seq)] // Tell me which is more readable
     pub fn emit_for_stmt(&mut self, stmt: &ForStmt, lines: &mut Vec<LineMap>) {
         //// Compute the iterable
         self.emit_expression(&stmt.iterable);
@@ -1725,7 +1727,7 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
     code.call(BUILTIN_ALLOC_OBJ);
     code.emit_push_rax();
 
-    for (_, attribute) in &class_slot.attributes {
+    for attribute in class_slot.attributes.values() {
         match &attribute.init {
             LiteralContent::NoneLiteral(_) => {
                 code.emit_none_literal();
@@ -1792,7 +1794,7 @@ fn gen_dtor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
             code.emit_push_rdi();
         }
     }
-    for (_, attribute) in &class_slot.attributes {
+    for attribute in class_slot.attributes.values() {
         if attribute.target_type != *TYPE_INT && attribute.target_type != *TYPE_BOOL {
             // mov rax,[rbp-8]
             code.emit(&[0x48, 0x8B, 0x45, 0xF8]);

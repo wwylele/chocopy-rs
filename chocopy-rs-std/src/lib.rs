@@ -1,3 +1,5 @@
+#![allow(clippy::missing_safety_doc)]
+
 use std::alloc::*;
 use std::mem::*;
 use std::process::exit;
@@ -5,9 +7,8 @@ use std::sync::atomic::*;
 
 static ALLOC_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-#[allow(unused)]
 #[repr(i32)]
-enum TypeTag {
+pub enum TypeTag {
     Other = 0,
     Int = 1,
     Bool = 2,
@@ -19,7 +20,7 @@ enum TypeTag {
 pub struct Prototype {
     size: i32,
     tag: TypeTag,
-    dtor: unsafe extern "C" fn(*mut u8),
+    dtor: unsafe extern "C" fn(*mut Object),
     // followed by other method pointers
 }
 
@@ -47,35 +48,34 @@ fn align_up(size: usize) -> usize {
 }
 
 #[export_name = "[object].$dtor"]
-pub unsafe extern "C" fn dtor_list(pointer: *mut u8) {
-    let object = pointer as *mut ArrayObject;
-    let len = (*object).len;
-    let elements = object.offset(1) as *mut *mut Object;
+pub unsafe extern "C" fn dtor_list(pointer: *mut ArrayObject) {
+    let len = (*pointer).len;
+    let elements = pointer.offset(1) as *mut *mut Object;
     for i in 0..len {
         let element = *elements.offset(i as isize);
         if !element.is_null() {
             (*element).ref_count -= 1;
             if (*element).ref_count == 0 {
-                free_obj(element as *mut u8);
+                free_obj(element);
             }
         }
     }
 }
 
 #[export_name = "$alloc_obj"]
-pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mut u8 {
+pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mut Object {
     let size = align_up(if (*prototype).size > 0 {
         assert!(len == 0);
         size_of::<Object>() + (*prototype).size as usize
     } else {
         size_of::<ArrayObject>() + (-(*prototype).size as u64 * len) as usize
     });
-    let pointer = alloc(Layout::from_size_align(size, 8).unwrap());
+    let pointer = alloc(Layout::from_size_align(size, 8).unwrap()).cast::<Object>();
     if pointer.is_null() {
         out_of_memory();
     }
-    (*(pointer as *mut Object)).prototype = prototype;
-    (*(pointer as *mut Object)).ref_count = 1;
+    (*pointer).prototype = prototype;
+    (*pointer).ref_count = 1;
     if (*prototype).size < 0 {
         (*(pointer as *mut ArrayObject)).len = len;
     }
@@ -84,9 +84,9 @@ pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mu
 }
 
 #[export_name = "$free_obj"]
-pub unsafe extern "C" fn free_obj(pointer: *mut u8) {
-    assert!((*(pointer as *mut Object)).ref_count == 0);
-    let prototype = (*(pointer as *mut Object)).prototype;
+pub unsafe extern "C" fn free_obj(pointer: *mut Object) {
+    assert!((*pointer).ref_count == 0);
+    let prototype = (*pointer).prototype;
     ((*prototype).dtor)(pointer);
     let size = align_up(if (*prototype).size > 0 {
         size_of::<Object>() + (*prototype).size as usize
@@ -94,12 +94,15 @@ pub unsafe extern "C" fn free_obj(pointer: *mut u8) {
         let len = (*(pointer as *mut ArrayObject)).len;
         size_of::<ArrayObject>() + (-(*prototype).size as u64 * len) as usize
     });
-    dealloc(pointer, Layout::from_size_align(size, 8).unwrap());
+    dealloc(
+        pointer as *mut u8,
+        Layout::from_size_align(size, 8).unwrap(),
+    );
     ALLOC_COUNTER.fetch_sub(1, Ordering::SeqCst);
 }
 
 #[export_name = "$len"]
-pub unsafe extern "C" fn len(pointer: *mut u8) -> i32 {
+pub unsafe extern "C" fn len(pointer: *mut Object) -> i32 {
     if pointer.is_null() {
         invalid_arg();
     }
@@ -117,20 +120,19 @@ pub unsafe extern "C" fn len(pointer: *mut u8) -> i32 {
 }
 
 #[export_name = "$print"]
-pub unsafe extern "C" fn print(pointer: *mut u8) -> *mut u8 {
+pub unsafe extern "C" fn print(pointer: *mut Object) -> *mut u8 {
     if pointer.is_null() {
         invalid_arg();
     }
-    let object = pointer as *mut Object;
-    let prototype = (*object).prototype;
+    let prototype = (*pointer).prototype;
     match (*prototype).tag {
         TypeTag::Int => {
-            println!("{}", *(object.offset(1) as *const i32));
+            println!("{}", *(pointer.offset(1) as *const i32));
         }
         TypeTag::Bool => {
             println!(
                 "{}",
-                if *(object.offset(1) as *const bool) {
+                if *(pointer.offset(1) as *const bool) {
                     "True"
                 } else {
                     "False"
@@ -138,7 +140,7 @@ pub unsafe extern "C" fn print(pointer: *mut u8) -> *mut u8 {
             );
         }
         TypeTag::Str => {
-            let object = object as *mut ArrayObject;
+            let object = pointer as *mut ArrayObject;
             let slice = std::str::from_utf8(std::slice::from_raw_parts(
                 object.offset(1) as *const u8,
                 (*object).len as usize,
@@ -151,15 +153,15 @@ pub unsafe extern "C" fn print(pointer: *mut u8) -> *mut u8 {
         }
     }
 
-    (*object).ref_count -= 1;
-    if (*object).ref_count == 0 {
+    (*pointer).ref_count -= 1;
+    if (*pointer).ref_count == 0 {
         free_obj(pointer);
     }
     std::ptr::null_mut()
 }
 
 #[export_name = "$input"]
-pub unsafe extern "C" fn input(str_proto: *const Prototype) -> *mut u8 {
+pub unsafe extern "C" fn input(str_proto: *const Prototype) -> *mut Object {
     let mut input = String::new();
     std::io::stdin().read_line(&mut input).unwrap();
     let input = input.as_bytes();
@@ -174,7 +176,7 @@ pub unsafe extern "C" fn input(str_proto: *const Prototype) -> *mut u8 {
     let pointer = alloc_obj(str_proto, len);
     std::ptr::copy_nonoverlapping(
         input.as_ptr(),
-        pointer.offset(size_of::<ArrayObject>() as isize),
+        (pointer as *mut u8).add(size_of::<ArrayObject>()),
         input.len(),
     );
     pointer
@@ -185,14 +187,8 @@ fn exit_code(code: i32) -> ! {
     exit(code);
 }
 
-#[cfg(not(test))]
-fn memory_leak() -> ! {
-    println!("--- Memory leak detected! ---");
-    exit_code(-1)
-}
-
 #[export_name = "$broken_stack"]
-pub unsafe extern "C" fn broken_stack() -> ! {
+pub extern "C" fn broken_stack() -> ! {
     println!("--- Broken stack detected! ---");
     exit_code(-2)
 }
@@ -203,19 +199,19 @@ fn invalid_arg() -> ! {
 }
 
 #[export_name = "$div_zero"]
-pub unsafe extern "C" fn div_zero() -> ! {
+pub extern "C" fn div_zero() -> ! {
     println!("Division by zero");
     exit_code(2)
 }
 
 #[export_name = "$out_of_bound"]
-pub unsafe extern "C" fn out_of_bound() -> ! {
+pub extern "C" fn out_of_bound() -> ! {
     println!("Index out of bounds");
     exit_code(3)
 }
 
 #[export_name = "$none_op"]
-pub unsafe extern "C" fn none_op() -> ! {
+pub extern "C" fn none_op() -> ! {
     println!("Operation on None");
     exit_code(4)
 }
@@ -236,7 +232,8 @@ extern "C" {
 pub unsafe extern "C" fn main() -> i32 {
     chocopy_main();
     if ALLOC_COUNTER.load(Ordering::SeqCst) != 0 {
-        memory_leak();
+        println!("--- Memory leak detected! ---");
+        exit_code(-1);
     }
     0
 }

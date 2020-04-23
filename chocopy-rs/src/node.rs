@@ -191,6 +191,7 @@ impl Display for ClassValueType {
     }
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)] // Function signature is required by serde
 fn is_not(b: &bool) -> bool {
     !*b
 }
@@ -207,6 +208,7 @@ pub struct CompilerError {
 
 impl_node!(CompilerError);
 
+#[allow(clippy::large_enum_variant)]
 #[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind", deny_unknown_fields)]

@@ -4,7 +4,7 @@ use gimli::constants::*;
 use gimli::write::*;
 use std::collections::HashMap;
 
-const GLOBAL_RELOC_HACK_MAGIC: u32 = 0xDEADB00Fu32;
+const GLOBAL_RELOC_HACK_MAGIC: u32 = 0xDEAD_B00F_u32;
 
 fn dwarf_add_base_type(
     dwarf: &mut DwarfUnit,
@@ -63,8 +63,7 @@ fn dwarf_add_pointer_type(
 
 fn dwarf_add_subroutine_type(dwarf: &mut DwarfUnit) -> UnitEntryId {
     let root_id = dwarf.unit.root();
-    let id = dwarf.unit.add(root_id, DW_TAG_subroutine_type);
-    id
+    dwarf.unit.add(root_id, DW_TAG_subroutine_type)
 }
 
 fn dwarf_add_array_type(
@@ -547,7 +546,7 @@ impl Dwarf {
 
                 if data.len() >= 4 {
                     for i in 0..data.len() - 3 {
-                        if &data[i..i + 4] == &GLOBAL_RELOC_HACK_MAGIC.to_le_bytes() {
+                        if data[i..i + 4] == GLOBAL_RELOC_HACK_MAGIC.to_le_bytes() {
                             data[i..i + 4].copy_from_slice(&[0; 4]);
                             links.push(DebugChunkLink {
                                 pos: i - 4,

@@ -12,26 +12,26 @@ use std::io::Write;
 use std::path::*;
 use target_lexicon::*;
 
-const BOOL_PROTOTYPE: &'static str = "bool.$proto";
-const INT_PROTOTYPE: &'static str = "int.$proto";
-const STR_PROTOTYPE: &'static str = "str.$proto";
-const BOOL_LIST_PROTOTYPE: &'static str = "[bool].$proto";
-const INT_LIST_PROTOTYPE: &'static str = "[int].$proto";
-const OBJECT_LIST_PROTOTYPE: &'static str = "[object].$proto";
+const BOOL_PROTOTYPE: &str = "bool.$proto";
+const INT_PROTOTYPE: &str = "int.$proto";
+const STR_PROTOTYPE: &str = "str.$proto";
+const BOOL_LIST_PROTOTYPE: &str = "[bool].$proto";
+const INT_LIST_PROTOTYPE: &str = "[int].$proto";
+const OBJECT_LIST_PROTOTYPE: &str = "[object].$proto";
 
-const BUILTIN_ALLOC_OBJ: &'static str = "$alloc_obj";
-const BUILTIN_FREE_OBJ: &'static str = "$free_obj";
-const BUILTIN_BROKEN_STACK: &'static str = "$broken_stack";
-const BUILTIN_DIV_ZERO: &'static str = "$div_zero";
-const BUILTIN_OUT_OF_BOUND: &'static str = "$out_of_bound";
-const BUILTIN_NONE_OP: &'static str = "$none_op";
-const BUILTIN_LEN: &'static str = "$len";
-const BUILTIN_INPUT: &'static str = "$input";
-const BUILTIN_PRINT: &'static str = "$print";
+const BUILTIN_ALLOC_OBJ: &str = "$alloc_obj";
+const BUILTIN_FREE_OBJ: &str = "$free_obj";
+const BUILTIN_BROKEN_STACK: &str = "$broken_stack";
+const BUILTIN_DIV_ZERO: &str = "$div_zero";
+const BUILTIN_OUT_OF_BOUND: &str = "$out_of_bound";
+const BUILTIN_NONE_OP: &str = "$none_op";
+const BUILTIN_LEN: &str = "$len";
+const BUILTIN_INPUT: &str = "$input";
+const BUILTIN_PRINT: &str = "$print";
 
-const BUILTIN_CHOCOPY_MAIN: &'static str = "$chocopy_main";
+const BUILTIN_CHOCOPY_MAIN: &str = "$chocopy_main";
 
-const GLOBAL_SECTION: &'static str = "$global";
+const GLOBAL_SECTION: &str = "$global";
 
 #[allow(unused)]
 #[derive(PartialEq, Eq)]
@@ -471,7 +471,7 @@ pub fn gen(
     } else {
         let mut obj_path = std::env::temp_dir();
         let obj_name = format!("chocopy-{}.o", rand::random::<u32>());
-        obj_path.push(obj_name.clone());
+        obj_path.push(obj_name);
         obj_path
     };
 

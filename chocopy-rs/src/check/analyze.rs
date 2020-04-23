@@ -276,9 +276,7 @@ impl BinaryExpr {
                 }
             }
             BinaryOp::Eq | BinaryOp::Ne => {
-                if left != *TYPE_INT && left != *TYPE_STR && left != *TYPE_BOOL {
-                    error = true
-                } else if left != right {
+                if (left != *TYPE_INT && left != *TYPE_STR && left != *TYPE_BOOL) || left != right {
                     error = true
                 }
                 TYPE_BOOL.clone()
@@ -335,7 +333,7 @@ impl ListExpr {
         o: &mut TypeLocalEnv,
         m: &ClassEnv,
     ) -> ValueType {
-        if self.elements.len() == 0 {
+        if self.elements.is_empty() {
             return TYPE_EMPTY.clone();
         }
         let mut element_type = self.elements[0].analyze(errors, o, m);
