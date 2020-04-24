@@ -350,12 +350,13 @@ pub fn gen(
             });
             section_map.insert(&chunk.name, (section, offset));
         } else {
-            let (section, offset) = obj.add_subsection(
-                object::write::StandardSection::ReadOnlyData,
-                chunk.name.as_bytes(),
-                &chunk.code,
-                8,
-            );
+            let parent_section = if chunk.links.is_empty() {
+                object::write::StandardSection::ReadOnlyData
+            } else {
+                object::write::StandardSection::ReadOnlyDataWithRel
+            };
+            let (section, offset) =
+                obj.add_subsection(parent_section, chunk.name.as_bytes(), &chunk.code, 8);
 
             obj.add_symbol(object::write::Symbol {
                 name: chunk.name.as_bytes().into(),
