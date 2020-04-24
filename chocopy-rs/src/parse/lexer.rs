@@ -16,9 +16,9 @@ struct TextReader<GetChar> {
     early_eof: bool,
 }
 
-impl<GetChar: FnMut() -> Option<char>> TextReader<GetChar> {
+impl<GetChar: Iterator<Item = char>> TextReader<GetChar> {
     fn new(mut get_char: GetChar) -> TextReader<GetChar> {
-        let current = get_char();
+        let current = get_char.next();
         let (current, early_eof) = if current.is_none() {
             (Some('\n'), true)
         } else {
@@ -39,14 +39,14 @@ impl<GetChar: FnMut() -> Option<char>> TextReader<GetChar> {
             Some('\n') => {
                 self.position.row += 1;
                 self.position.col = 1;
-                self.current = (self.get_char)();
+                self.current = self.get_char.next();
             }
             Some('\r') => {
                 self.position.row += 1;
                 self.position.col = 1;
-                self.current = (self.get_char)();
+                self.current = self.get_char.next();
                 if self.current == Some('\n') {
-                    self.current = (self.get_char)();
+                    self.current = self.get_char.next();
                 }
             }
             None => (),
@@ -55,7 +55,7 @@ impl<GetChar: FnMut() -> Option<char>> TextReader<GetChar> {
                 self.current = if self.early_eof {
                     None
                 } else {
-                    let c = (self.get_char)();
+                    let c = self.get_char.next();
                     if c.is_none() {
                         self.early_eof = true;
                         Some('\n')
@@ -84,7 +84,7 @@ impl<GetChar: FnMut() -> Option<char>> TextReader<GetChar> {
 }
 
 async fn lex_string<
-    GetChar: FnMut() -> Option<char>,
+    GetChar: Iterator<Item = char>,
     PutTokenFuture: Future<Output = ()>,
     PutToken: FnMut(Token, Position, Position) -> PutTokenFuture,
 >(
@@ -161,7 +161,7 @@ async fn lex_string<
 }
 
 async fn lex_line<
-    GetChar: FnMut() -> Option<char>,
+    GetChar: Iterator<Item = char>,
     PutTokenFuture: Future<Output = ()>,
     PutToken: FnMut(Token, Position, Position) -> PutTokenFuture,
 >(
@@ -249,7 +249,7 @@ async fn lex_line<
 }
 
 pub async fn lex(
-    get_char: impl FnMut() -> Option<char>,
+    get_char: impl Iterator<Item = char>,
     put_token: super::generator::Sender<ComplexToken>,
 ) {
     let mut reader = TextReader::new(get_char);
@@ -339,23 +339,8 @@ mod tests {
     use super::super::generator::*;
     use super::*;
 
-    struct StrGetChar<'a> {
-        iter: std::str::Chars<'a>,
-    }
-
-    impl<'a> StrGetChar<'a> {
-        fn get(&mut self) -> Option<char> {
-            self.iter.next()
-        }
-    }
-
-    fn str_get_char<'a>(s: &'a str) -> impl FnMut() -> Option<char> + 'a {
-        let mut sgc = StrGetChar::<'a> { iter: s.chars() };
-        move || sgc.get()
-    }
-
     fn read_all(s: &str) -> Vec<(char, Position)> {
-        let mut reader = TextReader::new(str_get_char(s));
+        let mut reader = TextReader::new(s.chars());
         let mut v = vec![];
         loop {
             let c = reader.current_char();
@@ -422,9 +407,7 @@ mod tests {
     }
 
     fn lex_case(s: &str, tokens_ref: &[Token]) {
-        let get_char = str_get_char(s);
-
-        let result = generator(|put_token| lex(get_char, put_token));
+        let result = generator(|put_token| lex(s.chars(), put_token));
         assert_eq!(&result.map(|t| t.token).collect::<Vec<_>>()[..], tokens_ref);
     }
 

@@ -4,22 +4,18 @@ use std::pin::*;
 use std::rc::*;
 use std::task::*;
 
-struct Pipe<T> {
-    value: Option<T>,
-}
-
 pub struct Sender<T> {
-    pipe: Rc<RefCell<Pipe<T>>>,
+    pipe: Rc<RefCell<Option<T>>>,
 }
 
 pub struct SenderFuture<T> {
-    pipe: Rc<RefCell<Pipe<T>>>,
+    pipe: Rc<RefCell<Option<T>>>,
 }
 
 impl<T> Future for SenderFuture<T> {
     type Output = ();
     fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
-        if self.pipe.borrow().value.is_some() {
+        if self.pipe.borrow().is_some() {
             Poll::Pending
         } else {
             Poll::Ready(())
@@ -29,7 +25,7 @@ impl<T> Future for SenderFuture<T> {
 
 impl<T> Sender<T> {
     pub async fn send(&self, value: T) {
-        assert!(std::mem::replace(&mut self.pipe.borrow_mut().value, Some(value)).is_none());
+        assert!(self.pipe.replace(Some(value)).is_none());
         SenderFuture {
             pipe: self.pipe.clone(),
         }
@@ -37,22 +33,22 @@ impl<T> Sender<T> {
     }
 }
 
-pub struct Receiver<DriverFuture, T> {
-    driver_future: Pin<Box<DriverFuture>>,
-    pipe: Rc<RefCell<Pipe<T>>>,
+pub struct Receiver<FFuture, T> {
+    f_future: Pin<Box<FFuture>>,
+    pipe: Rc<RefCell<Option<T>>>,
     waker: Waker,
 }
 
-impl<DriverFuture: Future<Output = ()>, T> Iterator for Receiver<DriverFuture, T> {
+impl<FFuture: Future<Output = ()>, T> Iterator for Receiver<FFuture, T> {
     type Item = T;
     fn next(&mut self) -> Option<Self::Item> {
         match self
-            .driver_future
+            .f_future
             .as_mut()
             .poll(&mut Context::from_waker(&self.waker))
         {
             Poll::Ready(()) => None,
-            Poll::Pending => self.pipe.borrow_mut().value.take(),
+            Poll::Pending => self.pipe.borrow_mut().take(),
         }
     }
 }
@@ -69,17 +65,17 @@ const WAKER_VTABLE: RawWakerVTable =
 
 const RAW_WAKER: RawWaker = RawWaker::new(&(), &WAKER_VTABLE);
 
-pub fn generator<T, Driver, DriverFuture>(driver: Driver) -> impl Iterator<Item = T>
+pub fn generator<T, F, FFuture>(f: F) -> impl Iterator<Item = T>
 where
-    Driver: FnOnce(Sender<T>) -> DriverFuture,
-    DriverFuture: Future<Output = ()>,
+    F: FnOnce(Sender<T>) -> FFuture,
+    FFuture: Future<Output = ()>,
 {
-    let pipe = Rc::new(RefCell::new(Pipe { value: None }));
+    let pipe = Rc::new(RefCell::new(None));
     let sender = Sender { pipe: pipe.clone() };
-    let driver_future = Box::new(driver(sender)).into();
+    let f_future = Box::new(f(sender)).into();
     let waker = unsafe { Waker::from_raw(RAW_WAKER) };
     Receiver {
-        driver_future,
+        f_future,
         pipe,
         waker,
     }
@@ -89,20 +85,21 @@ where
 mod tests {
     use super::*;
 
-    async fn generate(sender: Sender<i32>) {
-        sender.send(1).await;
-        sender.send(2).await;
-        let mut n = 2;
-        while n < 20 {
-            sender.send(n).await;
-            n *= 2;
+    async fn primes(sender: Sender<usize>) {
+        let mut table = [true; 20];
+        for i in 2..20 {
+            if table[i] {
+                sender.send(i).await;
+                for j in (i + i..20).step_by(i) {
+                    table[j] = false;
+                }
+            }
         }
-        sender.send(-1).await;
     }
 
     #[test]
-    fn test_generator() {
-        let result = generator(generate).map(|x| x + 3).collect::<Vec<_>>();
-        assert_eq!(&result, &[4, 5, 5, 7, 11, 19, 2])
+    fn test() {
+        let result = generator(primes).map(|x| x * 10).collect::<Vec<_>>();
+        assert_eq!(&result, &[20, 30, 50, 70, 110, 130, 170, 190])
     }
 }

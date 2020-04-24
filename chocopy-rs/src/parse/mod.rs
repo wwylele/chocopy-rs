@@ -7,17 +7,17 @@ use crate::node::*;
 pub fn process(path: &str) -> Result<Program, Box<dyn std::error::Error>> {
     use std::fs::*;
     use std::io::*;
-    let mut file = BufReader::new(File::open(path)?);
-    let get_char = move || {
-        let mut buf = [0];
-        match file.read_exact(&mut buf) {
-            Ok(()) if buf[0] < 0x80 => Some(buf[0] as char),
-            _ => None,
-        }
-    };
 
-    let driver = |put_token| lexer::lex(get_char, put_token);
-    let get_token = generator::generator(driver);
+    let get_char = File::open(path)?
+        .bytes()
+        .map(|c| match c {
+            Ok(c) if c < 0x80 => Some(c as char),
+            _ => None,
+        })
+        .take_while(|c| c.is_some())
+        .map(|c| c.unwrap());
+
+    let get_token = generator::generator(|put_token| lexer::lex(get_char, put_token));
     let mut ast = parser::parse(get_token);
 
     ast.errors.sort();
