@@ -109,7 +109,7 @@ impl<'a> Emitter<'a> {
         ForwardJumper { from }
     }
 
-    #[allow(clippy::wrong_self_convention)] // No it is not a to_type function
+    #[allow(clippy::wrong_self_convention)] // No, this is not a to_type function
     pub fn to_here(&mut self, jump: ForwardJumper) {
         let from = jump.from;
         let delta = (self.pos() - from - 4) as u32;

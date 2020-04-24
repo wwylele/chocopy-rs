@@ -1,5 +1,3 @@
-#![allow(clippy::missing_safety_doc)]
-
 use std::alloc::*;
 use std::mem::*;
 use std::process::exit;
@@ -47,6 +45,13 @@ fn align_up(size: usize) -> usize {
     }
 }
 
+/// Destructor for [object] type
+///
+/// # Safety
+///  - `pointer` must be previouly returned by returned by `alloc_obj`.
+///  - The object must be allocated with a [object] prototype (`-prototype.size` is size of a pointer).
+///  - The `prototype` and `len` field must be intact.
+///  - Each list element must be either a valid `Object` pointer (returned by `alloc_obj`) or null.
 #[export_name = "[object].$dtor"]
 pub unsafe extern "C" fn dtor_list(pointer: *mut ArrayObject) {
     let len = (*pointer).len;
@@ -62,6 +67,12 @@ pub unsafe extern "C" fn dtor_list(pointer: *mut ArrayObject) {
     }
 }
 
+/// Allocates a ChocoPy object
+///
+/// # Safety
+///  - `prototype.size` is not 0.
+///  - `prototype.tag` is Str or List if and only if `prototype.size < 0`.
+///  - `prototype.dtor` points to a valid function.
 #[export_name = "$alloc_obj"]
 pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mut Object {
     let size = align_up(if (*prototype).size > 0 {
@@ -70,19 +81,37 @@ pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mu
     } else {
         size_of::<ArrayObject>() + (-(*prototype).size as u64 * len) as usize
     });
-    let pointer = alloc(Layout::from_size_align(size, 8).unwrap()).cast::<Object>();
+
+    let layout = Layout::from_size_align(size, align_of::<Object>()).unwrap();
+    #[allow(clippy::cast_ptr_alignment)] // I specified alignment here
+    let pointer = alloc(layout) as *mut Object;
     if pointer.is_null() {
         out_of_memory();
     }
-    (*pointer).prototype = prototype;
-    (*pointer).ref_count = 1;
-    if (*prototype).size < 0 {
-        (*(pointer as *mut ArrayObject)).len = len;
+
+    let object = Object {
+        prototype,
+        ref_count: 1,
+    };
+
+    if (*prototype).size > 0 {
+        pointer.write(object);
+    } else {
+        let object = ArrayObject { object, len };
+        (pointer as *mut ArrayObject).write(object);
     }
+
     ALLOC_COUNTER.fetch_add(1, Ordering::SeqCst);
     pointer
 }
 
+/// Deallocates a ChocoPy object
+///
+/// # Safety
+///  - `pointer` must be previously returned by `alloc_obj`.
+///  - The `prototype` field must be intact.
+///  - For ArrayObject, the `len` field must be intact.
+///  - Other safety requirements to call `dtor` on `pointer` must be hold.
 #[export_name = "$free_obj"]
 pub unsafe extern "C" fn free_obj(pointer: *mut Object) {
     assert!((*pointer).ref_count == 0);
@@ -94,13 +123,20 @@ pub unsafe extern "C" fn free_obj(pointer: *mut Object) {
         let len = (*(pointer as *mut ArrayObject)).len;
         size_of::<ArrayObject>() + (-(*prototype).size as u64 * len) as usize
     });
-    dealloc(
-        pointer as *mut u8,
-        Layout::from_size_align(size, 8).unwrap(),
-    );
+
+    let layout = Layout::from_size_align(size, align_of::<Object>()).unwrap();
+    dealloc(pointer as *mut u8, layout);
+
     ALLOC_COUNTER.fetch_sub(1, Ordering::SeqCst);
 }
 
+/// Gets the array length of a ChocoPy object
+///
+/// # Safety
+///  - `pointer` must be previously returned by `alloc_obj`.
+///  - The `prototype` field must be intact.
+///  - For ArrayObject, the `len` field must be intact.
+///  - Other safety requirements to call `dtor` on `pointer` must be hold.
 #[export_name = "$len"]
 pub unsafe extern "C" fn len(pointer: *mut Object) -> i32 {
     if pointer.is_null() {
@@ -119,6 +155,12 @@ pub unsafe extern "C" fn len(pointer: *mut Object) -> i32 {
     len
 }
 
+/// Prints a ChocoPy object
+///
+/// # Safety
+///  - `pointer` must be previously returned by `alloc_obj`.
+///  - The `prototype` field must be intact.
+///  - Other safety requirements to call `dtor` on `pointer` must be hold.
 #[export_name = "$print"]
 pub unsafe extern "C" fn print(pointer: *mut Object) -> *mut u8 {
     if pointer.is_null() {
@@ -160,6 +202,12 @@ pub unsafe extern "C" fn print(pointer: *mut Object) -> *mut u8 {
     std::ptr::null_mut()
 }
 
+/// Creates a new str object that holds a line of user input
+///
+/// # Safety
+///  - `str_proto.size == -1` .
+///  - `str_proto.tag == TypeTag::Str`.
+///  - `str_proto.dtor` points to a no-op function.
 #[export_name = "$input"]
 pub unsafe extern "C" fn input(str_proto: *const Prototype) -> *mut Object {
     let mut input = String::new();
@@ -221,19 +269,23 @@ fn out_of_memory() -> ! {
     exit_code(5)
 }
 
-extern "C" {
-    #[cfg(not(test))]
-    #[link_name = "$chocopy_main"]
-    fn chocopy_main();
-}
-
-#[no_mangle]
 #[cfg(not(test))]
-pub unsafe extern "C" fn main() -> i32 {
-    chocopy_main();
-    if ALLOC_COUNTER.load(Ordering::SeqCst) != 0 {
-        println!("--- Memory leak detected! ---");
-        exit_code(-1);
+pub mod crt0_glue {
+    use super::*;
+    extern "C" {
+        #[link_name = "$chocopy_main"]
+        fn chocopy_main();
     }
-    0
+
+    /// # Safety
+    /// `$chocopy_main` is linked to a valid ChocoPy program entry point
+    #[export_name = "main"]
+    pub unsafe extern "C" fn entry_point() -> i32 {
+        chocopy_main();
+        if ALLOC_COUNTER.load(Ordering::SeqCst) != 0 {
+            println!("--- Memory leak detected! ---");
+            exit_code(-1);
+        }
+        0
+    }
 }
