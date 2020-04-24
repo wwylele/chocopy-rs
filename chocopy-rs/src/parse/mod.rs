@@ -1,35 +1,24 @@
+mod generator;
 mod lexer;
 mod parser;
-mod pipe;
 mod token;
 use crate::node::*;
 
 pub fn process(path: &str) -> Result<Program, Box<dyn std::error::Error>> {
-    use async_std::fs::*;
-    use async_std::io::*;
-    use futures::executor::block_on;
-    use futures::future::join;
-    use std::cell::*;
-    use std::rc::*;
-
-    let file = Rc::new(RefCell::new(BufReader::new(block_on(File::open(path))?)));
+    use std::fs::*;
+    use std::io::*;
+    let mut file = BufReader::new(File::open(path)?);
     let get_char = move || {
-        let file = file.clone();
-        async move {
-            let mut buf = [0];
-            match file.borrow_mut().read_exact(&mut buf).await {
-                Ok(()) if buf[0] < 0x80 => Some(buf[0] as char),
-                _ => None,
-            }
+        let mut buf = [0];
+        match file.read_exact(&mut buf) {
+            Ok(()) if buf[0] < 0x80 => Some(buf[0] as char),
+            _ => None,
         }
     };
 
-    let (put_token, get_token) = pipe::create_pipe();
-
-    let ((), mut ast) = block_on(join(
-        lexer::lex(get_char, put_token),
-        parser::parse(get_token),
-    ));
+    let driver = |put_token| lexer::lex(get_char, put_token);
+    let get_token = generator::generator(driver);
+    let mut ast = parser::parse(get_token);
 
     ast.errors.sort();
 

@@ -16,11 +16,9 @@ struct TextReader<GetChar> {
     early_eof: bool,
 }
 
-impl<GetCharFuture: Future<Output = Option<char>>, GetChar: FnMut() -> GetCharFuture>
-    TextReader<GetChar>
-{
-    async fn new(mut get_char: GetChar) -> TextReader<GetChar> {
-        let current = get_char().await;
+impl<GetChar: FnMut() -> Option<char>> TextReader<GetChar> {
+    fn new(mut get_char: GetChar) -> TextReader<GetChar> {
+        let current = get_char();
         let (current, early_eof) = if current.is_none() {
             (Some('\n'), true)
         } else {
@@ -35,20 +33,20 @@ impl<GetCharFuture: Future<Output = Option<char>>, GetChar: FnMut() -> GetCharFu
         }
     }
 
-    async fn next(&mut self) {
+    fn next(&mut self) {
         self.previous_position = self.position;
         match self.current.take() {
             Some('\n') => {
                 self.position.row += 1;
                 self.position.col = 1;
-                self.current = (self.get_char)().await;
+                self.current = (self.get_char)();
             }
             Some('\r') => {
                 self.position.row += 1;
                 self.position.col = 1;
-                self.current = (self.get_char)().await;
+                self.current = (self.get_char)();
                 if self.current == Some('\n') {
-                    self.current = (self.get_char)().await;
+                    self.current = (self.get_char)();
                 }
             }
             None => (),
@@ -57,7 +55,7 @@ impl<GetCharFuture: Future<Output = Option<char>>, GetChar: FnMut() -> GetCharFu
                 self.current = if self.early_eof {
                     None
                 } else {
-                    let c = (self.get_char)().await;
+                    let c = (self.get_char)();
                     if c.is_none() {
                         self.early_eof = true;
                         Some('\n')
@@ -86,8 +84,7 @@ impl<GetCharFuture: Future<Output = Option<char>>, GetChar: FnMut() -> GetCharFu
 }
 
 async fn lex_string<
-    GetCharFuture: Future<Output = Option<char>>,
-    GetChar: FnMut() -> GetCharFuture,
+    GetChar: FnMut() -> Option<char>,
     PutTokenFuture: Future<Output = ()>,
     PutToken: FnMut(Token, Position, Position) -> PutTokenFuture,
 >(
@@ -95,27 +92,27 @@ async fn lex_string<
     put_token: &mut PutToken,
     start: Position,
 ) {
-    reader.next().await;
+    reader.next();
     let mut s = "".to_owned();
     let mut is_id = true;
     loop {
         match reader.current_char().unwrap() {
             // end quote
             '\"' => {
-                reader.next().await;
+                reader.next();
                 break;
             }
             // escape
             '\\' => {
                 is_id = false;
-                reader.next().await;
+                reader.next();
                 match reader.current_char().unwrap() {
                     'n' => s.push('\n'),
                     't' => s.push('\t'),
                     '\\' => s.push('\\'),
                     '\"' => s.push('\"'),
                     c => {
-                        reader.next().await;
+                        reader.next();
                         put_token(
                             Token::Unrecognized(c.to_string()),
                             start,
@@ -135,7 +132,7 @@ async fn lex_string<
             }
             // unrecognized
             c => {
-                reader.next().await;
+                reader.next();
                 put_token(
                     Token::Unrecognized(c.to_string()),
                     start,
@@ -145,7 +142,7 @@ async fn lex_string<
                 break;
             }
         }
-        reader.next().await;
+        reader.next();
     }
     let end = reader.previous_position();
     if matches!(s.chars().next(), Some('0'..='9') | None) {
@@ -164,8 +161,7 @@ async fn lex_string<
 }
 
 async fn lex_line<
-    GetCharFuture: Future<Output = Option<char>>,
-    GetChar: FnMut() -> GetCharFuture,
+    GetChar: FnMut() -> Option<char>,
     PutTokenFuture: Future<Output = ()>,
     PutToken: FnMut(Token, Position, Position) -> PutTokenFuture,
 >(
@@ -178,14 +174,14 @@ async fn lex_line<
             // Skip spaces
             ' ' | '\t' => {
                 while reader.current_char() == Some(' ') || reader.current_char() == Some('\t') {
-                    reader.next().await;
+                    reader.next();
                 }
             }
 
             // Skip comments
             '#' => {
                 while reader.current_char() != Some('\n') {
-                    reader.next().await;
+                    reader.next();
                 }
             }
 
@@ -194,7 +190,7 @@ async fn lex_line<
                 let mut s = "".to_owned();
                 while let c @ '0'..='9' = reader.current_char().unwrap() {
                     s.push(c);
-                    reader.next().await;
+                    reader.next();
                 }
                 let end = reader.previous_position();
                 match s.parse() {
@@ -210,7 +206,7 @@ async fn lex_line<
                     reader.current_char().unwrap()
                 {
                     s.push(c);
-                    reader.next().await;
+                    reader.next();
                 }
                 let end = reader.previous_position();
                 put_token(
@@ -231,12 +227,12 @@ async fn lex_line<
 
             // Operators
             c => {
-                reader.next().await;
+                reader.next();
 
                 let token = if let Some(operator) = OPERATORS.get(&c) {
                     let second = reader.current_char().unwrap();
                     if let Some(operator) = operator.get(&second) {
-                        reader.next().await;
+                        reader.next();
                         operator.clone()
                     } else if let Some(operator) = operator.get(&'\0') {
                         operator.clone()
@@ -252,16 +248,13 @@ async fn lex_line<
     }
 }
 
-pub async fn lex<
-    GetCharFuture: Future<Output = Option<char>>,
-    PutTokenFuture: Future<Output = ()>,
->(
-    get_char: impl FnMut() -> GetCharFuture,
-    mut put_token: impl FnMut(ComplexToken) -> PutTokenFuture,
+pub async fn lex(
+    get_char: impl FnMut() -> Option<char>,
+    put_token: super::generator::Sender<ComplexToken>,
 ) {
-    let mut reader = TextReader::new(get_char).await;
-    let mut put_token = move |token, start, end| {
-        put_token(ComplexToken {
+    let mut reader = TextReader::new(get_char);
+    let mut put_token = |token, start, end| {
+        put_token.send(ComplexToken {
             token,
             location: Location { start, end },
         })
@@ -278,7 +271,7 @@ pub async fn lex<
                 Some('\t') => indentation += 8 - indentation % 8,
                 _ => break,
             }
-            reader.next().await;
+            reader.next();
         }
 
         // The reference program does this weird thing. Yes this can lead to col = 0
@@ -288,13 +281,13 @@ pub async fn lex<
         // Found comment immediately, skip to line break
         if reader.current_char() == Some('#') {
             while reader.current_char() != Some('\n') {
-                reader.next().await;
+                reader.next();
             }
         }
 
         // Found line break immediately. This is an empty line
         if reader.current_char() == Some('\n') {
-            reader.next().await;
+            reader.next();
             continue;
         }
 
@@ -327,7 +320,7 @@ pub async fn lex<
         // Finish the line
         let new_line_begin = reader.current_position();
         put_token(Token::NewLine, new_line_begin, new_line_begin).await;
-        reader.next().await;
+        reader.next();
     }
 
     let mut end = reader.current_position();
@@ -343,39 +336,36 @@ pub async fn lex<
 
 #[cfg(test)]
 mod tests {
+    use super::super::generator::*;
     use super::*;
-    use futures::executor::block_on;
-    use futures::future::*;
 
     struct StrGetChar<'a> {
         iter: std::str::Chars<'a>,
     }
 
     impl<'a> StrGetChar<'a> {
-        fn get(&mut self) -> Ready<Option<char>> {
-            ready(self.iter.next())
+        fn get(&mut self) -> Option<char> {
+            self.iter.next()
         }
     }
 
-    fn str_get_char<'a>(s: &'a str) -> impl FnMut() -> Ready<Option<char>> + 'a {
+    fn str_get_char<'a>(s: &'a str) -> impl FnMut() -> Option<char> + 'a {
         let mut sgc = StrGetChar::<'a> { iter: s.chars() };
         move || sgc.get()
     }
 
     fn read_all(s: &str) -> Vec<(char, Position)> {
-        block_on(async {
-            let mut reader = TextReader::new(str_get_char(s)).await;
-            let mut v = vec![];
-            loop {
-                let c = reader.current_char();
-                if let Some(c) = c {
-                    v.push((c, reader.current_position()));
-                    reader.next().await;
-                } else {
-                    break v;
-                }
+        let mut reader = TextReader::new(str_get_char(s));
+        let mut v = vec![];
+        loop {
+            let c = reader.current_char();
+            if let Some(c) = c {
+                v.push((c, reader.current_position()));
+                reader.next();
+            } else {
+                break v;
             }
-        })
+        }
     }
 
     #[test]
@@ -432,21 +422,10 @@ mod tests {
     }
 
     fn lex_case(s: &str, tokens_ref: &[Token]) {
-        use std::cell::*;
-        use std::rc::*;
-        let tokens = Rc::new(RefCell::new(vec![]));
-        let put_token = {
-            let tokens = tokens.clone();
-            move |complex_token: ComplexToken| {
-                tokens.borrow_mut().push(complex_token.token);
-                async {}
-            }
-        };
-
         let get_char = str_get_char(s);
 
-        block_on(lex(get_char, put_token));
-        assert_eq!(&tokens.borrow()[..], tokens_ref);
+        let result = generator(|put_token| lex(get_char, put_token));
+        assert_eq!(&result.map(|t| t.token).collect::<Vec<_>>()[..], tokens_ref);
     }
 
     #[test]
