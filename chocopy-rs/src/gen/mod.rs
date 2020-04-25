@@ -483,16 +483,11 @@ pub fn gen(
         Platform::Windows => {
             let vcvarsall = (|| -> Option<PathBuf> {
                 let linker = cc::windows_registry::find_tool("x86_64-pc-windows-msvc", "link.exe")?;
-                let mut vcvarsall = linker.path();
-                vcvarsall = vcvarsall.parent()?;
-                vcvarsall = vcvarsall.parent()?;
-                vcvarsall = vcvarsall.parent()?;
-                vcvarsall = vcvarsall.parent()?;
-                vcvarsall = vcvarsall.parent()?;
-                vcvarsall = vcvarsall.parent()?;
-                vcvarsall = vcvarsall.parent()?;
                 Some(
-                    vcvarsall
+                    linker
+                        .path()
+                        .ancestors()
+                        .nth(7)?
                         .join("Auxiliary")
                         .join("Build")
                         .join("vcvarsall.bat"),
