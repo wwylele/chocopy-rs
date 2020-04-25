@@ -4,13 +4,16 @@ mod x64;
 
 use crate::local_env::*;
 use crate::node::*;
+use object::{
+    target_lexicon::*, write::*, RelocationEncoding, RelocationKind, SectionKind, SymbolFlags,
+    SymbolKind, SymbolScope,
+};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::convert::*;
 use std::ffi::OsStr;
 use std::io::Write;
 use std::path::*;
-use target_lexicon::*;
 
 const BOOL_PROTOTYPE: &str = "bool.$proto";
 const INT_PROTOTYPE: &str = "int.$proto";
@@ -229,7 +232,7 @@ impl std::fmt::Display for PathError {
 
 impl std::error::Error for PathError {}
 
-fn windows_path_escape(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+fn windows_path_escape(path: &Path) -> std::result::Result<String, Box<dyn std::error::Error>> {
     let path = path.to_str().ok_or(PathError)?;
 
     // TODO: actually escape the path
@@ -251,7 +254,7 @@ pub fn gen(
     path: &str,
     no_link: bool,
     static_lib: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let current_dir_buf = std::env::current_dir();
     let current_dir = current_dir_buf
         .as_ref()
@@ -267,18 +270,18 @@ pub fn gen(
         Platform::Linux => BinaryFormat::Elf,
         Platform::Macos => BinaryFormat::Macho,
     };
-    let mut obj = object::write::Object::new(binary_format, Architecture::X86_64);
+    let mut obj = Object::new(binary_format, Architecture::X86_64);
 
-    let import_function = |obj: &mut object::write::Object, name: &str| {
-        obj.add_symbol(object::write::Symbol {
+    let import_function = |obj: &mut Object, name: &str| {
+        obj.add_symbol(Symbol {
             name: name.into(),
             value: 0,
             size: 0,
-            kind: object::SymbolKind::Text,
-            scope: object::SymbolScope::Linkage,
+            kind: SymbolKind::Text,
+            scope: SymbolScope::Linkage,
             weak: false,
-            section: object::write::SymbolSection::Undefined,
-            flags: object::SymbolFlags::None,
+            section: SymbolSection::Undefined,
+            flags: SymbolFlags::None,
         })
     };
 
@@ -301,17 +304,17 @@ pub fn gen(
         dwarf.add_class(class_name, classes_debug);
     }
 
-    let bss_section = obj.section_id(object::write::StandardSection::UninitializedData);
+    let bss_section = obj.section_id(StandardSection::UninitializedData);
 
-    let global_symbol = obj.add_symbol(object::write::Symbol {
+    let global_symbol = obj.add_symbol(Symbol {
         name: GLOBAL_SECTION.into(),
         value: 0,
         size: code_set.global_size,
-        kind: object::SymbolKind::Data,
-        scope: object::SymbolScope::Compilation,
+        kind: SymbolKind::Data,
+        scope: SymbolScope::Compilation,
         weak: false,
-        section: object::write::SymbolSection::Undefined,
-        flags: object::SymbolFlags::None,
+        section: SymbolSection::Undefined,
+        flags: SymbolFlags::None,
     });
 
     obj.add_symbol_bss(global_symbol, bss_section, code_set.global_size, 8);
@@ -326,47 +329,43 @@ pub fn gen(
         dwarf.add_chunk(&chunk);
         if let ChunkExtra::Procedure(_) = chunk.extra {
             let scope = if chunk.name == BUILTIN_CHOCOPY_MAIN {
-                object::SymbolScope::Linkage
+                SymbolScope::Linkage
             } else {
-                object::SymbolScope::Compilation
+                SymbolScope::Compilation
             };
 
-            let (section, offset) = obj.add_subsection(
-                object::write::StandardSection::Text,
-                chunk.name.as_bytes(),
-                &chunk.code,
-                1,
-            );
+            let (section, offset) =
+                obj.add_subsection(StandardSection::Text, chunk.name.as_bytes(), &chunk.code, 1);
 
-            obj.add_symbol(object::write::Symbol {
+            obj.add_symbol(Symbol {
                 name: chunk.name.as_bytes().into(),
                 value: offset,
                 size: chunk.code.len() as u64,
-                kind: object::SymbolKind::Text,
+                kind: SymbolKind::Text,
                 scope,
                 weak: false,
-                section: object::write::SymbolSection::Section(section),
-                flags: object::SymbolFlags::None,
+                section: SymbolSection::Section(section),
+                flags: SymbolFlags::None,
             });
             section_map.insert(&chunk.name, (section, offset));
         } else {
             let parent_section = if chunk.links.is_empty() {
-                object::write::StandardSection::ReadOnlyData
+                StandardSection::ReadOnlyData
             } else {
-                object::write::StandardSection::ReadOnlyDataWithRel
+                StandardSection::ReadOnlyDataWithRel
             };
             let (section, offset) =
                 obj.add_subsection(parent_section, chunk.name.as_bytes(), &chunk.code, 8);
 
-            obj.add_symbol(object::write::Symbol {
+            obj.add_symbol(Symbol {
                 name: chunk.name.as_bytes().into(),
                 value: offset,
                 size: chunk.code.len() as u64,
-                kind: object::SymbolKind::Data,
-                scope: object::SymbolScope::Compilation,
+                kind: SymbolKind::Data,
+                scope: SymbolScope::Compilation,
                 weak: false,
-                section: object::write::SymbolSection::Section(section),
-                flags: object::SymbolFlags::None,
+                section: SymbolSection::Section(section),
+                flags: SymbolFlags::None,
             });
 
             section_map.insert(&chunk.name, (section, offset));
@@ -383,13 +382,13 @@ pub fn gen(
         let addend;
         if let ChunkExtra::Procedure(_) = chunk.extra {
             size = 32;
-            kind = object::RelocationKind::Relative;
-            encoding = object::RelocationEncoding::X86RipRelative;
+            kind = RelocationKind::Relative;
+            encoding = RelocationEncoding::X86RipRelative;
             addend = -4;
         } else {
             size = 64;
-            kind = object::RelocationKind::Absolute;
-            encoding = object::RelocationEncoding::Generic;
+            kind = RelocationKind::Absolute;
+            encoding = RelocationEncoding::Generic;
             addend = 0;
         };
         for link in &chunk.links {
@@ -399,27 +398,27 @@ pub fn gen(
                     let name = format!("$str{}", data_id);
                     data_id += 1;
                     let (id, offset) = obj.add_subsection(
-                        object::write::StandardSection::ReadOnlyData,
+                        StandardSection::ReadOnlyData,
                         name.as_bytes(),
                         &data,
                         1,
                     );
 
-                    obj.add_symbol(object::write::Symbol {
+                    obj.add_symbol(Symbol {
                         name: name.into(),
                         value: offset,
                         size: 0,
-                        kind: object::SymbolKind::Data,
-                        scope: object::SymbolScope::Compilation,
+                        kind: SymbolKind::Data,
+                        scope: SymbolScope::Compilation,
                         weak: false,
-                        section: object::write::SymbolSection::Section(id),
-                        flags: object::SymbolFlags::None,
+                        section: SymbolSection::Section(id),
+                        flags: SymbolFlags::None,
                     })
                 }
             };
             obj.add_relocation(
                 from,
-                object::write::Relocation {
+                Relocation {
                     offset: from_offset + link.pos as u64,
                     size,
                     kind,
@@ -437,11 +436,8 @@ pub fn gen(
         let debug_chunks = dwarf.finalize();
         let mut debug_section_map = HashMap::new();
         for chunk in &debug_chunks {
-            let section = obj.add_section(
-                "".into(),
-                chunk.name.as_bytes().into(),
-                object::SectionKind::Debug,
-            );
+            let section =
+                obj.add_section("".into(), chunk.name.as_bytes().into(), SectionKind::Debug);
             obj.append_section_data(section, &chunk.code, 8);
             debug_section_map.insert(chunk.name.clone(), section);
         }
@@ -453,11 +449,11 @@ pub fn gen(
                     .unwrap_or_else(|| obj.section_symbol(debug_section_map[&link.to]));
                 obj.add_relocation(
                     debug_section_map[&chunk.name],
-                    object::write::Relocation {
+                    Relocation {
                         offset: link.pos as u64,
                         size: link.size * 8,
-                        kind: object::RelocationKind::Absolute,
-                        encoding: object::RelocationEncoding::Generic,
+                        kind: RelocationKind::Absolute,
+                        encoding: RelocationEncoding::Generic,
                         symbol: to,
                         addend: 0,
                     },

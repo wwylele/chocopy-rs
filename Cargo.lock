@@ -49,7 +49,6 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
- "target-lexicon",
 ]
 
 [[package]]
