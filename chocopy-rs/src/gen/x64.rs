@@ -44,6 +44,7 @@ struct Emitter<'a> {
     links: Vec<ChunkLink>,
     rsp_offset: usize, // offsets relative to rbp
     rsp_call_restore: Vec<usize>,
+    platform: Platform,
 }
 
 impl Platform {
@@ -72,6 +73,7 @@ impl<'a> Emitter<'a> {
         classes: Option<&'a HashMap<String, ClassSlot>>,
         clean_up_list: Vec<i32>,
         level: u32,
+        platform: Platform,
     ) -> Emitter<'a> {
         Emitter {
             name: name.to_owned(),
@@ -84,6 +86,7 @@ impl<'a> Emitter<'a> {
             links: vec![],
             rsp_offset: 0,
             rsp_call_restore: vec![],
+            platform,
         }
     }
 
@@ -261,7 +264,7 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn call_builtin_alloc(&mut self, prototype: &str) {
-        match PLATFORM {
+        match self.platform {
             Platform::Windows => {
                 // mov rdx,rsi
                 self.emit(&[0x48, 0x89, 0xF2]);
@@ -274,7 +277,7 @@ impl<'a> Emitter<'a> {
             }
         }
         self.emit_link(prototype, 0);
-        self.prepare_call(PLATFORM.stack_reserve());
+        self.prepare_call(self.platform.stack_reserve());
         self.call(BUILTIN_ALLOC_OBJ);
     }
 
@@ -284,7 +287,7 @@ impl<'a> Emitter<'a> {
         // jne
         self.emit(&[0x0F, 0x85]);
         let ok = self.jump_from();
-        self.prepare_call(PLATFORM.stack_reserve());
+        self.prepare_call(self.platform.stack_reserve());
         self.call(BUILTIN_NONE_OP);
         self.to_here(ok);
     }
@@ -322,8 +325,8 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x0f, 0x85]);
         let skip_b = self.jump_from();
 
-        self.prepare_call(PLATFORM.stack_reserve());
-        match PLATFORM {
+        self.prepare_call(self.platform.stack_reserve());
+        match self.platform {
             Platform::Windows => self.emit(&[0x48, 0x89, 0xc1]), // mov rcx,rax
             Platform::Linux | Platform::Macos => self.emit(&[0x48, 0x89, 0xc7]), // mov rdi,rax
         }
@@ -678,7 +681,7 @@ impl<'a> Emitter<'a> {
                     // jne
                     self.emit(&[0x0F, 0x85]);
                     let ok = self.jump_from();
-                    self.prepare_call(PLATFORM.stack_reserve());
+                    self.prepare_call(self.platform.stack_reserve());
                     self.call(BUILTIN_DIV_ZERO);
                     self.to_here(ok);
                     // xchg eax,r11d
@@ -848,7 +851,7 @@ impl<'a> Emitter<'a> {
         // jb
         self.emit(&[0x0F, 0x82]);
         let ok = self.jump_from();
-        self.prepare_call(PLATFORM.stack_reserve());
+        self.prepare_call(self.platform.stack_reserve());
         self.call(BUILTIN_OUT_OF_BOUND);
         self.to_here(ok);
         // mov r10b,[r11+rsi+24]
@@ -881,7 +884,7 @@ impl<'a> Emitter<'a> {
         // jb
         self.emit(&[0x0F, 0x82]);
         let ok = self.jump_from();
-        self.prepare_call(PLATFORM.stack_reserve());
+        self.prepare_call(self.platform.stack_reserve());
         self.call(BUILTIN_OUT_OF_BOUND);
         self.to_here(ok);
 
@@ -1261,7 +1264,7 @@ impl<'a> Emitter<'a> {
                     // jb
                     self.emit(&[0x0F, 0x82]);
                     let ok = self.jump_from();
-                    self.prepare_call(PLATFORM.stack_reserve());
+                    self.prepare_call(self.platform.stack_reserve());
                     self.call(BUILTIN_OUT_OF_BOUND);
                     self.to_here(ok);
 
@@ -1562,6 +1565,7 @@ fn gen_function(
     classes: &HashMap<String, ClassSlot>,
     level: u32,
     parent: Option<&str>,
+    platform: Platform,
 ) -> Vec<Chunk> {
     let link_name = if let Some(parent) = parent {
         parent.to_owned() + "." + &function.name.name
@@ -1649,6 +1653,7 @@ fn gen_function(
         Some(classes),
         clean_up_list,
         level,
+        platform,
     );
 
     if level != 0 {
@@ -1697,6 +1702,7 @@ fn gen_function(
                 classes,
                 level + 1,
                 Some(&link_name),
+                platform,
             ));
         }
     }
@@ -1704,11 +1710,11 @@ fn gen_function(
     chunks
 }
 
-fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
-    let mut code = Emitter::new(class_name, None, None, vec![], 0);
+fn gen_ctor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chunk {
+    let mut code = Emitter::new(class_name, None, None, vec![], 0, platform);
 
-    code.prepare_call(PLATFORM.stack_reserve());
-    match PLATFORM {
+    code.prepare_call(platform.stack_reserve());
+    match platform {
         Platform::Windows => {
             // xor rdx,rdx
             code.emit(&[0x48, 0x31, 0xD2]);
@@ -1781,10 +1787,17 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
     })
 }
 
-fn gen_dtor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
-    let mut code = Emitter::new(&(class_name.to_owned() + ".$dtor"), None, None, vec![], 0);
+fn gen_dtor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chunk {
+    let mut code = Emitter::new(
+        &(class_name.to_owned() + ".$dtor"),
+        None,
+        None,
+        vec![],
+        0,
+        platform,
+    );
     // Note: This uses C ABI instead of chocopy ABI
-    match PLATFORM {
+    match platform {
         Platform::Windows => {
             code.emit_push_rcx();
             code.emit_push_rsi();
@@ -1804,7 +1817,7 @@ fn gen_dtor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
             code.emit_drop();
         }
     }
-    match PLATFORM {
+    match platform {
         Platform::Windows => {
             code.emit_pop_rdi();
             code.emit_pop_rsi();
@@ -1828,8 +1841,8 @@ fn gen_dtor(class_name: &str, class_slot: &ClassSlot) -> Chunk {
     })
 }
 
-fn gen_int() -> Chunk {
-    let mut code = Emitter::new("int", None, None, vec![], 0);
+fn gen_int(platform: Platform) -> Chunk {
+    let mut code = Emitter::new("int", None, None, vec![], 0, platform);
     code.emit_int_literal(0);
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -1843,8 +1856,8 @@ fn gen_int() -> Chunk {
     })
 }
 
-fn gen_bool() -> Chunk {
-    let mut code = Emitter::new("bool", None, None, vec![], 0);
+fn gen_bool(platform: Platform) -> Chunk {
+    let mut code = Emitter::new("bool", None, None, vec![], 0, platform);
     code.emit_bool_literal(false);
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -1858,8 +1871,8 @@ fn gen_bool() -> Chunk {
     })
 }
 
-fn gen_str() -> Chunk {
-    let mut code = Emitter::new("str", None, None, vec![], 0);
+fn gen_str(platform: Platform) -> Chunk {
+    let mut code = Emitter::new("str", None, None, vec![], 0, platform);
     code.emit_string_literal("");
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -1873,8 +1886,8 @@ fn gen_str() -> Chunk {
     })
 }
 
-fn gen_object_init() -> Chunk {
-    let mut code = Emitter::new("object.__init__", None, None, vec![], 0);
+fn gen_object_init(platform: Platform) -> Chunk {
+    let mut code = Emitter::new("object.__init__", None, None, vec![], 0, platform);
     // mov rax,[rsp+16]
     code.emit(&[0x48, 0x8B, 0x44, 0x24, 0x10]);
     code.emit_drop();
@@ -1896,13 +1909,13 @@ fn gen_object_init() -> Chunk {
     })
 }
 
-fn gen_len() -> Chunk {
-    let mut code = Emitter::new("len", None, None, vec![], 0);
-    match PLATFORM {
+fn gen_len(platform: Platform) -> Chunk {
+    let mut code = Emitter::new("len", None, None, vec![], 0, platform);
+    match platform {
         Platform::Windows => code.emit(&[0x48, 0x8B, 0x4C, 0x24, 0x10]), //  mov rcx,[rsp+16]
         Platform::Linux | Platform::Macos => code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]), // mov rdi,[rsp+16]
     }
-    code.prepare_call(PLATFORM.stack_reserve());
+    code.prepare_call(platform.stack_reserve());
     code.call(BUILTIN_LEN);
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -1921,14 +1934,14 @@ fn gen_len() -> Chunk {
     })
 }
 
-fn gen_input() -> Chunk {
-    let mut code = Emitter::new("input", None, None, vec![], 0);
-    match PLATFORM {
+fn gen_input(platform: Platform) -> Chunk {
+    let mut code = Emitter::new("input", None, None, vec![], 0, platform);
+    match platform {
         Platform::Windows => code.emit(&[0x48, 0x8D, 0x0D]), // lea rcx,[rip+{}]
         Platform::Linux | Platform::Macos => code.emit(&[0x48, 0x8D, 0x3D]), // lea rdi,[rip+{}]
     }
     code.emit_link(STR_PROTOTYPE, 0);
-    code.prepare_call(PLATFORM.stack_reserve());
+    code.prepare_call(platform.stack_reserve());
     code.call(BUILTIN_INPUT);
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -1942,13 +1955,13 @@ fn gen_input() -> Chunk {
     })
 }
 
-fn gen_print() -> Chunk {
-    let mut code = Emitter::new("print", None, None, vec![], 0);
-    match PLATFORM {
+fn gen_print(platform: Platform) -> Chunk {
+    let mut code = Emitter::new("print", None, None, vec![], 0, platform);
+    match platform {
         Platform::Windows => code.emit(&[0x48, 0x8B, 0x4C, 0x24, 0x10]), // mov rcx,[rsp+16]
         Platform::Linux | Platform::Macos => code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]), // mov rdi,[rsp+16]
     }
-    code.prepare_call(PLATFORM.stack_reserve());
+    code.prepare_call(platform.stack_reserve());
     code.call(BUILTIN_PRINT);
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -1971,6 +1984,7 @@ fn gen_main(
     ast: &Program,
     storage_env: &mut StorageEnv,
     classes: &HashMap<String, ClassSlot>,
+    platform: Platform,
 ) -> Chunk {
     let mut main_code = Emitter::new(
         BUILTIN_CHOCOPY_MAIN,
@@ -1978,13 +1992,14 @@ fn gen_main(
         Some(classes),
         vec![],
         0,
+        platform,
     );
 
     // mov rax,0x12345678
     main_code.emit(&[0x48, 0xC7, 0xC0, 0x78, 0x56, 0x34, 0x12]);
     main_code.emit_push_rax();
 
-    if PLATFORM == Platform::Windows {
+    if platform == Platform::Windows {
         main_code.emit_push_rdi();
         main_code.emit_push_rsi();
     }
@@ -2007,7 +2022,7 @@ fn gen_main(
         }
     }
 
-    if PLATFORM == Platform::Windows {
+    if platform == Platform::Windows {
         main_code.emit_pop_rsi();
         main_code.emit_pop_rdi();
     }
@@ -2019,7 +2034,7 @@ fn gen_main(
     main_code.emit(&[0x0f, 0x84]);
     let ok = main_code.jump_from();
 
-    main_code.prepare_call(PLATFORM.stack_reserve());
+    main_code.prepare_call(platform.stack_reserve());
     main_code.call(BUILTIN_BROKEN_STACK);
 
     main_code.to_here(ok);
@@ -2160,7 +2175,7 @@ fn gen_special_proto(name: &str, size: i32, tag: i32, dtor: &str) -> Chunk {
     }
 }
 
-pub(super) fn gen_code_set(ast: Program) -> CodeSet {
+pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
     let mut globals = HashMap::new();
     let mut classes = HashMap::new();
     let mut base_methods = HashMap::new();
@@ -2275,12 +2290,19 @@ pub(super) fn gen_code_set(ast: Program) -> CodeSet {
 
     let mut storage_env = StorageEnv::new(globals);
 
-    let mut chunks = vec![gen_main(&ast, &mut storage_env, &classes)];
+    let mut chunks = vec![gen_main(&ast, &mut storage_env, &classes, platform)];
 
     for declaration in &ast.declarations {
         match declaration {
             Declaration::FuncDef(f) => {
-                chunks.append(&mut gen_function(&f, &mut storage_env, &classes, 0, None));
+                chunks.append(&mut gen_function(
+                    &f,
+                    &mut storage_env,
+                    &classes,
+                    0,
+                    None,
+                    platform,
+                ));
             }
             Declaration::ClassDef(c) => {
                 for declaration in &c.declarations {
@@ -2291,6 +2313,7 @@ pub(super) fn gen_code_set(ast: Program) -> CodeSet {
                             &classes,
                             0,
                             Some(&c.name.name),
+                            platform,
                         ));
                     }
                 }
@@ -2300,8 +2323,8 @@ pub(super) fn gen_code_set(ast: Program) -> CodeSet {
     }
 
     for (class_name, class_slot) in &classes {
-        chunks.push(gen_ctor(&class_name, &class_slot));
-        chunks.push(gen_dtor(&class_name, &class_slot));
+        chunks.push(gen_ctor(&class_name, &class_slot, platform));
+        chunks.push(gen_dtor(&class_name, &class_slot, platform));
 
         let mut prototype = vec![0; class_slot.prototype_size as usize];
         prototype[0..4].copy_from_slice(&class_slot.object_size.to_le_bytes());
@@ -2322,13 +2345,13 @@ pub(super) fn gen_code_set(ast: Program) -> CodeSet {
         });
     }
 
-    chunks.push(gen_int());
-    chunks.push(gen_bool());
-    chunks.push(gen_str());
-    chunks.push(gen_object_init());
-    chunks.push(gen_len());
-    chunks.push(gen_input());
-    chunks.push(gen_print());
+    chunks.push(gen_int(platform));
+    chunks.push(gen_bool(platform));
+    chunks.push(gen_str(platform));
+    chunks.push(gen_object_init(platform));
+    chunks.push(gen_len(platform));
+    chunks.push(gen_input(platform));
+    chunks.push(gen_print(platform));
 
     chunks.push(gen_special_proto(INT_PROTOTYPE, 4, 1, "object.$dtor"));
     chunks.push(gen_special_proto(BOOL_PROTOTYPE, 1, 2, "object.$dtor"));

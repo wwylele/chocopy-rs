@@ -36,22 +36,12 @@ const BUILTIN_CHOCOPY_MAIN: &str = "$chocopy_main";
 
 const GLOBAL_SECTION: &str = "$global";
 
-#[allow(unused)]
-#[derive(PartialEq, Eq)]
-enum Platform {
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum Platform {
     Windows,
     Linux,
     Macos,
 }
-
-#[cfg(target_os = "windows")]
-const PLATFORM: Platform = Platform::Windows;
-
-#[cfg(target_os = "linux")]
-const PLATFORM: Platform = Platform::Linux;
-
-#[cfg(target_os = "macos")]
-const PLATFORM: Platform = Platform::Macos;
 
 #[derive(PartialEq, Eq, Hash, Clone)]
 struct TypeDebug {
@@ -254,6 +244,7 @@ pub fn gen(
     path: &str,
     no_link: bool,
     static_lib: bool,
+    platform: Platform,
 ) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let current_dir_buf = std::env::current_dir();
     let current_dir = current_dir_buf
@@ -265,7 +256,7 @@ pub fn gen(
 
     let mut dwarf = dwarf::Dwarf::new(source_path, current_dir);
 
-    let binary_format = match PLATFORM {
+    let binary_format = match platform {
         Platform::Windows => BinaryFormat::Coff,
         Platform::Linux => BinaryFormat::Elf,
         Platform::Macos => BinaryFormat::Macho,
@@ -296,7 +287,7 @@ pub fn gen(
     import_function(&mut obj, BUILTIN_INPUT);
     import_function(&mut obj, "[object].$dtor");
 
-    let code_set = x64::gen_code_set(ast);
+    let code_set = x64::gen_code_set(ast, platform);
 
     dwarf.add_types(code_set.used_types());
 
@@ -432,7 +423,7 @@ pub fn gen(
 
     dwarf.finalize_code_range();
 
-    if PLATFORM == Platform::Linux {
+    if platform == Platform::Linux {
         let debug_chunks = dwarf.finalize();
         let mut debug_section_map = HashMap::new();
         for chunk in &debug_chunks {
@@ -480,7 +471,7 @@ pub fn gen(
         return Ok(());
     }
 
-    let lib_file = match PLATFORM {
+    let lib_file = match platform {
         Platform::Windows => "chocopy_rs_std.lib",
         Platform::Linux | Platform::Macos => "libchocopy_rs_std.a",
     };
@@ -488,7 +479,7 @@ pub fn gen(
     let mut lib_path = std::env::current_exe()?;
     lib_path.set_file_name(lib_file);
 
-    let ld_output = match PLATFORM {
+    let ld_output = match platform {
         Platform::Windows => {
             let vcvarsall = (|| -> Option<PathBuf> {
                 let linker = cc::windows_registry::find_tool("x86_64-pc-windows-msvc", "link.exe")?;
