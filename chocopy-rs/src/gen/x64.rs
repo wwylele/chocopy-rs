@@ -48,7 +48,7 @@ struct Emitter<'a> {
 }
 
 impl Platform {
-    fn stack_reserve(&self) -> usize {
+    fn stack_reserve(self) -> usize {
         match self {
             Platform::Windows => 4,
             Platform::Linux | Platform::Macos => 0,
