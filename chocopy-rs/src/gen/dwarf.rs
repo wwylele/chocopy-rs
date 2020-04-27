@@ -1,3 +1,4 @@
+use super::debug::*;
 use super::gimli_writer::*;
 use super::*;
 use gimli::constants::*;
@@ -90,8 +91,8 @@ pub(super) struct Dwarf {
     size_t_id: UnitEntryId,
     int_t_id: UnitEntryId,
     char_id: UnitEntryId,
-    default_prototype_id: UnitEntryId,
-    default_prototype_ptr_id: UnitEntryId,
+    object_prototype_id: UnitEntryId,
+    object_prototype_ptr_id: UnitEntryId,
     debug_types: HashMap<TypeDebug, UnitEntryId>,
     debug_method_types: HashMap<MethodDebug, UnitEntryId>,
     range_list: Vec<Range>,
@@ -143,20 +144,17 @@ impl Dwarf {
         let size_t_id = dwarf_add_base_type(&mut dwarf, "$size_t", DW_ATE_signed, 8);
         let int_t_id = dwarf_add_base_type(&mut dwarf, "$int_t", DW_ATE_signed, 4);
         let char_id = dwarf_add_base_type(&mut dwarf, "$char", DW_ATE_signed, 1);
-        let default_prototype_id = dwarf_add_struct_type(&mut dwarf, "object.$prototype", 24);
-        dwarf_add_member(&mut dwarf, default_prototype_id, "$size", int_t_id, 0);
-        dwarf_add_member(&mut dwarf, default_prototype_id, "$tag", int_t_id, 4);
 
-        let default_prototype_ptr_id =
-            dwarf_add_pointer_type(&mut dwarf, None, default_prototype_id);
+        let object_prototype_id = dwarf_add_struct_type(&mut dwarf, "object", 24);
+        let object_prototype_ptr_id = dwarf_add_pointer_type(&mut dwarf, None, object_prototype_id);
 
         Dwarf {
             dwarf,
             size_t_id,
             int_t_id,
             char_id,
-            default_prototype_id,
-            default_prototype_ptr_id,
+            object_prototype_id,
+            object_prototype_ptr_id,
             debug_types: HashMap::new(),
             debug_method_types: HashMap::new(),
             range_list: vec![],
@@ -165,131 +163,7 @@ impl Dwarf {
         }
     }
 
-    pub fn add_types<'a>(&mut self, types: impl IntoIterator<Item = &'a TypeDebug>) {
-        let mut array_level_map = HashMap::<&str, u32>::new();
-        for type_used in types {
-            if let Some(array_level) = array_level_map.get_mut(type_used.core_name.as_str()) {
-                *array_level = std::cmp::max(*array_level, type_used.array_level)
-            } else {
-                array_level_map.insert(&type_used.core_name, type_used.array_level);
-            }
-        }
-        array_level_map.entry("int").or_insert(0);
-        array_level_map.entry("str").or_insert(0);
-        array_level_map.entry("bool").or_insert(0);
-        array_level_map.entry("object").or_insert(0);
-        array_level_map.entry("<None>").or_insert(0);
-
-        for (type_name, max_array_level) in array_level_map {
-            for array_level in 0..=max_array_level {
-                let type_debug = TypeDebug {
-                    core_name: type_name.to_owned(),
-                    array_level,
-                };
-                if self.debug_types.contains_key(&type_debug) {
-                    continue;
-                }
-                let node_id = if type_debug.array_level == 0 && type_debug.core_name == "bool" {
-                    dwarf_add_base_type(&mut self.dwarf, "bool", DW_ATE_boolean, 1)
-                } else if type_debug.array_level == 0 && type_debug.core_name == "int" {
-                    dwarf_add_base_type(&mut self.dwarf, "int", DW_ATE_signed, 4)
-                } else if type_debug.array_level == 0 && type_debug.core_name == "<None>" {
-                    dwarf_add_base_type(&mut self.dwarf, "<None>", DW_ATE_address, 8)
-                } else {
-                    let type_string = type_debug.to_string();
-                    let is_array = array_level != 0 || type_string == "str";
-
-                    let storage_type_id = dwarf_add_struct_type(
-                        &mut self.dwarf,
-                        &(type_debug.to_string() + ".$storage"),
-                        if is_array { 24 } else { 16 },
-                    );
-
-                    if is_array {
-                        dwarf_add_member(
-                            &mut self.dwarf,
-                            storage_type_id,
-                            "$proto",
-                            self.default_prototype_ptr_id,
-                            0,
-                        );
-
-                        dwarf_add_member(
-                            &mut self.dwarf,
-                            storage_type_id,
-                            "$ref",
-                            self.size_t_id,
-                            8,
-                        );
-
-                        let len_id = dwarf_add_member(
-                            &mut self.dwarf,
-                            storage_type_id,
-                            "$len",
-                            self.size_t_id,
-                            16,
-                        );
-
-                        let element_type = if type_string == "str" {
-                            self.char_id
-                        } else {
-                            let mut element_type = type_debug.clone();
-                            element_type.array_level -= 1;
-                            self.debug_types[&element_type]
-                        };
-                        let array_type_id = dwarf_add_array_type(
-                            &mut self.dwarf,
-                            element_type,
-                            self.size_t_id,
-                            len_id,
-                        );
-                        dwarf_add_member(
-                            &mut self.dwarf,
-                            storage_type_id,
-                            "$array",
-                            array_type_id,
-                            24,
-                        );
-                    }
-
-                    dwarf_add_pointer_type(
-                        &mut self.dwarf,
-                        Some(&type_debug.to_string()),
-                        storage_type_id,
-                    )
-                };
-                self.debug_types.insert(type_debug, node_id);
-            }
-        }
-
-        let object_init_type = self.add_method_type(MethodDebug {
-            params: vec![TypeDebug::class_type("object")],
-            return_type: TypeDebug::class_type("<None>"),
-        });
-
-        dwarf_add_member(
-            &mut self.dwarf,
-            self.default_prototype_id,
-            "__init__",
-            object_init_type,
-            16,
-        );
-
-        let dtor_type = self.add_method_type(MethodDebug {
-            return_type: TypeDebug::class_type("<None>"),
-            params: vec![TypeDebug::class_type("object")],
-        });
-
-        dwarf_add_member(
-            &mut self.dwarf,
-            self.default_prototype_id,
-            "$dtor",
-            dtor_type,
-            8,
-        );
-    }
-
-    pub fn add_method_type(&mut self, method_type: MethodDebug) -> UnitEntryId {
+    fn add_method_type(&mut self, method_type: MethodDebug) -> UnitEntryId {
         if let Some(&id) = self.debug_method_types.get(&method_type) {
             return id;
         }
@@ -312,8 +186,82 @@ impl Dwarf {
         self.debug_method_types.insert(method_type, tag);
         tag
     }
+}
 
-    pub fn add_class(&mut self, class_name: String, class_debug: ClassDebug) {
+impl DebugWriter for Dwarf {
+    fn add_type<'a>(&mut self, type_repr: TypeDebugRepresentive<'a>) {
+        for array_level in 0..=type_repr.max_array_level {
+            let type_debug = TypeDebug {
+                core_name: type_repr.core_name.to_owned(),
+                array_level,
+            };
+            if self.debug_types.contains_key(&type_debug) {
+                continue;
+            }
+            let node_id = if type_debug.array_level == 0 && type_debug.core_name == "bool" {
+                dwarf_add_base_type(&mut self.dwarf, "bool", DW_ATE_boolean, 1)
+            } else if type_debug.array_level == 0 && type_debug.core_name == "int" {
+                dwarf_add_base_type(&mut self.dwarf, "int", DW_ATE_signed, 4)
+            } else if type_debug.array_level == 0 && type_debug.core_name == "<None>" {
+                dwarf_add_base_type(&mut self.dwarf, "<None>", DW_ATE_address, 8)
+            } else {
+                let type_string = type_debug.to_string();
+                let is_array = array_level != 0 || type_string == "str";
+
+                let storage_type_id = dwarf_add_struct_type(
+                    &mut self.dwarf,
+                    &(type_debug.to_string() + ".$storage"),
+                    if is_array { 24 } else { 16 },
+                );
+
+                if is_array {
+                    dwarf_add_member(
+                        &mut self.dwarf,
+                        storage_type_id,
+                        "$proto",
+                        self.object_prototype_ptr_id,
+                        0,
+                    );
+
+                    dwarf_add_member(&mut self.dwarf, storage_type_id, "$ref", self.size_t_id, 8);
+
+                    let len_id = dwarf_add_member(
+                        &mut self.dwarf,
+                        storage_type_id,
+                        "$len",
+                        self.size_t_id,
+                        16,
+                    );
+
+                    let element_type = if type_string == "str" {
+                        self.char_id
+                    } else {
+                        let mut element_type = type_debug.clone();
+                        element_type.array_level -= 1;
+                        self.debug_types[&element_type]
+                    };
+                    let array_type_id =
+                        dwarf_add_array_type(&mut self.dwarf, element_type, self.size_t_id, len_id);
+                    dwarf_add_member(
+                        &mut self.dwarf,
+                        storage_type_id,
+                        "$array",
+                        array_type_id,
+                        24,
+                    );
+                }
+
+                dwarf_add_pointer_type(
+                    &mut self.dwarf,
+                    Some(&type_debug.to_string()),
+                    storage_type_id,
+                )
+            };
+            self.debug_types.insert(type_debug, node_id);
+        }
+    }
+
+    fn add_class(&mut self, class_name: String, class_debug: ClassDebug) {
         let prototype_name = class_name.clone() + ".$prototype";
         let tag_id = self.debug_types[&TypeDebug::class_type(&class_name)];
 
@@ -330,11 +278,15 @@ impl Dwarf {
             AttributeValue::Udata((class_debug.size + 16) as u64),
         );
 
-        let prototype_id = dwarf_add_struct_type(
-            &mut self.dwarf,
-            &prototype_name,
-            ((class_debug.methods.len() + 2) * 8) as u64,
-        );
+        let prototype_id = if class_name == "object" {
+            self.object_prototype_id
+        } else {
+            dwarf_add_struct_type(
+                &mut self.dwarf,
+                &prototype_name,
+                ((class_debug.methods.len() + 2) * 8) as u64,
+            )
+        };
 
         dwarf_add_member(&mut self.dwarf, prototype_id, "$size", self.int_t_id, 0);
         dwarf_add_member(&mut self.dwarf, prototype_id, "$tag", self.int_t_id, 4);
@@ -357,7 +309,11 @@ impl Dwarf {
             );
         }
 
-        let prototype_ptr_id = dwarf_add_pointer_type(&mut self.dwarf, None, prototype_id);
+        let prototype_ptr_id = if class_name == "object" {
+            self.object_prototype_ptr_id
+        } else {
+            dwarf_add_pointer_type(&mut self.dwarf, None, prototype_id)
+        };
 
         dwarf_add_member(&mut self.dwarf, tag_id, "$proto", prototype_ptr_id, 0);
         dwarf_add_member(&mut self.dwarf, tag_id, "$ref", self.size_t_id, 8);
@@ -373,7 +329,7 @@ impl Dwarf {
         }
     }
 
-    pub fn add_chunk(&mut self, chunk: &Chunk) {
+    fn add_chunk(&mut self, chunk: &Chunk) {
         if let ChunkExtra::Procedure(procedure_debug) = &chunk.extra {
             let parent_id = if let Some(parent) = &procedure_debug.parent {
                 self.procedure_debug_map[parent]
@@ -491,20 +447,7 @@ impl Dwarf {
         }
     }
 
-    pub fn finalize_code_range(&mut self) {
-        let range_list = self
-            .dwarf
-            .unit
-            .ranges
-            .add(RangeList(std::mem::replace(&mut self.range_list, vec![])));
-        let root_id = self.dwarf.unit.root();
-        self.dwarf
-            .unit
-            .get_mut(root_id)
-            .set(DW_AT_ranges, AttributeValue::RangeListRef(range_list));
-    }
-
-    pub fn add_global(&mut self, global_debug: VarDebug) {
+    fn add_global(&mut self, global_debug: VarDebug) {
         let root_id = self.dwarf.unit.root();
         let node_id = self.dwarf.unit.add(root_id, DW_TAG_variable);
         let node = self.dwarf.unit.get_mut(node_id);
@@ -533,7 +476,18 @@ impl Dwarf {
         );
     }
 
-    pub fn finalize(mut self) -> Vec<DebugChunk> {
+    fn finalize(&mut self) -> Vec<DebugChunk> {
+        let range_list = self
+            .dwarf
+            .unit
+            .ranges
+            .add(RangeList(std::mem::replace(&mut self.range_list, vec![])));
+        let root_id = self.dwarf.unit.root();
+        self.dwarf
+            .unit
+            .get_mut(root_id)
+            .set(DW_AT_ranges, AttributeValue::RangeListRef(range_list));
+
         let mut chunks = vec![];
 
         let mut dwarf_sections = Sections::new(DwarfWriter::new());

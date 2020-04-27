@@ -1,9 +1,11 @@
+mod debug;
 mod dwarf;
 mod gimli_writer;
 mod x64;
 
 use crate::local_env::*;
 use crate::node::*;
+use debug::*;
 use object::{
     target_lexicon::*, write::*, RelocationEncoding, RelocationKind, SectionKind, SymbolFlags,
     SymbolKind, SymbolScope,
@@ -47,6 +49,11 @@ pub enum Platform {
 struct TypeDebug {
     core_name: String,
     array_level: u32,
+}
+
+struct TypeDebugRepresentive<'a> {
+    core_name: &'a str,
+    max_array_level: u32,
 }
 
 impl TypeDebug {
@@ -195,6 +202,28 @@ impl CodeSet {
                     .flatten(),
             )
     }
+
+    fn used_types_representive(&self) -> impl Iterator<Item = TypeDebugRepresentive> {
+        let mut array_level_map = HashMap::<&str, u32>::new();
+        for type_used in self.used_types() {
+            if let Some(array_level) = array_level_map.get_mut(type_used.core_name.as_str()) {
+                *array_level = std::cmp::max(*array_level, type_used.array_level)
+            } else {
+                array_level_map.insert(&type_used.core_name, type_used.array_level);
+            }
+        }
+        array_level_map.entry("int").or_insert(0);
+        array_level_map.entry("str").or_insert(0);
+        array_level_map.entry("bool").or_insert(0);
+        array_level_map.entry("object").or_insert(0);
+        array_level_map.entry("<None>").or_insert(0);
+        array_level_map
+            .into_iter()
+            .map(|(core_name, max_array_level)| TypeDebugRepresentive {
+                core_name,
+                max_array_level,
+            })
+    }
 }
 
 #[derive(Debug)]
@@ -254,7 +283,11 @@ pub fn gen(
         .flatten()
         .unwrap_or("");
 
-    let mut dwarf = dwarf::Dwarf::new(source_path, current_dir);
+    let mut debug: Box<dyn DebugWriter> = match platform {
+        Platform::Windows => Box::new(debug::DummyDebug),
+        Platform::Linux => Box::new(dwarf::Dwarf::new(source_path, current_dir)),
+        Platform::Macos => Box::new(debug::DummyDebug),
+    };
 
     let binary_format = match platform {
         Platform::Windows => BinaryFormat::Coff,
@@ -289,10 +322,12 @@ pub fn gen(
 
     let code_set = x64::gen_code_set(ast, platform);
 
-    dwarf.add_types(code_set.used_types());
+    for t in code_set.used_types_representive() {
+        debug.add_type(t);
+    }
 
     for (class_name, classes_debug) in code_set.classes_debug {
-        dwarf.add_class(class_name, classes_debug);
+        debug.add_class(class_name, classes_debug);
     }
 
     let bss_section = obj.section_id(StandardSection::UninitializedData);
@@ -311,13 +346,13 @@ pub fn gen(
     obj.add_symbol_bss(global_symbol, bss_section, code_set.global_size, 8);
 
     for global_debug in code_set.globals_debug {
-        dwarf.add_global(global_debug);
+        debug.add_global(global_debug);
     }
 
     let mut section_map = HashMap::new();
 
     for chunk in &code_set.chunks {
-        dwarf.add_chunk(&chunk);
+        debug.add_chunk(&chunk);
         if let ChunkExtra::Procedure(_) = chunk.extra {
             let scope = if chunk.name == BUILTIN_CHOCOPY_MAIN {
                 SymbolScope::Linkage
@@ -421,35 +456,30 @@ pub fn gen(
         }
     }
 
-    dwarf.finalize_code_range();
+    let debug_chunks = debug.finalize();
+    let mut debug_section_map = HashMap::new();
+    for chunk in &debug_chunks {
+        let section = obj.add_section("".into(), chunk.name.as_bytes().into(), SectionKind::Debug);
+        obj.append_section_data(section, &chunk.code, 8);
+        debug_section_map.insert(chunk.name.clone(), section);
+    }
 
-    if platform == Platform::Linux {
-        let debug_chunks = dwarf.finalize();
-        let mut debug_section_map = HashMap::new();
-        for chunk in &debug_chunks {
-            let section =
-                obj.add_section("".into(), chunk.name.as_bytes().into(), SectionKind::Debug);
-            obj.append_section_data(section, &chunk.code, 8);
-            debug_section_map.insert(chunk.name.clone(), section);
-        }
-
-        for chunk in debug_chunks {
-            for link in chunk.links {
-                let to = obj
-                    .symbol_id(link.to.as_bytes())
-                    .unwrap_or_else(|| obj.section_symbol(debug_section_map[&link.to]));
-                obj.add_relocation(
-                    debug_section_map[&chunk.name],
-                    Relocation {
-                        offset: link.pos as u64,
-                        size: link.size * 8,
-                        kind: RelocationKind::Absolute,
-                        encoding: RelocationEncoding::Generic,
-                        symbol: to,
-                        addend: 0,
-                    },
-                )?;
-            }
+    for chunk in debug_chunks {
+        for link in chunk.links {
+            let to = obj
+                .symbol_id(link.to.as_bytes())
+                .unwrap_or_else(|| obj.section_symbol(debug_section_map[&link.to]));
+            obj.add_relocation(
+                debug_section_map[&chunk.name],
+                Relocation {
+                    offset: link.pos as u64,
+                    size: link.size * 8,
+                    kind: RelocationKind::Absolute,
+                    encoding: RelocationEncoding::Generic,
+                    symbol: to,
+                    addend: 0,
+                },
+            )?;
         }
     }
 
