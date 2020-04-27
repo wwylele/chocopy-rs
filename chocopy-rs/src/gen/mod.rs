@@ -1,3 +1,4 @@
+mod codeview;
 mod debug;
 mod dwarf;
 mod gimli_writer;
@@ -144,7 +145,14 @@ struct Chunk {
     extra: ChunkExtra,
 }
 
+enum DebugChunkLinkType {
+    Absolute,
+    SectionRelative,
+    SectionId,
+}
+
 struct DebugChunkLink {
+    link_type: DebugChunkLinkType,
     pos: usize,
     to: String,
     size: u8,
@@ -241,7 +249,7 @@ impl std::fmt::Display for ToolChainError {
 impl std::error::Error for ToolChainError {}
 
 #[derive(Debug)]
-struct PathError;
+pub struct PathError;
 
 impl std::fmt::Display for PathError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -283,8 +291,22 @@ pub fn gen(
         .flatten()
         .unwrap_or("");
 
+    let obj_path = if no_link {
+        let obj_path = Path::new(path);
+        obj_path.to_owned()
+    } else {
+        let mut obj_path = std::env::temp_dir();
+        let obj_name = format!("chocopy-{}.o", rand::random::<u32>());
+        obj_path.push(obj_name);
+        obj_path
+    };
+
     let mut debug: Box<dyn DebugWriter> = match platform {
-        Platform::Windows => Box::new(debug::DummyDebug),
+        Platform::Windows => Box::new(codeview::Codeview::new(
+            source_path,
+            current_dir,
+            obj_path.as_os_str().to_str().unwrap_or(""),
+        )?),
         Platform::Linux => Box::new(dwarf::Dwarf::new(source_path, current_dir)),
         Platform::Macos => Box::new(debug::DummyDebug),
     };
@@ -469,12 +491,17 @@ pub fn gen(
             let to = obj
                 .symbol_id(link.to.as_bytes())
                 .unwrap_or_else(|| obj.section_symbol(debug_section_map[&link.to]));
+            let kind = match link.link_type {
+                DebugChunkLinkType::Absolute => RelocationKind::Absolute,
+                DebugChunkLinkType::SectionRelative => RelocationKind::SectionOffset,
+                DebugChunkLinkType::SectionId => RelocationKind::SectionIndex,
+            };
             obj.add_relocation(
                 debug_section_map[&chunk.name],
                 Relocation {
                     offset: link.pos as u64,
                     size: link.size * 8,
-                    kind: RelocationKind::Absolute,
+                    kind,
                     encoding: RelocationEncoding::Generic,
                     symbol: to,
                     addend: 0,
@@ -482,16 +509,6 @@ pub fn gen(
             )?;
         }
     }
-
-    let obj_path = if no_link {
-        let obj_path = Path::new(path);
-        obj_path.to_owned()
-    } else {
-        let mut obj_path = std::env::temp_dir();
-        let obj_name = format!("chocopy-{}.o", rand::random::<u32>());
-        obj_path.push(obj_name);
-        obj_path
-    };
 
     let mut obj_file = std::fs::File::create(&obj_path)?;
     obj_file.write_all(&obj.write()?)?;
@@ -543,7 +560,7 @@ call \"{}\" amd64
 link /NOLOGO /NXCOMPAT /OPT:REF,NOICF \
 \"{}\" \"{}\" /OUT:\"{}\" \
 kernel32.lib advapi32.lib ws2_32.lib userenv.lib {} \
-/SUBSYSTEM:CONSOLE",
+/SUBSYSTEM:CONSOLE /DEBUG",
                 windows_path_escape(&vcvarsall)?,
                 windows_path_escape(&obj_path)?,
                 windows_path_escape(&lib_path)?,

@@ -476,7 +476,7 @@ impl DebugWriter for Dwarf {
         );
     }
 
-    fn finalize(&mut self) -> Vec<DebugChunk> {
+    fn finalize(mut self: Box<Self>) -> Vec<DebugChunk> {
         let range_list = self
             .dwarf
             .unit
@@ -503,6 +503,7 @@ impl DebugWriter for Dwarf {
                         if data[i..i + 4] == GLOBAL_RELOC_HACK_MAGIC.to_le_bytes() {
                             data[i..i + 4].copy_from_slice(&[0; 4]);
                             links.push(DebugChunkLink {
+                                link_type: DebugChunkLinkType::Absolute,
                                 pos: i - 4,
                                 to: GLOBAL_SECTION.to_owned(),
                                 size: 8,
@@ -513,6 +514,7 @@ impl DebugWriter for Dwarf {
 
                 for reloc in relocs {
                     links.push(DebugChunkLink {
+                        link_type: DebugChunkLinkType::Absolute,
                         pos: reloc.offset,
                         to: self.symbol_pool[reloc.symbol].to_owned(),
                         size: reloc.size,
@@ -521,6 +523,7 @@ impl DebugWriter for Dwarf {
 
                 for self_reloc in self_relocs {
                     links.push(DebugChunkLink {
+                        link_type: DebugChunkLinkType::Absolute,
                         pos: self_reloc.offset,
                         to: self_reloc.section.to_owned(),
                         size: self_reloc.size,

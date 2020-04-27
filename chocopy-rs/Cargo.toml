@@ -14,3 +14,4 @@ gimli = "0.20"
 object = { git = "https://github.com/gimli-rs/object", features = ["write"] }
 cc = "1.0"
 once_cell = "1.3"
+md-5 = "0.8"

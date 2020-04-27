@@ -5,7 +5,7 @@ pub(super) trait DebugWriter {
     fn add_class(&mut self, class_name: String, class_debug: ClassDebug);
     fn add_chunk(&mut self, chunk: &Chunk);
     fn add_global(&mut self, global_debug: VarDebug);
-    fn finalize(&mut self) -> Vec<DebugChunk>;
+    fn finalize(self: Box<Self>) -> Vec<DebugChunk>;
 }
 
 pub struct DummyDebug;
@@ -15,7 +15,7 @@ impl DebugWriter for DummyDebug {
     fn add_class(&mut self, _: String, _: ClassDebug) {}
     fn add_chunk(&mut self, _: &Chunk) {}
     fn add_global(&mut self, _: VarDebug) {}
-    fn finalize(&mut self) -> Vec<DebugChunk> {
+    fn finalize(self: Box<Self>) -> Vec<DebugChunk> {
         vec![]
     }
 }
