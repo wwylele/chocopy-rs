@@ -36,6 +36,7 @@ struct ClassSlot {
 
 struct Emitter<'a> {
     name: String,
+    return_type: Option<&'a ValueType>,
     storage_env: Option<&'a StorageEnv>,
     classes: Option<&'a HashMap<String, ClassSlot>>,
     clean_up_list: Vec<i32>, // offsets relative to rbp
@@ -67,8 +68,13 @@ struct BackwardJumper {
 }
 
 impl<'a> Emitter<'a> {
+    pub fn new_simple(name: &str, platform: Platform) -> Emitter<'a> {
+        Emitter::new(name, None, None, None, vec![], 0, platform)
+    }
+
     pub fn new(
         name: &str,
+        return_type: Option<&'a ValueType>,
         storage_env: Option<&'a StorageEnv>,
         classes: Option<&'a HashMap<String, ClassSlot>>,
         clean_up_list: Vec<i32>,
@@ -77,6 +83,7 @@ impl<'a> Emitter<'a> {
     ) -> Emitter<'a> {
         Emitter {
             name: name.to_owned(),
+            return_type,
             storage_env,
             classes,
             clean_up_list,
@@ -1470,7 +1477,8 @@ impl<'a> Emitter<'a> {
             }
             Stmt::ReturnStmt(stmt) => {
                 if let Some(value) = &stmt.value {
-                    self.emit_expression(value)
+                    self.emit_expression(value);
+                    self.emit_coerce(value.get_type(), self.return_type.as_ref().unwrap());
                 } else {
                     self.emit_none_literal();
                 }
@@ -1646,9 +1654,11 @@ fn gen_function(
     }
 
     let mut handle = storage_env.push(locals);
+    let return_type = ValueType::from_annotation(&function.return_type);
 
     let mut code = Emitter::new(
         &link_name,
+        Some(&return_type),
         Some(handle.inner()),
         Some(classes),
         clean_up_list,
@@ -1711,7 +1721,7 @@ fn gen_function(
 }
 
 fn gen_ctor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chunk {
-    let mut code = Emitter::new(class_name, None, None, vec![], 0, platform);
+    let mut code = Emitter::new(class_name, None, None, None, vec![], 0, platform);
 
     code.prepare_call(platform.stack_reserve());
     match platform {
@@ -1788,14 +1798,7 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
 }
 
 fn gen_dtor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chunk {
-    let mut code = Emitter::new(
-        &(class_name.to_owned() + ".$dtor"),
-        None,
-        None,
-        vec![],
-        0,
-        platform,
-    );
+    let mut code = Emitter::new_simple(&(class_name.to_owned() + ".$dtor"), platform);
     // Note: This uses C ABI instead of chocopy ABI
     match platform {
         Platform::Windows => {
@@ -1842,7 +1845,7 @@ fn gen_dtor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
 }
 
 fn gen_int(platform: Platform) -> Chunk {
-    let mut code = Emitter::new("int", None, None, vec![], 0, platform);
+    let mut code = Emitter::new_simple("int", platform);
     code.emit_int_literal(0);
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -1857,7 +1860,7 @@ fn gen_int(platform: Platform) -> Chunk {
 }
 
 fn gen_bool(platform: Platform) -> Chunk {
-    let mut code = Emitter::new("bool", None, None, vec![], 0, platform);
+    let mut code = Emitter::new_simple("bool", platform);
     code.emit_bool_literal(false);
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -1872,7 +1875,7 @@ fn gen_bool(platform: Platform) -> Chunk {
 }
 
 fn gen_str(platform: Platform) -> Chunk {
-    let mut code = Emitter::new("str", None, None, vec![], 0, platform);
+    let mut code = Emitter::new_simple("str", platform);
     code.emit_string_literal("");
     code.end_proc();
     code.finalize(ProcedureDebug {
@@ -1887,7 +1890,7 @@ fn gen_str(platform: Platform) -> Chunk {
 }
 
 fn gen_object_init(platform: Platform) -> Chunk {
-    let mut code = Emitter::new("object.__init__", None, None, vec![], 0, platform);
+    let mut code = Emitter::new_simple("object.__init__", platform);
     // mov rax,[rsp+16]
     code.emit(&[0x48, 0x8B, 0x44, 0x24, 0x10]);
     code.emit_drop();
@@ -1910,7 +1913,7 @@ fn gen_object_init(platform: Platform) -> Chunk {
 }
 
 fn gen_len(platform: Platform) -> Chunk {
-    let mut code = Emitter::new("len", None, None, vec![], 0, platform);
+    let mut code = Emitter::new_simple("len", platform);
     match platform {
         Platform::Windows => code.emit(&[0x48, 0x8B, 0x4C, 0x24, 0x10]), //  mov rcx,[rsp+16]
         Platform::Linux | Platform::Macos => code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]), // mov rdi,[rsp+16]
@@ -1935,7 +1938,7 @@ fn gen_len(platform: Platform) -> Chunk {
 }
 
 fn gen_input(platform: Platform) -> Chunk {
-    let mut code = Emitter::new("input", None, None, vec![], 0, platform);
+    let mut code = Emitter::new_simple("input", platform);
     match platform {
         Platform::Windows => code.emit(&[0x48, 0x8D, 0x0D]), // lea rcx,[rip+{}]
         Platform::Linux | Platform::Macos => code.emit(&[0x48, 0x8D, 0x3D]), // lea rdi,[rip+{}]
@@ -1956,7 +1959,7 @@ fn gen_input(platform: Platform) -> Chunk {
 }
 
 fn gen_print(platform: Platform) -> Chunk {
-    let mut code = Emitter::new("print", None, None, vec![], 0, platform);
+    let mut code = Emitter::new_simple("print", platform);
     match platform {
         Platform::Windows => code.emit(&[0x48, 0x8B, 0x4C, 0x24, 0x10]), // mov rcx,[rsp+16]
         Platform::Linux | Platform::Macos => code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]), // mov rdi,[rsp+16]
@@ -1988,6 +1991,7 @@ fn gen_main(
 ) -> Chunk {
     let mut main_code = Emitter::new(
         BUILTIN_CHOCOPY_MAIN,
+        None,
         Some(storage_env),
         Some(classes),
         vec![],
