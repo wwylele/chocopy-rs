@@ -1,6 +1,7 @@
 use super::debug::*;
 use super::*;
 use md5::*;
+use std::collections::HashMap;
 use std::fs::*;
 use std::io::Read;
 
@@ -15,6 +16,7 @@ enum RecordType {
     ObjName = 0x1101,
     Compile3 = 0x113C,
     FrameProc = 0x1012,
+    Udt = 0x1108,
     LData32 = 0x110C,
     Local = 0x113E,
     DefRangFramePointerRelFullScope = 0x1144,
@@ -25,6 +27,12 @@ enum RecordType {
 }
 
 enum LeafType {
+    Pointer = 0x1002,
+    Procedure = 0x1008,
+    ArgList = 0x1201,
+    FieldList = 0x1203,
+    Structure = 0x1505,
+    FuncId = 0x1601,
     BuildInfo = 0x1603,
     StringId = 0x1605,
 }
@@ -95,6 +103,7 @@ pub struct Codeview {
     type_stream: Vec<u8>,
     type_index: u32,
     string_table: Vec<u8>,
+    type_map: HashMap<String, u32>,
 }
 
 impl Codeview {
@@ -167,6 +176,7 @@ impl Codeview {
             type_stream,
             type_index: 0x1000,
             string_table,
+            type_map: HashMap::new(),
         };
 
         let mut leaf_current_dir = vec![];
@@ -214,26 +224,231 @@ impl Codeview {
         Ok(codeview)
     }
 
-    fn get_type(&self, type_debug: &TypeDebug) -> u32 {
+    fn get_type(&mut self, type_debug: &TypeDebug) -> u32 {
         if type_debug.array_level == 0 {
             match type_debug.core_name.as_str() {
-                "int" => 0x0074,
-                "bool" => 0x0030,
-                _ => 0x0603,
+                "int" => return 0x0074,
+                "bool" => return 0x0030,
+                "str" => (),
+                s => return self.type_map.get(s).copied().unwrap_or(0x0603),
             }
-        } else {
-            0x0603
         }
+
+        if let Some(&id) = self.type_map.get("[]") {
+            return id;
+        }
+
+        self.add_type(TypeDebugRepresentive {
+            core_name: "[]",
+            max_array_level: 0,
+        });
+
+        self.add_class(
+            "[]".to_owned(),
+            ClassDebug {
+                size: 8,
+                attributes: vec![VarDebug {
+                    offset: 16,
+                    line: 0,
+                    name: "$len".to_owned(),
+                    var_type: TypeDebug::class_type("int"),
+                }],
+                methods: std::iter::once((
+                    16,
+                    (
+                        "__init__".to_owned(),
+                        MethodDebug {
+                            params: vec![],
+                            return_type: TypeDebug::class_type("[]"),
+                        },
+                    ),
+                ))
+                .collect(),
+            },
+        );
+
+        self.type_map.get("[]").copied().unwrap()
     }
 }
 
 impl DebugWriter for Codeview {
-    fn add_type<'a>(&mut self, _: TypeDebugRepresentive<'a>) {}
+    fn add_type<'a>(&mut self, representive: TypeDebugRepresentive<'a>) {
+        if !matches!(
+            representive.core_name,
+            "str" | "int" | "bool" | "<None>" | "<Empty>"
+        ) {
+            let mut storage_type = vec![];
+            storage_type.write_u16(0); // element count
+            storage_type.write_u16(0x0080); // forward def
+            storage_type.write_u32(0); // field
+            storage_type.write_u32(0); // derived
+            storage_type.write_u32(0); // vshape
+            storage_type.write_u16(0); // size
+            storage_type.write_str(representive.core_name);
+            let storage_type_id = self.write_leaf(LeafType::Structure, storage_type);
 
-    fn add_class(&mut self, _: String, _: ClassDebug) {}
+            let mut pointer_type = vec![];
+            pointer_type.write_u32(storage_type_id);
+            pointer_type.write_u32(0xC); // ptr64
+            let pointer_type_id = self.write_leaf(LeafType::Pointer, pointer_type);
+
+            self.type_map
+                .insert(representive.core_name.to_owned(), pointer_type_id);
+        }
+    }
+
+    fn add_class(&mut self, name: String, class_debug: ClassDebug) {
+        const MEMBER: u16 = 0x150D;
+
+        let mut proto_fields = vec![];
+
+        proto_fields.write_u16(MEMBER);
+        proto_fields.write_u16(1); // private
+        proto_fields.write_u32(0x0074);
+        proto_fields.write_u16(0);
+        proto_fields.write_str("$size");
+
+        proto_fields.write_u16(MEMBER);
+        proto_fields.write_u16(1); // private
+        proto_fields.write_u32(0x0074);
+        proto_fields.write_u16(4);
+        proto_fields.write_str("$tag");
+
+        let mut arg_list = vec![];
+        arg_list.write_u32(1);
+        arg_list.write_u32(self.get_type(&TypeDebug::class_type(&name)));
+        let arg_list_id = self.write_leaf(LeafType::ArgList, arg_list);
+
+        let mut procedure_type = vec![];
+        procedure_type.write_u32(0x0003); // void
+        procedure_type.write_u8(0); // CV_CALL_NEAR_C,  near right to left push, caller pops stack
+        procedure_type.write_u8(0); // funcattr
+        procedure_type.write_u16(1);
+        procedure_type.write_u32(arg_list_id);
+        let procedure_type_id = self.write_leaf(LeafType::Procedure, procedure_type);
+
+        let mut procedure_pointer_type = vec![];
+        procedure_pointer_type.write_u32(procedure_type_id);
+        procedure_pointer_type.write_u32(0xC); // ptr64
+        let procedure_pointer_type_id = self.write_leaf(LeafType::Pointer, procedure_pointer_type);
+
+        proto_fields.write_u16(MEMBER);
+        proto_fields.write_u16(1); // private
+        proto_fields.write_u32(procedure_pointer_type_id);
+        proto_fields.write_u16(8);
+        proto_fields.write_str("$dtor");
+
+        for (&offset, (name, method)) in &class_debug.methods {
+            let mut arg_list = vec![];
+            arg_list.write_u32(method.params.len() as u32);
+            for param in &method.params {
+                arg_list.write_u32(self.get_type(&param));
+            }
+            let arg_list_id = self.write_leaf(LeafType::ArgList, arg_list);
+
+            let mut procedure_type = vec![];
+            procedure_type.write_u32(self.get_type(&method.return_type));
+            procedure_type.write_u8(0); // CV_CALL_NEAR_C,  near right to left push, caller pops stack
+            procedure_type.write_u8(0); // funcattr
+            procedure_type.write_u16(method.params.len() as u16);
+            procedure_type.write_u32(arg_list_id);
+            let procedure_type_id = self.write_leaf(LeafType::Procedure, procedure_type);
+
+            let mut procedure_pointer_type = vec![];
+            procedure_pointer_type.write_u32(procedure_type_id);
+            procedure_pointer_type.write_u32(0xC); // ptr64
+            let procedure_pointer_type_id =
+                self.write_leaf(LeafType::Pointer, procedure_pointer_type);
+
+            proto_fields.write_u16(MEMBER);
+            proto_fields.write_u16(1); // private
+            proto_fields.write_u32(procedure_pointer_type_id);
+            proto_fields.write_u16(offset as u16);
+            proto_fields.write_str(name);
+        }
+
+        let proto_fields_id = self.write_leaf(LeafType::FieldList, proto_fields);
+
+        let mut proto_storage_type = vec![];
+        proto_storage_type.write_u16(class_debug.methods.len() as u16 + 3); // element count
+        proto_storage_type.write_u16(0); // no flag
+        proto_storage_type.write_u32(proto_fields_id);
+        proto_storage_type.write_u32(0); // derived
+        proto_storage_type.write_u32(0); // vshape
+        proto_storage_type.write_u16(class_debug.methods.len() as u16 * 8 + 16); // size
+        proto_storage_type.write_str(&(name.clone() + ".$prototype"));
+        let proto_storage_type_id = self.write_leaf(LeafType::Structure, proto_storage_type);
+
+        let mut proto_pointer_type = vec![];
+        proto_pointer_type.write_u32(proto_storage_type_id);
+        proto_pointer_type.write_u32(0xC); // ptr64
+        let proto_pointer_type_id = self.write_leaf(LeafType::Pointer, proto_pointer_type);
+
+        let mut fields = vec![];
+
+        fields.write_u16(MEMBER);
+        fields.write_u16(1); // private
+        fields.write_u32(proto_pointer_type_id);
+        fields.write_u16(0);
+        fields.write_str("$proto");
+
+        fields.write_u16(MEMBER);
+        fields.write_u16(1); // private
+        fields.write_u32(0x0077);
+        fields.write_u16(8);
+        fields.write_str("$ref");
+
+        for attribute in &class_debug.attributes {
+            fields.write_u16(MEMBER);
+            fields.write_u16(3); // public
+            fields.write_u32(self.get_type(&attribute.var_type));
+            fields.write_u16(attribute.offset as u16);
+            fields.write_str(&attribute.name);
+        }
+        let fields_id = self.write_leaf(LeafType::FieldList, fields);
+
+        let mut storage_type = vec![];
+        storage_type.write_u16(class_debug.attributes.len() as u16 + 2); // element count
+        storage_type.write_u16(0); // no flag
+        storage_type.write_u32(fields_id);
+        storage_type.write_u32(0); // derived
+        storage_type.write_u32(0); // vshape
+        storage_type.write_u16(class_debug.size as u16 + 16); // size
+        storage_type.write_str(&name);
+        let storage_type_id = self.write_leaf(LeafType::Structure, storage_type);
+
+        let mut udt = vec![];
+        udt.write_u32(storage_type_id);
+        udt.write_str(&name);
+        let mut udt_subsection = vec![];
+        udt_subsection.write_record(RecordType::Udt, udt);
+        self.symbol_stream
+            .write_subsection(SubsectionType::Symbols, udt_subsection);
+    }
 
     fn add_chunk(&mut self, chunk: &Chunk) {
         if let ChunkExtra::Procedure(procedure) = &chunk.extra {
+            let mut arg_list = vec![];
+            arg_list.write_u32(procedure.params.len() as u32);
+            for param in &procedure.params {
+                arg_list.write_u32(self.get_type(&param.var_type));
+            }
+            let arg_list_id = self.write_leaf(LeafType::ArgList, arg_list);
+
+            let mut procedure_type = vec![];
+            procedure_type.write_u32(self.get_type(&procedure.return_type));
+            procedure_type.write_u8(0); // CV_CALL_NEAR_C,  near right to left push, caller pops stack
+            procedure_type.write_u8(0); // funcattr
+            procedure_type.write_u16(procedure.params.len() as u16);
+            procedure_type.write_u32(arg_list_id);
+            let procedure_type_id = self.write_leaf(LeafType::Procedure, procedure_type);
+
+            let mut func_id = vec![];
+            func_id.write_u32(0); // parent
+            func_id.write_u32(procedure_type_id);
+            func_id.write_str(&chunk.name);
+            let func_id_id = self.write_leaf(LeafType::FuncId, func_id);
+
             let proc_id_type = if chunk.name == BUILTIN_CHOCOPY_MAIN {
                 RecordType::GProc32Id
             } else {
@@ -246,7 +461,7 @@ impl DebugWriter for Codeview {
             proc.write_u32(chunk.code.len() as u32);
             proc.write_u32(0); // debug start
             proc.write_u32(chunk.code.len() as u32); // debug end
-            proc.write_u32(0); // type
+            proc.write_u32(func_id_id);
             proc.write_u32(0); // offset
             proc.write_u16(0); // segment
             proc.write_u8(1 | (1 << 5)); // flags: CV_PFLAG_NOFPO | CV_PFLAG_CUST_CALL
