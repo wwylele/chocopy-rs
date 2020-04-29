@@ -15,9 +15,16 @@ enum RecordType {
     ObjName = 0x1101,
     Compile3 = 0x113C,
     FrameProc = 0x1012,
+    LData32 = 0x110C,
     LProc32Id = 0x1146,
     GProc32Id = 0x1147,
+    BuildInfo = 0x114C,
     ProcIdEnd = 0x114F,
+}
+
+enum LeafType {
+    BuildInfo = 0x1603,
+    StringId = 0x1605,
 }
 
 trait VecWriter {
@@ -84,10 +91,20 @@ pub struct Codeview {
     symbol_stream: Vec<u8>,
     symbol_links: Vec<DebugChunkLink>,
     type_stream: Vec<u8>,
+    type_index: u32,
     string_table: Vec<u8>,
 }
 
 impl Codeview {
+    fn write_leaf(&mut self, record_type: LeafType, record: Vec<u8>) -> u32 {
+        self.type_stream.write_u16((record.len() + 2) as u16);
+        self.type_stream.write_u16(record_type as u16);
+        self.type_stream.write_slice(&record);
+        let current_index = self.type_index;
+        self.type_index += 1;
+        current_index
+    }
+
     pub fn new(
         source_path: &str,
         current_dir: &str,
@@ -114,10 +131,9 @@ impl Codeview {
         unit_info.write_record(RecordType::ObjName, obj_name);
         unit_info.write_record(RecordType::Compile3, compile3);
 
-        // TODO: emit build info
-
         let mut symbol_stream = vec![];
-        let type_stream = vec![];
+        let mut type_stream = vec![];
+        type_stream.write_u32(4);
         let mut string_table = vec![0]; // not sure what the leading 0 means
 
         symbol_stream.write_u32(4);
@@ -126,11 +142,11 @@ impl Codeview {
         let md5 = compute_md5(source_path)?;
 
         // Use canonicalize() instead? But it starts with "\\?\". Is it ok?
-        let source_path = std::path::PathBuf::from(source_path);
-        let full_path = if source_path.is_absolute() {
-            source_path
+        let source_path_buf = std::path::PathBuf::from(source_path);
+        let full_path = if source_path_buf.is_absolute() {
+            source_path_buf
         } else {
-            std::path::Path::new(current_dir).join(source_path)
+            std::path::Path::new(current_dir).join(source_path_buf)
         };
         let source_path_offset = string_table.len();
         string_table.write_str(full_path.to_str().ok_or(PathError)?);
@@ -143,12 +159,57 @@ impl Codeview {
         chksms.align4();
         symbol_stream.write_subsection(SubsectionType::FileChksms, chksms);
 
-        Ok(Codeview {
+        let mut codeview = Codeview {
             symbol_stream,
             symbol_links: vec![],
             type_stream,
+            type_index: 0x1000,
             string_table,
-        })
+        };
+
+        let mut leaf_current_dir = vec![];
+        leaf_current_dir.write_u32(0);
+        leaf_current_dir.write_str(current_dir);
+        let id_current_dir = codeview.write_leaf(LeafType::StringId, leaf_current_dir);
+
+        let mut leaf_build_tool = vec![];
+        leaf_build_tool.write_u32(0);
+        leaf_build_tool.write_str("chocopy-rs.exe");
+        let id_build_tool = codeview.write_leaf(LeafType::StringId, leaf_build_tool);
+
+        let mut leaf_source_path = vec![];
+        leaf_source_path.write_u32(0);
+        leaf_source_path.write_str(source_path);
+        let id_source_path = codeview.write_leaf(LeafType::StringId, leaf_source_path);
+
+        let mut leaf_database = vec![];
+        leaf_database.write_u32(0);
+        leaf_database.write_str("");
+        let id_database = codeview.write_leaf(LeafType::StringId, leaf_database);
+
+        let mut leaf_build_arg = vec![];
+        leaf_build_arg.write_u32(0);
+        leaf_build_arg.write_str("");
+        let id_build_arg = codeview.write_leaf(LeafType::StringId, leaf_build_arg);
+
+        let mut leaf_build_info = vec![];
+        leaf_build_info.write_u16(5);
+        leaf_build_info.write_u32(id_current_dir);
+        leaf_build_info.write_u32(id_build_tool);
+        leaf_build_info.write_u32(id_source_path);
+        leaf_build_info.write_u32(id_database);
+        leaf_build_info.write_u32(id_build_arg);
+        let id_build_info = codeview.write_leaf(LeafType::BuildInfo, leaf_build_info);
+
+        let mut build_info = vec![];
+        build_info.write_u32(id_build_info);
+        let mut subsection_build_info = vec![];
+        subsection_build_info.write_record(RecordType::BuildInfo, build_info);
+        codeview
+            .symbol_stream
+            .write_subsection(SubsectionType::Symbols, subsection_build_info);
+
+        Ok(codeview)
     }
 }
 
@@ -245,15 +306,59 @@ impl DebugWriter for Codeview {
         }
     }
 
-    fn add_global(&mut self, _: VarDebug) {}
+    fn add_global(&mut self, global: VarDebug) {
+        let mut symbol = vec![];
+
+        let type_id = if global.var_type.array_level == 0 {
+            match global.var_type.core_name.as_str() {
+                "int" => 0x0074,
+                "bool" => 0x0030,
+                _ => 0x0603,
+            }
+        } else {
+            0x0603
+        };
+
+        symbol.write_u32(type_id);
+        symbol.write_u32(global.offset as u32);
+        symbol.write_u16(0); // segment
+        symbol.write_str(&global.name);
+
+        let mut subsection = vec![];
+        subsection.write_record(RecordType::LData32, symbol);
+
+        self.symbol_links.push(DebugChunkLink {
+            link_type: DebugChunkLinkType::SectionRelative,
+            pos: self.symbol_stream.len() + 16,
+            to: GLOBAL_SECTION.to_owned(),
+            size: 4,
+        });
+
+        self.symbol_links.push(DebugChunkLink {
+            link_type: DebugChunkLinkType::SectionId,
+            pos: self.symbol_stream.len() + 20,
+            to: GLOBAL_SECTION.to_owned(),
+            size: 2,
+        });
+
+        self.symbol_stream
+            .write_subsection(SubsectionType::Symbols, subsection);
+    }
 
     fn finalize(mut self: Box<Self>) -> Vec<DebugChunk> {
         self.symbol_stream
             .write_subsection(SubsectionType::StringTable, self.string_table);
-        vec![DebugChunk {
-            name: ".debug$S".to_owned(),
-            code: self.symbol_stream,
-            links: self.symbol_links,
-        }]
+        vec![
+            DebugChunk {
+                name: ".debug$S".to_owned(),
+                code: self.symbol_stream,
+                links: self.symbol_links,
+            },
+            DebugChunk {
+                name: ".debug$T".to_owned(),
+                code: self.type_stream,
+                links: vec![],
+            },
+        ]
     }
 }
