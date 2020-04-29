@@ -34,10 +34,8 @@ This will produce two binaries in the target directory:
 chocopy-rs needs a linker and some basic libraries to produce native executable:
  - Windows: Visual Studio (full version or build tools only), Windows SDK
    - chocopy-rs invokes command `link.exe` with Visual Studio environment set up
- - Linux: GCC, glibc
-   - chocopy-rs invokes command `gcc`
- - macOS: clang, libc
-   - chocopy-rs invokes command `clang`
+ - Linux / macOS: ld (with GCC or Clang as interface), libc
+   - chocopy-rs invokes command `cc`
 
 These are not needed if you only use chocopy-rs to produce AST JSON or object file.
 

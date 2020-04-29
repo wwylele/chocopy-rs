@@ -580,23 +580,8 @@ kernel32.lib advapi32.lib ws2_32.lib userenv.lib {} \
             std::fs::remove_file(&bat_path)?;
             ld_output
         }
-        Platform::Linux => {
-            let mut command = std::process::Command::new("gcc");
-            command.args(&[
-                OsStr::new("-o"),
-                OsStr::new(path),
-                obj_path.as_os_str(),
-                lib_path.as_os_str(),
-                OsStr::new("-pthread"),
-                OsStr::new("-ldl"),
-            ]);
-            if static_lib {
-                command.arg("-static");
-            }
-            command.output()?
-        }
-        Platform::Macos => {
-            let mut command = std::process::Command::new("clang");
+        Platform::Linux | Platform::Macos => {
+            let mut command = std::process::Command::new("cc");
             command.args(&[
                 OsStr::new("-o"),
                 OsStr::new(path),
