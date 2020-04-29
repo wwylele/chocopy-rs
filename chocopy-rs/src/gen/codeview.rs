@@ -16,6 +16,8 @@ enum RecordType {
     Compile3 = 0x113C,
     FrameProc = 0x1012,
     LData32 = 0x110C,
+    Local = 0x113E,
+    DefRangFramePointerRelFullScope = 0x1144,
     LProc32Id = 0x1146,
     GProc32Id = 0x1147,
     BuildInfo = 0x114C,
@@ -211,6 +213,18 @@ impl Codeview {
 
         Ok(codeview)
     }
+
+    fn get_type(&self, type_debug: &TypeDebug) -> u32 {
+        if type_debug.array_level == 0 {
+            match type_debug.core_name.as_str() {
+                "int" => 0x0074,
+                "bool" => 0x0030,
+                _ => 0x0603,
+            }
+        } else {
+            0x0603
+        }
+    }
 }
 
 impl DebugWriter for Codeview {
@@ -250,6 +264,24 @@ impl DebugWriter for Codeview {
             let mut symbols = vec![];
             symbols.write_record(proc_id_type, proc);
             symbols.write_record(RecordType::FrameProc, frame_proc);
+
+            for (var, is_param) in procedure
+                .params
+                .iter()
+                .zip(std::iter::repeat(true))
+                .chain(procedure.locals.iter().zip(std::iter::repeat(false)))
+            {
+                let type_id = self.get_type(&var.var_type);
+                let mut symbol = vec![];
+                symbol.write_u32(type_id);
+                symbol.write_u16(if is_param { 1 } else { 0 });
+                symbol.write_str(&var.name);
+                symbols.write_record(RecordType::Local, symbol);
+
+                let mut location = vec![];
+                location.write_u32(var.offset as u32);
+                symbols.write_record(RecordType::DefRangFramePointerRelFullScope, location);
+            }
 
             symbols.write_record(RecordType::ProcIdEnd, vec![]);
 
@@ -309,15 +341,7 @@ impl DebugWriter for Codeview {
     fn add_global(&mut self, global: VarDebug) {
         let mut symbol = vec![];
 
-        let type_id = if global.var_type.array_level == 0 {
-            match global.var_type.core_name.as_str() {
-                "int" => 0x0074,
-                "bool" => 0x0030,
-                _ => 0x0603,
-            }
-        } else {
-            0x0603
-        };
+        let type_id = self.get_type(&global.var_type);
 
         symbol.write_u32(type_id);
         symbol.write_u32(global.offset as u32);
