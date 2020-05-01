@@ -39,12 +39,13 @@ struct Emitter<'a> {
     return_type: Option<&'a ValueType>,
     storage_env: Option<&'a StorageEnv>,
     classes: Option<&'a HashMap<String, ClassSlot>>,
+    current_stack_top: i32, // relative to rbp, non-positive
+    max_stack_top: i32,     // relative to rbp, non-positive
+    max_parameter: usize,
     clean_up_list: Vec<i32>, // offsets relative to rbp
     level: u32,
     code: Vec<u8>,
     links: Vec<ChunkLink>,
-    rsp_offset: usize, // offsets relative to rbp
-    rsp_call_restore: Vec<usize>,
     platform: Platform,
 }
 
@@ -67,6 +68,24 @@ struct BackwardJumper {
     to: usize,
 }
 
+#[must_use]
+struct StackTicket {
+    offset: i32, // relative to rbp
+}
+
+impl Drop for StackTicket {
+    fn drop(&mut self) {
+        panic!()
+    }
+}
+
+#[derive(PartialEq, Eq)]
+enum TicketType {
+    Unknown,
+    Plain,
+    Reference,
+}
+
 impl<'a> Emitter<'a> {
     pub fn new_simple(name: &str, platform: Platform) -> Emitter<'a> {
         Emitter::new(name, None, None, None, vec![], 0, platform)
@@ -86,13 +105,14 @@ impl<'a> Emitter<'a> {
             return_type,
             storage_env,
             classes,
+            current_stack_top: 0,
+            max_stack_top: 0,
+            max_parameter: 0,
             clean_up_list,
             level,
-            // push rbp; mov rbp,rsp
-            code: vec![0x55, 0x48, 0x89, 0xe5],
+            // push rbp; mov rbp,rsp; add rsp,{}
+            code: vec![0x55, 0x48, 0x89, 0xe5, 0x48, 0x81, 0xEC, 0, 0, 0, 0],
             links: vec![],
-            rsp_offset: 0,
-            rsp_call_restore: vec![],
             platform,
         }
     }
@@ -111,6 +131,31 @@ impl<'a> Emitter<'a> {
 
     pub fn pos(&self) -> usize {
         self.code.len()
+    }
+
+    pub fn alloc_stack(&mut self, ticket_type: TicketType) -> StackTicket {
+        self.current_stack_top -= 8;
+        self.max_stack_top = std::cmp::min(self.max_stack_top, self.current_stack_top);
+        if ticket_type == TicketType::Reference {
+            self.clean_up_list.push(self.current_stack_top);
+        }
+        StackTicket {
+            offset: self.current_stack_top,
+        }
+    }
+
+    pub fn free_stack(&mut self, ticket: StackTicket) {
+        assert!(ticket.offset == self.current_stack_top);
+        if self.clean_up_list.last() == Some(&self.current_stack_top) {
+            self.clean_up_list.pop();
+        }
+        self.current_stack_top += 8;
+        std::mem::forget(ticket);
+    }
+
+    pub fn emit_with_stack(&mut self, instruction: &[u8], ticket: &StackTicket) {
+        self.emit(instruction);
+        self.emit(&ticket.offset.to_le_bytes());
     }
 
     pub fn jump_from(&mut self) -> ForwardJumper {
@@ -137,38 +182,25 @@ impl<'a> Emitter<'a> {
 
     pub fn end_proc(&mut self) {
         if !self.clean_up_list.is_empty() {
-            self.emit_push_rax();
+            let return_value = self.alloc_stack(TicketType::Unknown);
+            // mov [rbp+{}],rax
+            self.emit_with_stack(&[0x48, 0x89, 0x85], &return_value);
             for offset in self.clean_up_list.clone() {
                 // mov rax,[rbp+{}]
                 self.emit(&[0x48, 0x8B, 0x85]);
                 self.emit(&offset.to_le_bytes());
                 self.emit_drop();
             }
-            self.emit_pop_rax();
+            // mov rax,[rbp+{}]
+            self.emit_with_stack(&[0x48, 0x8B, 0x85], &return_value);
+            self.free_stack(return_value);
         }
         // leave; ret
         self.emit(&[0xc9, 0xc3])
     }
 
     pub fn prepare_call(&mut self, stack_reserve: usize) {
-        let mut spill = stack_reserve;
-        if (self.rsp_offset / 8) % 2 != spill % 2 {
-            spill += 1;
-        }
-        spill *= 8;
-        // sub rsp,{spill}
-        self.emit(&[0x48, 0x81, 0xEC]);
-        self.emit(&(spill as u32).to_le_bytes());
-        self.rsp_call_restore.push(spill);
-        self.rsp_offset += spill;
-    }
-
-    pub fn after_call(&mut self) {
-        let spill = self.rsp_call_restore.pop().unwrap();
-        // add rsp,{spill}
-        self.emit(&[0x48, 0x81, 0xC4]);
-        self.emit(&(spill as u32).to_le_bytes());
-        self.rsp_offset -= spill;
+        self.max_parameter = std::cmp::max(self.max_parameter, stack_reserve * 8);
     }
 
     pub fn emit_link(&mut self, name: impl Into<String>, offset: i32) {
@@ -182,7 +214,6 @@ impl<'a> Emitter<'a> {
     pub fn call(&mut self, name: &str) {
         self.emit(&[0xe8]);
         self.emit_link(name, 0);
-        self.after_call();
     }
 
     pub fn call_virtual(&mut self, offset: u32) {
@@ -193,81 +224,20 @@ impl<'a> Emitter<'a> {
         // call [rax+{}]
         self.emit(&[0xFF, 0x90]);
         self.emit(&offset.to_le_bytes());
-        self.after_call();
     }
 
-    pub fn finalize(self, procedure_debug: ProcedureDebug) -> Chunk {
+    pub fn finalize(mut self, procedure_debug: ProcedureDebug) -> Chunk {
+        let mut frame_size = self.max_parameter as i32 - self.max_stack_top;
+        if frame_size % 16 == 8 {
+            frame_size += 8;
+        }
+        self.code[7..11].copy_from_slice(&frame_size.to_le_bytes());
         Chunk {
             name: self.name,
             code: self.code,
             links: self.links,
             extra: ChunkExtra::Procedure(procedure_debug),
         }
-    }
-
-    pub fn emit_push_rax(&mut self) {
-        self.emit(&[0x50]);
-        self.rsp_offset += 8;
-    }
-
-    pub fn emit_push_rcx(&mut self) {
-        self.emit(&[0x51]);
-        self.rsp_offset += 8;
-    }
-
-    pub fn emit_push_rdx(&mut self) {
-        self.emit(&[0x52]);
-        self.rsp_offset += 8;
-    }
-
-    pub fn emit_push_rsi(&mut self) {
-        self.emit(&[0x56]);
-        self.rsp_offset += 8;
-    }
-
-    pub fn emit_push_rdi(&mut self) {
-        self.emit(&[0x57]);
-        self.rsp_offset += 8;
-    }
-
-    pub fn emit_push_r10(&mut self) {
-        self.emit(&[0x41, 0x52]);
-        self.rsp_offset += 8;
-    }
-
-    pub fn emit_push_r11(&mut self) {
-        self.emit(&[0x41, 0x53]);
-        self.rsp_offset += 8;
-    }
-
-    pub fn emit_pop_rax(&mut self) {
-        self.emit(&[0x58]);
-        self.rsp_offset -= 8;
-    }
-
-    pub fn emit_pop_rcx(&mut self) {
-        self.emit(&[0x59]);
-        self.rsp_offset -= 8;
-    }
-
-    pub fn emit_pop_rsi(&mut self) {
-        self.emit(&[0x5e]);
-        self.rsp_offset -= 8;
-    }
-
-    pub fn emit_pop_rdi(&mut self) {
-        self.emit(&[0x5f]);
-        self.rsp_offset -= 8;
-    }
-
-    pub fn emit_pop_r10(&mut self) {
-        self.emit(&[0x41, 0x5A]);
-        self.rsp_offset -= 8;
-    }
-
-    pub fn emit_pop_r11(&mut self) {
-        self.emit(&[0x41, 0x5B]);
-        self.rsp_offset -= 8;
     }
 
     pub fn call_builtin_alloc(&mut self, prototype: &str) {
@@ -300,23 +270,31 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn emit_box_int(&mut self) {
-        self.emit_push_rax();
+        let value = self.alloc_stack(TicketType::Plain);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &value);
         // xor rsi,rsi
         self.emit(&[0x48, 0x31, 0xF6]);
         self.call_builtin_alloc(INT_PROTOTYPE);
-        self.emit_pop_r11();
-        // mov DWORD PTR [rax+0x10],r11d
-        self.emit(&[0x44, 0x89, 0x58, 0x10]);
+        // mov rcx,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0x8D], &value);
+        self.free_stack(value);
+        // mov DWORD PTR [rax+0x10],ecx
+        self.emit(&[0x89, 0x48, 0x10]);
     }
 
     pub fn emit_box_bool(&mut self) {
-        self.emit_push_rax();
+        let value = self.alloc_stack(TicketType::Plain);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &value);
         // xor rsi,rsi
         self.emit(&[0x48, 0x31, 0xF6]);
         self.call_builtin_alloc(BOOL_PROTOTYPE);
-        self.emit_pop_r11();
-        // mov BYTE PTR [rax+0x10],r11b
-        self.emit(&[0x44, 0x88, 0x58, 0x10]);
+        // mov rcx,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0x8D], &value);
+        self.free_stack(value);
+        // mov BYTE PTR [rax+0x10],cl
+        self.emit(&[0x88, 0x48, 0x10]);
     }
 
     pub fn emit_drop(&mut self) {
@@ -403,17 +381,28 @@ impl<'a> Emitter<'a> {
         self.emit_expression(&expr.left);
         // mov rsi,QWORD PTR [rax+0x10]
         self.emit(&[0x48, 0x8B, 0x70, 0x10]);
-        self.emit_push_rax();
-        self.emit_push_rsi();
+        let left = self.alloc_stack(TicketType::Reference);
+        let left_len = self.alloc_stack(TicketType::Plain);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &left);
+        // mov [rbp+{}],rsi
+        self.emit_with_stack(&[0x48, 0x89, 0xB5], &left_len);
+
         self.emit_expression(&expr.right);
-        self.emit_pop_rsi();
+        // mov rsi,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0xB5], &left_len);
+        self.free_stack(left_len);
         // add rsi,QWORD PTR [rax+0x10]
         self.emit(&[0x48, 0x03, 0x70, 0x10]);
-        self.emit_push_rax();
+        let right = self.alloc_stack(TicketType::Reference);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &right);
         self.call_builtin_alloc(STR_PROTOTYPE);
 
-        self.emit_pop_r11(); // right
-        self.emit_pop_r10(); // left
+        // mov r11,[rbp+{}]
+        self.emit_with_stack(&[0x4C, 0x8B, 0x9D], &right);
+        // mov r10,[rbp+{}]
+        self.emit_with_stack(&[0x4C, 0x8B, 0x95], &left);
 
         /*
         lea rdi,[rax+24]
@@ -446,14 +435,22 @@ impl<'a> Emitter<'a> {
             0xF4, 0x49, 0x8B, 0x4B, 0x10, 0x48, 0x85, 0xC9, 0x74, 0x10, 0x49, 0x8D, 0x73, 0x18,
             0x8A, 0x16, 0x88, 0x17, 0x48, 0xFF, 0xC6, 0x48, 0xFF, 0xC7, 0xE2, 0xF4,
         ]);
-        self.emit_push_rax();
-        self.emit_push_r11();
+
+        let result = self.alloc_stack(TicketType::Reference);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &result);
         // mov rax,r10
         self.emit(&[0x4C, 0x89, 0xD0]);
         self.emit_drop();
-        self.emit_pop_rax();
+        // mov rax,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0x85], &right);
         self.emit_drop();
-        self.emit_pop_rax();
+        // mov rax,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0x85], &result);
+
+        self.free_stack(result);
+        self.free_stack(right);
+        self.free_stack(left);
     }
 
     pub fn emit_list_add_half(&mut self, source_element: &ValueType, target_element: &ValueType) {
@@ -471,7 +468,12 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x48, 0x83, 0xC6, 0x18]);
         let loop_pos = self.jump_to();
 
-        self.emit_push_rax();
+        let dest = self.alloc_stack(TicketType::Plain);
+        let src = self.alloc_stack(TicketType::Plain);
+        let counter = self.alloc_stack(TicketType::Plain);
+
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &dest);
 
         if source_element == &*TYPE_INT {
             // mov eax,[rsi]
@@ -491,14 +493,19 @@ impl<'a> Emitter<'a> {
             self.emit(&[0x48, 0x83, 0xC6, 0x08]);
         }
 
-        self.emit_push_rsi();
-        self.emit_push_rcx();
+        // mov [rbp+{}],rsi
+        self.emit_with_stack(&[0x48, 0x89, 0xB5], &src);
+        // mov [rbp+{}],rcx
+        self.emit_with_stack(&[0x48, 0x89, 0x8D], &counter);
         self.emit_coerce(source_element, target_element);
         // mov r11,rax
         self.emit(&[0x49, 0x89, 0xC3]);
-        self.emit_pop_rcx();
-        self.emit_pop_rsi();
-        self.emit_pop_rax();
+        // mov rcx,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0x8D], &counter);
+        // mov rsi,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0xB5], &src);
+        // mov rax,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0x85], &dest);
 
         if target_element == &*TYPE_INT {
             // mov [rax],r11d
@@ -524,6 +531,10 @@ impl<'a> Emitter<'a> {
         self.from_here(loop_pos);
 
         self.to_here(skip);
+
+        self.free_stack(counter);
+        self.free_stack(src);
+        self.free_stack(dest);
     }
 
     pub fn emit_list_add(&mut self, expr: &BinaryExpr, target_element: &ValueType) {
@@ -539,21 +550,31 @@ impl<'a> Emitter<'a> {
         self.emit_check_none();
         // mov rsi,QWORD PTR [rax+0x10]
         self.emit(&[0x48, 0x8B, 0x70, 0x10]);
-        self.emit_push_rax();
-        self.emit_push_rsi();
+        let left = self.alloc_stack(TicketType::Reference);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &left);
+        let left_size = self.alloc_stack(TicketType::Plain);
+        // mov [rbp+{}],rsi
+        self.emit_with_stack(&[0x48, 0x89, 0xB5], &left_size);
         self.emit_expression(&expr.right);
         self.emit_check_none();
-        self.emit_pop_rsi();
+        // mov rsi,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0xB5], &left_size);
+        self.free_stack(left_size);
         // add rsi,QWORD PTR [rax+0x10]
         self.emit(&[0x48, 0x03, 0x70, 0x10]);
-        self.emit_push_rax();
+        let right = self.alloc_stack(TicketType::Reference);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &right);
         self.call_builtin_alloc(prototype);
-        self.emit_push_rax();
+        let result = self.alloc_stack(TicketType::Reference);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &result);
         // add rax,24
         self.emit(&[0x48, 0x83, 0xC0, 0x18]);
 
-        // mov rsi,[rsp+16]
-        self.emit(&[0x48, 0x8B, 0x74, 0x24, 0x10]);
+        // mov rsi,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0xB5], &left);
         let source_element = if let ValueType::ListValueType(l) = expr.left.get_type() {
             &*l.element_type
         } else {
@@ -561,8 +582,8 @@ impl<'a> Emitter<'a> {
         };
         self.emit_list_add_half(source_element, target_element);
 
-        // mov rsi,[rsp+8]
-        self.emit(&[0x48, 0x8B, 0x74, 0x24, 0x08]);
+        // mov rsi,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0xB5], &right);
         let source_element = if let ValueType::ListValueType(l) = expr.right.get_type() {
             &*l.element_type
         } else {
@@ -570,22 +591,27 @@ impl<'a> Emitter<'a> {
         };
         self.emit_list_add_half(source_element, target_element);
 
-        // mov rax,[rsp+8]
-        self.emit(&[0x48, 0x8B, 0x44, 0x24, 0x08]);
+        // mov rax,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0x85], &left);
         self.emit_drop();
-        // mov rax,[rsp+16]
-        self.emit(&[0x48, 0x8B, 0x44, 0x24, 0x10]);
+        // mov rax,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0x85], &right);
         self.emit_drop();
-        self.emit_pop_rax();
-        self.emit_pop_r11();
-        self.emit_pop_r11();
+        // mov rax,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0x85], &result);
+        self.free_stack(result);
+        self.free_stack(right);
+        self.free_stack(left);
     }
 
     pub fn emit_str_compare(&mut self, expr: &BinaryExpr) {
         self.emit_expression(&expr.left);
-        self.emit_push_rax();
+        let left = self.alloc_stack(TicketType::Reference);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &left);
         self.emit_expression(&expr.right);
-        self.emit_pop_r11();
+        // mov r11,[rbp+{}]
+        self.emit_with_stack(&[0x4C, 0x8B, 0x9D], &left);
 
         /*
         mov rcx,[rax+16]
@@ -624,12 +650,17 @@ impl<'a> Emitter<'a> {
             self.emit(&[0x0F, 0x94, 0xC2]);
         }
 
-        self.emit_push_rdx();
-        self.emit_push_r11();
+        let result = self.alloc_stack(TicketType::Plain);
+        // mov [rbp+{}],rdx
+        self.emit_with_stack(&[0x48, 0x89, 0x95], &result);
         self.emit_drop();
-        self.emit_pop_rax();
+        // mov rax,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0x85], &left);
         self.emit_drop();
-        self.emit_pop_rax();
+        // mov rax,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0x85], &result);
+        self.free_stack(result);
+        self.free_stack(left);
     }
 
     pub fn emit_binary_expr(&mut self, expr: &BinaryExpr, target_type: &ValueType) {
@@ -663,9 +694,13 @@ impl<'a> Emitter<'a> {
             self.to_here(skip);
         } else {
             self.emit_expression(&expr.left);
-            self.emit_push_rax();
+            let left = self.alloc_stack(TicketType::Unknown);
+            // mov [rbp+{}],rax
+            self.emit_with_stack(&[0x48, 0x89, 0x85], &left);
             self.emit_expression(&expr.right);
-            self.emit_pop_r11();
+            // mov r11,[rbp+{}]
+            self.emit_with_stack(&[0x4C, 0x8B, 0x9D], &left);
+            self.free_stack(left);
 
             match expr.operator {
                 BinaryOp::Add => {
@@ -728,14 +763,22 @@ impl<'a> Emitter<'a> {
                 BinaryOp::Is => {
                     // cmp r11,rax
                     self.emit(&[0x49, 0x39, 0xC3]);
-                    // sete r10b
-                    self.emit(&[0x41, 0x0F, 0x94, 0xC2]);
-                    self.emit_push_r10();
-                    self.emit_push_r11();
+                    // sete cl
+                    self.emit(&[0x0F, 0x94, 0xC1]);
+                    let result = self.alloc_stack(TicketType::Plain);
+                    let left = self.alloc_stack(TicketType::Reference);
+                    // mov [rbp+{}],rcx
+                    self.emit_with_stack(&[0x48, 0x89, 0x8D], &result);
+                    // mov [rbp+{}],r11
+                    self.emit_with_stack(&[0x4C, 0x89, 0x9D], &left);
                     self.emit_drop();
-                    self.emit_pop_rax();
+                    // mov rax,[rbp+{}]
+                    self.emit_with_stack(&[0x48, 0x8B, 0x85], &left);
                     self.emit_drop();
-                    self.emit_pop_rax();
+                    // mov rax,[rbp+{}]
+                    self.emit_with_stack(&[0x48, 0x8B, 0x85], &result);
+                    self.free_stack(left);
+                    self.free_stack(result);
                 }
                 BinaryOp::Ne
                 | BinaryOp::Eq
@@ -786,6 +829,8 @@ impl<'a> Emitter<'a> {
     ) {
         self.prepare_call(args.len());
 
+        let mut args_stack = vec![];
+
         for (i, arg) in args.iter().enumerate() {
             self.emit_expression(arg);
 
@@ -797,10 +842,20 @@ impl<'a> Emitter<'a> {
                 self.emit_check_none();
             }
 
+            let arg_stack = self.alloc_stack(TicketType::Unknown);
+            // mov [rbp+{}],rax
+            self.emit_with_stack(&[0x48, 0x89, 0x85], &arg_stack);
+            args_stack.push(arg_stack);
+        }
+
+        for (i, arg_stack) in args_stack.into_iter().enumerate().rev() {
+            // mov rax,[rbp+{}]
+            self.emit_with_stack(&[0x48, 0x8B, 0x85], &arg_stack);
             let offset = i * 8;
             // mov QWORD PTR [rsp+{offset}],rax
             self.emit(&[0x48, 0x89, 0x84, 0x24]);
             self.emit(&(offset as u32).to_le_bytes());
+            self.free_stack(arg_stack);
         }
 
         if virtual_call {
@@ -843,16 +898,25 @@ impl<'a> Emitter<'a> {
 
     pub fn emit_str_index(&mut self, expr: &IndexExpr) {
         self.emit_expression(&expr.list);
-        self.emit_push_rax();
+        let list = self.alloc_stack(TicketType::Reference);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &list);
+
         self.emit_expression(&expr.index);
         // cdqe
         self.emit(&[0x48, 0x98]);
-        self.emit_push_rax();
+        let index = self.alloc_stack(TicketType::Plain);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &index);
         // mov rsi,1
         self.emit(&[0x48, 0xc7, 0xc6, 0x01, 0x00, 0x00, 0x00]);
         self.call_builtin_alloc(STR_PROTOTYPE);
-        self.emit_pop_rsi();
-        self.emit_pop_r11();
+        // mov rsi,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0xB5], &index);
+        self.free_stack(index);
+        // mov r11,[rbp+{}]
+        self.emit_with_stack(&[0x4C, 0x8B, 0x9D], &list);
+        self.free_stack(list);
         // cmp rsi,[r11+16]
         self.emit(&[0x49, 0x3B, 0x73, 0x10]);
         // jb
@@ -865,21 +929,29 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x45, 0x8A, 0x54, 0x33, 0x18]);
         // mov [rax+24],r10b
         self.emit(&[0x44, 0x88, 0x50, 0x18]);
-        self.emit_push_rax();
+        let result = self.alloc_stack(TicketType::Reference);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &result);
         // mov rax,r11
         self.emit(&[0x4C, 0x89, 0xD8]);
         self.emit_drop();
-        self.emit_pop_rax();
+        // mov rax,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0x85], &result);
+        self.free_stack(result);
     }
 
     pub fn emit_list_index(&mut self, expr: &IndexExpr) {
         self.emit_expression(&expr.list);
         self.emit_check_none();
-        self.emit_push_rax();
+        let list = self.alloc_stack(TicketType::Reference);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &list);
         self.emit_expression(&expr.index);
         // cdqe
         self.emit(&[0x48, 0x98]);
-        self.emit_pop_rsi();
+        // mov rsi,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0xB5], &list);
+        self.free_stack(list);
         let element_type = if let ValueType::ListValueType(l) = expr.list.get_type() {
             &*l.element_type
         } else {
@@ -907,11 +979,15 @@ impl<'a> Emitter<'a> {
             self.emit_clone();
         }
 
-        self.emit_push_rax();
+        let result = self.alloc_stack(TicketType::Unknown);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &result);
         // mov rax,rsi
         self.emit(&[0x48, 0x89, 0xF0]);
         self.emit_drop();
-        self.emit_pop_rax();
+        // mov rax,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0x85], &result);
+        self.free_stack(result);
     }
 
     pub fn emit_member_expr(&mut self, expr: &MemberExpr) {
@@ -941,11 +1017,15 @@ impl<'a> Emitter<'a> {
             self.emit_clone();
         }
 
-        self.emit_push_rax();
+        let result = self.alloc_stack(TicketType::Unknown);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &result);
         // mov rax,rsi
         self.emit(&[0x48, 0x89, 0xF0]);
         self.emit_drop();
-        self.emit_pop_rax();
+        // mov rax,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0x85], &result);
+        self.free_stack(result);
     }
 
     pub fn emit_if_expr(&mut self, expr: &IfExpr, target_type: &ValueType) {
@@ -1021,13 +1101,15 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x48, 0xc7, 0xc6]);
         self.emit(&(expr.elements.len() as u32).to_le_bytes());
         self.call_builtin_alloc(prototype);
-        self.emit_push_rax();
+        let result = self.alloc_stack(TicketType::Reference);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &result);
 
         for (i, element) in expr.elements.iter().enumerate() {
             self.emit_expression(element);
             self.emit_coerce(element.get_type(), element_type);
-            // mov rdi,[rsp]
-            self.emit(&[0x48, 0x8B, 0x3C, 0x24]);
+            // mov rdi,[rbp+{}]
+            self.emit_with_stack(&[0x48, 0x8B, 0xBD], &result);
             if element_type == &*TYPE_INT {
                 // mov [rdi+{}],eax
                 self.emit(&[0x89, 0x87]);
@@ -1043,7 +1125,9 @@ impl<'a> Emitter<'a> {
             }
         }
 
-        self.emit_pop_rax();
+        // mov rax,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0x85], &result);
+        self.free_stack(result);
     }
 
     pub fn emit_load_var(&mut self, identifier: &Variable, target_type: &ValueType) {
@@ -1200,12 +1284,16 @@ impl<'a> Emitter<'a> {
                 // mov [rip+{}],al
                 self.emit(&[0x88, 0x05]);
             } else {
-                self.emit_push_rax();
+                let value = self.alloc_stack(TicketType::Reference);
+                // mov [rbp+{}],rax
+                self.emit_with_stack(&[0x48, 0x89, 0x85], &value);
                 // mov rax,[rip+{}]
                 self.emit(&[0x48, 0x8B, 0x05]);
                 self.emit_link(GLOBAL_SECTION, offset);
                 self.emit_drop();
-                self.emit_pop_rax();
+                // mov rax,[rbp+{}]
+                self.emit_with_stack(&[0x48, 0x8B, 0x85], &value);
+                self.free_stack(value);
                 // mov [rip+{}],rax
                 self.emit(&[0x48, 0x89, 0x05]);
             }
@@ -1228,13 +1316,21 @@ impl<'a> Emitter<'a> {
             }
 
             if target_type != &*TYPE_INT && target_type != &*TYPE_BOOL {
-                self.emit_push_rdi();
-                self.emit_push_rax();
+                let dest = self.alloc_stack(TicketType::Plain);
+                let value = self.alloc_stack(TicketType::Reference);
+                // mov [rbp+{}],rdi
+                self.emit_with_stack(&[0x48, 0x89, 0xBD], &dest);
+                // mov [rbp+{}],rax
+                self.emit_with_stack(&[0x48, 0x89, 0x85], &value);
                 // mov rax,[rdi]
                 self.emit(&[0x48, 0x8B, 0x07]);
                 self.emit_drop();
-                self.emit_pop_rax();
-                self.emit_pop_rdi();
+                // mov rax,[rbp+{}]
+                self.emit_with_stack(&[0x48, 0x8B, 0x85], &value);
+                // mov rdi,[rbp+{}]
+                self.emit_with_stack(&[0x48, 0x8B, 0xBD], &dest);
+                self.free_stack(value);
+                self.free_stack(dest);
             }
             // mov [rdi],rax
             self.emit(&[0x48, 0x89, 0x07]);
@@ -1244,14 +1340,16 @@ impl<'a> Emitter<'a> {
     pub fn emit_assign(&mut self, stmt: &AssignStmt) {
         let source_type = stmt.value.get_type();
         self.emit_expression(&stmt.value);
-        self.emit_push_rax();
+        let value = self.alloc_stack(TicketType::Unknown);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &value);
 
         for target in &stmt.targets {
             let target_type = target.get_type();
             match &target.content {
                 ExprContent::Variable(identifier) => {
-                    // mov rax,[rsp]
-                    self.emit(&[0x48, 0x8B, 0x04, 0x24]);
+                    // mov rax,[rbp+{}]
+                    self.emit_with_stack(&[0x48, 0x8B, 0x85], &value);
                     if source_type != &*TYPE_INT && source_type != &*TYPE_BOOL {
                         self.emit_clone();
                     }
@@ -1261,10 +1359,12 @@ impl<'a> Emitter<'a> {
                 ExprContent::IndexExpr(expr) => {
                     self.emit_expression(&expr.list);
                     self.emit_check_none();
-                    self.emit_push_rax();
+                    let list = self.alloc_stack(TicketType::Reference);
+                    // mov [rbp+{}],rax
+                    self.emit_with_stack(&[0x48, 0x89, 0x85], &list);
                     self.emit_expression(&expr.index);
-                    // mov rsi,[rsp]
-                    self.emit(&[0x48, 0x8B, 0x34, 0x24]);
+                    // mov rsi,[rbp+{}]
+                    self.emit_with_stack(&[0x48, 0x8B, 0xB5], &list);
 
                     // cmp rax,[rsi+16]
                     self.emit(&[0x48, 0x3B, 0x46, 0x10]);
@@ -1275,30 +1375,36 @@ impl<'a> Emitter<'a> {
                     self.call(BUILTIN_OUT_OF_BOUND);
                     self.to_here(ok);
 
+                    let dest = self.alloc_stack(TicketType::Plain);
                     if target_type == &*TYPE_INT {
                         // lea rsi,[rsi+rax*4+24]
                         self.emit(&[0x48, 0x8D, 0x74, 0x86, 0x18]);
-                        self.emit_push_rsi();
+                        // mov [rbp+{}],rsi
+                        self.emit_with_stack(&[0x48, 0x89, 0xB5], &dest);
                     } else if target_type == &*TYPE_BOOL {
                         // lea rsi,[rsi+rax+24]
                         self.emit(&[0x48, 0x8D, 0x74, 0x06, 0x18]);
-                        self.emit_push_rsi();
+                        // mov [rbp+{}],rsi
+                        self.emit_with_stack(&[0x48, 0x89, 0xB5], &dest);
                     } else {
                         // lea rsi,[rsi+rax*8+24]
                         self.emit(&[0x48, 0x8D, 0x74, 0xC6, 0x18]);
                         // mov rax,[rsi]
                         self.emit(&[0x48, 0x8B, 0x06]);
-                        self.emit_push_rsi();
+                        // mov [rbp+{}],rsi
+                        self.emit_with_stack(&[0x48, 0x89, 0xB5], &dest);
                         self.emit_drop();
                     }
 
-                    // mov rax,[rsp+16]
-                    self.emit(&[0x48, 0x8B, 0x44, 0x24, 0x10]);
+                    // mov rax,[rbp+{}]
+                    self.emit_with_stack(&[0x48, 0x8B, 0x85], &value);
                     if source_type != &*TYPE_INT && source_type != &*TYPE_BOOL {
                         self.emit_clone();
                     }
                     self.emit_coerce(source_type, target_type);
-                    self.emit_pop_rsi();
+                    // mov rsi,[rbp+{}]
+                    self.emit_with_stack(&[0x48, 0x8B, 0xB5], &dest);
+                    self.free_stack(dest);
 
                     if target_type == &*TYPE_INT {
                         // mov [rsi],eax
@@ -1311,13 +1417,17 @@ impl<'a> Emitter<'a> {
                         self.emit(&[0x48, 0x89, 0x06]);
                     }
 
-                    self.emit_pop_rax();
+                    // mov rax,[rbp+{}]
+                    self.emit_with_stack(&[0x48, 0x8B, 0x85], &list);
                     self.emit_drop();
+                    self.free_stack(list);
                 }
                 ExprContent::MemberExpr(expr) => {
                     self.emit_expression(&expr.object);
                     self.emit_check_none();
-                    self.emit_push_rax();
+                    let object = self.alloc_stack(TicketType::Reference);
+                    // mov [rbp+{}],rax
+                    self.emit_with_stack(&[0x48, 0x89, 0x85], &object);
 
                     let slot = if let ValueType::ClassValueType(c) = expr.object.get_type() {
                         &self.classes()[&c.class_name].attributes[&expr.member.name]
@@ -1332,15 +1442,15 @@ impl<'a> Emitter<'a> {
                         self.emit_drop();
                     }
 
-                    // mov rax,[rsp+0x8]
-                    self.emit(&[0x48, 0x8B, 0x44, 0x24, 0x08]);
+                    // mov rax,[rbp+{}]
+                    self.emit_with_stack(&[0x48, 0x8B, 0x85], &value);
                     if source_type != &*TYPE_INT && source_type != &*TYPE_BOOL {
                         self.emit_clone();
                     }
                     self.emit_coerce(source_type, &slot.target_type);
 
-                    // mov rsi,[rsp]
-                    self.emit(&[0x48, 0x8B, 0x34, 0x24]);
+                    // mov rsi,[rbp+{}]
+                    self.emit_with_stack(&[0x48, 0x8B, 0xB5], &object);
                     if slot.target_type == *TYPE_INT {
                         // mov [rsi+{}],eax
                         self.emit(&[0x89, 0x86]);
@@ -1353,17 +1463,21 @@ impl<'a> Emitter<'a> {
                     }
                     self.emit(&slot.offset.to_le_bytes());
 
-                    self.emit_pop_rax();
+                    // mov rax,[rbp+{}]
+                    self.emit_with_stack(&[0x48, 0x8B, 0x85], &object);
                     self.emit_drop();
+                    self.free_stack(object);
                 }
                 _ => panic!(),
             }
         }
 
-        self.emit_pop_rax();
         if source_type != &*TYPE_INT && source_type != &*TYPE_BOOL {
+            // mov rax,[rbp+{}]
+            self.emit_with_stack(&[0x48, 0x8B, 0x85], &value);
             self.emit_drop();
         }
+        self.free_stack(value);
     }
 
     #[allow(clippy::useless_let_if_seq)] // Tell me which is more readable
@@ -1371,22 +1485,25 @@ impl<'a> Emitter<'a> {
         //// Compute the iterable
         self.emit_expression(&stmt.iterable);
         self.emit_check_none();
-        self.emit_push_rax();
-        self.clean_up_list.push(self.rsp_offset as i32);
+        let list = self.alloc_stack(TicketType::Reference);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &list);
         // xor rax,rax
         self.emit(&[0x48, 0x31, 0xC0]);
 
         let start = self.jump_to();
         //// Check the index range
-        // mov rsi,[rsp]
-        self.emit(&[0x48, 0x8B, 0x34, 0x24]);
+        // mov rsi,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0xB5], &list);
         // cmp rax,[rsi+16]
         self.emit(&[0x48, 0x3B, 0x46, 0x10]);
         // je
         self.emit(&[0x0f, 0x84]);
         let end = self.jump_from();
 
-        self.emit_push_rax();
+        let counter = self.alloc_stack(TicketType::Plain);
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &counter);
 
         //// Compute the element
         let iterable_type = stmt.iterable.get_type();
@@ -1395,10 +1512,10 @@ impl<'a> Emitter<'a> {
             // mov rsi,1
             self.emit(&[0x48, 0xc7, 0xc6, 0x01, 0x00, 0x00, 0x00]);
             self.call_builtin_alloc(STR_PROTOTYPE);
-            // mov rsi,[rsp]
-            self.emit(&[0x48, 0x8B, 0x34, 0x24]);
-            // mov r11,[rsp+8]
-            self.emit(&[0x4C, 0x8B, 0x5C, 0x24, 0x08]);
+            // mov rsi,[rbp+{}]
+            self.emit_with_stack(&[0x48, 0x8B, 0xB5], &counter);
+            // mov r11,[rbp+{}]
+            self.emit_with_stack(&[0x4C, 0x8B, 0x9D], &list);
             // mov r10b,[r11+rsi+24]
             self.emit(&[0x45, 0x8A, 0x54, 0x33, 0x18]);
             // mov [rax+24],r10b
@@ -1437,7 +1554,8 @@ impl<'a> Emitter<'a> {
         }
 
         //// Increase the index and loop back
-        self.emit_pop_rax();
+        // mov rax,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0x85], &counter);
         // inc rax
         self.emit(&[0x48, 0xFF, 0xC0]);
         // jmp
@@ -1445,10 +1563,11 @@ impl<'a> Emitter<'a> {
         self.from_here(start);
         self.to_here(end);
 
-        //// Drop the iterable
-        self.clean_up_list.pop();
-        self.emit_pop_rax();
+        // mov rax,[rbp+{}]
+        self.emit_with_stack(&[0x48, 0x8B, 0x85], &list);
         self.emit_drop();
+        self.free_stack(counter);
+        self.free_stack(list);
     }
 
     pub fn emit_statement(&mut self, statement: &Stmt, lines: &mut Vec<LineMap>) {
@@ -1505,7 +1624,14 @@ impl<'a> Emitter<'a> {
 
         let target_type = ValueType::from_annotation(&decl.var.type_);
         self.emit_coerce(decl.value.get_type(), &target_type);
-        self.emit_push_rax();
+        let local = self.alloc_stack(if target_type == *TYPE_INT || target_type == *TYPE_BOOL {
+            TicketType::Plain
+        } else {
+            TicketType::Reference
+        });
+        // mov [rbp+{}],rax
+        self.emit_with_stack(&[0x48, 0x89, 0x85], &local);
+        std::mem::forget(local);
     }
 
     pub fn emit_global_var_init(&mut self, decl: &VarDef) {
@@ -1627,10 +1753,6 @@ fn gen_function(
                         level: level + 1,
                     }),
                 );
-                let local_type = ValueType::from_annotation(&v.var.type_);
-                if local_type != *TYPE_INT && local_type != *TYPE_BOOL {
-                    clean_up_list.push(offset);
-                }
 
                 locals_debug.push(VarDebug {
                     offset,
@@ -1667,7 +1789,10 @@ fn gen_function(
     );
 
     if level != 0 {
-        code.emit_push_r10();
+        let static_link = code.alloc_stack(TicketType::Plain);
+        // mov [rbp+{}],r10
+        code.emit_with_stack(&[0x4C, 0x89, 0x95], &static_link);
+        std::mem::forget(static_link);
     }
 
     for declaration in &function.declarations {
@@ -1741,7 +1866,9 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
     code.emit_link(class_name.to_owned() + ".$proto", 0);
 
     code.call(BUILTIN_ALLOC_OBJ);
-    code.emit_push_rax();
+    let object = code.alloc_stack(TicketType::Reference);
+    // mov [rbp+{}],rax
+    code.emit_with_stack(&[0x48, 0x89, 0x85], &object);
 
     for attribute in class_slot.attributes.values() {
         match &attribute.init {
@@ -1760,8 +1887,8 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
         }
 
         code.emit_coerce(&attribute.source_type, &attribute.target_type);
-        // mov rdi,[rsp]
-        code.emit(&[0x48, 0x8B, 0x3C, 0x24]);
+        // mov rdi,[rbp+{}]
+        code.emit_with_stack(&[0x48, 0x8B, 0xBD], &object);
 
         if attribute.target_type == *TYPE_INT {
             // mov [rdi+{}],eax
@@ -1776,15 +1903,17 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
         code.emit(&attribute.offset.to_le_bytes());
     }
 
-    // mov rax,[rsp]
-    code.emit(&[0x48, 0x8B, 0x04, 0x24]);
+    // mov rax,[rbp+{}]
+    code.emit_with_stack(&[0x48, 0x8B, 0x85], &object);
     code.emit_clone();
     code.prepare_call(1);
     // mov [rsp],rax
     code.emit(&[0x48, 0x89, 0x04, 0x24]);
     code.call_virtual(16);
 
-    code.emit_pop_rax();
+    // mov rax,[rbp+{}]
+    code.emit_with_stack(&[0x48, 0x8B, 0x85], &object);
+    code.free_stack(object);
     code.end_proc();
     code.finalize(ProcedureDebug {
         decl_line: 0,
@@ -1800,20 +1929,31 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
 fn gen_dtor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chunk {
     let mut code = Emitter::new_simple(&(class_name.to_owned() + ".$dtor"), platform);
     // Note: This uses C ABI instead of chocopy ABI
+
+    let mut rdi = None;
+    let mut rsi = None;
+    let object = code.alloc_stack(TicketType::Reference);
+
     match platform {
         Platform::Windows => {
-            code.emit_push_rcx();
-            code.emit_push_rsi();
-            code.emit_push_rdi();
+            // mov [rbp+{}],rcx
+            code.emit_with_stack(&[0x48, 0x89, 0x8D], &object);
+            rdi = Some(code.alloc_stack(TicketType::Plain));
+            rsi = Some(code.alloc_stack(TicketType::Plain));
+            // mov [rbp+{}],rdi
+            code.emit_with_stack(&[0x48, 0x89, 0xBD], &rdi.as_ref().unwrap());
+            // mov [rbp+{}],rsi
+            code.emit_with_stack(&[0x48, 0x89, 0xB5], &rsi.as_ref().unwrap());
         }
         Platform::Linux | Platform::Macos => {
-            code.emit_push_rdi();
+            // mov [rbp+{}],rdi
+            code.emit_with_stack(&[0x48, 0x89, 0xBD], &object);
         }
     }
     for attribute in class_slot.attributes.values() {
         if attribute.target_type != *TYPE_INT && attribute.target_type != *TYPE_BOOL {
-            // mov rax,[rbp-8]
-            code.emit(&[0x48, 0x8B, 0x45, 0xF8]);
+            // mov rax,[rbp+{}]
+            code.emit_with_stack(&[0x48, 0x8B, 0x85], &object);
             // mov rax,[rax+{}]
             code.emit(&[0x48, 0x8B, 0x80]);
             code.emit(&attribute.offset.to_le_bytes());
@@ -1822,11 +1962,17 @@ fn gen_dtor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
     }
     match platform {
         Platform::Windows => {
-            code.emit_pop_rdi();
-            code.emit_pop_rsi();
+            // mov rdi,[rbp+{}]
+            code.emit_with_stack(&[0x48, 0x8B, 0xBD], &rdi.as_ref().unwrap());
+            // mov rsi,[rbp+{}]
+            code.emit_with_stack(&[0x48, 0x8B, 0xB5], &rsi.as_ref().unwrap());
+
+            code.free_stack(rsi.unwrap());
+            code.free_stack(rdi.unwrap())
         }
         Platform::Linux | Platform::Macos => (),
     }
+    code.free_stack(object);
     code.end_proc();
     code.finalize(ProcedureDebug {
         decl_line: 0,
@@ -1999,13 +2145,20 @@ fn gen_main(
         platform,
     );
 
-    // mov rax,0x12345678
+    /*// mov rax,0x12345678
     main_code.emit(&[0x48, 0xC7, 0xC0, 0x78, 0x56, 0x34, 0x12]);
-    main_code.emit_push_rax();
+    main_code.emit_push_rax();*/
+
+    let mut rdi = None;
+    let mut rsi = None;
 
     if platform == Platform::Windows {
-        main_code.emit_push_rdi();
-        main_code.emit_push_rsi();
+        rdi = Some(main_code.alloc_stack(TicketType::Plain));
+        rsi = Some(main_code.alloc_stack(TicketType::Plain));
+        // mov [rbp+{}],rdi
+        main_code.emit_with_stack(&[0x48, 0x89, 0xBD], &rdi.as_ref().unwrap());
+        // mov [rbp+{}],rsi
+        main_code.emit_with_stack(&[0x48, 0x89, 0xB5], &rsi.as_ref().unwrap());
     }
 
     for declaration in &ast.declarations {
@@ -2027,9 +2180,15 @@ fn gen_main(
     }
 
     if platform == Platform::Windows {
-        main_code.emit_pop_rsi();
-        main_code.emit_pop_rdi();
+        // mov rdi,[rbp+{}]
+        main_code.emit_with_stack(&[0x48, 0x8B, 0xBD], &rdi.as_ref().unwrap());
+        // mov rsi,[rbp+{}]
+        main_code.emit_with_stack(&[0x48, 0x8B, 0xB5], &rsi.as_ref().unwrap());
+
+        main_code.free_stack(rsi.unwrap());
+        main_code.free_stack(rdi.unwrap())
     }
+    /*
     main_code.emit_pop_rax();
     // cmp rax,0x12345678
     main_code.emit(&[0x48, 0x3D, 0x78, 0x56, 0x34, 0x12]);
@@ -2041,7 +2200,7 @@ fn gen_main(
     main_code.prepare_call(platform.stack_reserve());
     main_code.call(BUILTIN_BROKEN_STACK);
 
-    main_code.to_here(ok);
+    main_code.to_here(ok);*/
 
     main_code.end_proc();
 
