@@ -27,7 +27,6 @@ const OBJECT_LIST_PROTOTYPE: &str = "[object].$proto";
 
 const BUILTIN_ALLOC_OBJ: &str = "$alloc_obj";
 const BUILTIN_FREE_OBJ: &str = "$free_obj";
-const BUILTIN_BROKEN_STACK: &str = "$broken_stack";
 const BUILTIN_DIV_ZERO: &str = "$div_zero";
 const BUILTIN_OUT_OF_BOUND: &str = "$out_of_bound";
 const BUILTIN_NONE_OP: &str = "$none_op";
@@ -333,7 +332,6 @@ pub fn gen(
 
     import_function(&mut obj, BUILTIN_ALLOC_OBJ);
     import_function(&mut obj, BUILTIN_FREE_OBJ);
-    import_function(&mut obj, BUILTIN_BROKEN_STACK);
     import_function(&mut obj, BUILTIN_DIV_ZERO);
     import_function(&mut obj, BUILTIN_OUT_OF_BOUND);
     import_function(&mut obj, BUILTIN_NONE_OP);

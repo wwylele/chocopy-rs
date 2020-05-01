@@ -79,6 +79,12 @@ impl Drop for StackTicket {
     }
 }
 
+impl StackTicket {
+    fn free_on_exit(self) {
+        std::mem::forget(self);
+    }
+}
+
 #[derive(PartialEq, Eq)]
 enum TicketType {
     Unknown,
@@ -1631,7 +1637,7 @@ impl<'a> Emitter<'a> {
         });
         // mov [rbp+{}],rax
         self.emit_with_stack(&[0x48, 0x89, 0x85], &local);
-        std::mem::forget(local);
+        local.free_on_exit();
     }
 
     pub fn emit_global_var_init(&mut self, decl: &VarDef) {
@@ -1792,7 +1798,7 @@ fn gen_function(
         let static_link = code.alloc_stack(TicketType::Plain);
         // mov [rbp+{}],r10
         code.emit_with_stack(&[0x4C, 0x89, 0x95], &static_link);
-        std::mem::forget(static_link);
+        static_link.free_on_exit();
     }
 
     for declaration in &function.declarations {
@@ -2145,10 +2151,6 @@ fn gen_main(
         platform,
     );
 
-    /*// mov rax,0x12345678
-    main_code.emit(&[0x48, 0xC7, 0xC0, 0x78, 0x56, 0x34, 0x12]);
-    main_code.emit_push_rax();*/
-
     let mut rdi = None;
     let mut rsi = None;
 
@@ -2188,19 +2190,6 @@ fn gen_main(
         main_code.free_stack(rsi.unwrap());
         main_code.free_stack(rdi.unwrap())
     }
-    /*
-    main_code.emit_pop_rax();
-    // cmp rax,0x12345678
-    main_code.emit(&[0x48, 0x3D, 0x78, 0x56, 0x34, 0x12]);
-
-    // je
-    main_code.emit(&[0x0f, 0x84]);
-    let ok = main_code.jump_from();
-
-    main_code.prepare_call(platform.stack_reserve());
-    main_code.call(BUILTIN_BROKEN_STACK);
-
-    main_code.to_here(ok);*/
 
     main_code.end_proc();
 
