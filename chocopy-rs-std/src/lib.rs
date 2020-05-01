@@ -235,12 +235,6 @@ fn exit_code(code: i32) -> ! {
     exit(code);
 }
 
-#[export_name = "$broken_stack"]
-pub extern "C" fn broken_stack() -> ! {
-    println!("--- Broken stack detected! ---");
-    exit_code(-2)
-}
-
 fn invalid_arg() -> ! {
     println!("Invalid argument");
     exit_code(1)
