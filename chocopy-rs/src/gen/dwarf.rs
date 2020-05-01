@@ -5,8 +5,6 @@ use gimli::constants::*;
 use gimli::write::*;
 use std::collections::HashMap;
 
-const GLOBAL_RELOC_HACK_MAGIC: u32 = 0xDEAD_B00F_u32;
-
 fn dwarf_add_base_type(
     dwarf: &mut DwarfUnit,
     name: &str,
@@ -42,7 +40,7 @@ fn dwarf_add_member(
     let tag = dwarf.unit.get_mut(id);
     tag.set(DW_AT_name, AttributeValue::String(name.into()));
     tag.set(DW_AT_data_member_location, AttributeValue::Udata(offset));
-    tag.set(DW_AT_type, AttributeValue::ThisUnitEntryRef(member_type_id));
+    tag.set(DW_AT_type, AttributeValue::UnitRef(member_type_id));
     id
 }
 
@@ -57,7 +55,7 @@ fn dwarf_add_pointer_type(
     if let Some(name) = name {
         tag.set(DW_AT_name, AttributeValue::String(name.into()));
     }
-    tag.set(DW_AT_type, AttributeValue::ThisUnitEntryRef(pointee));
+    tag.set(DW_AT_type, AttributeValue::UnitRef(pointee));
     tag.set(DW_AT_byte_size, AttributeValue::Data1(8));
     id
 }
@@ -76,12 +74,12 @@ fn dwarf_add_array_type(
     let root_id = dwarf.unit.root();
     let id = dwarf.unit.add(root_id, DW_TAG_array_type);
     let tag = dwarf.unit.get_mut(id);
-    tag.set(DW_AT_type, AttributeValue::ThisUnitEntryRef(element_type));
+    tag.set(DW_AT_type, AttributeValue::UnitRef(element_type));
 
     let index_id = dwarf.unit.add(id, DW_TAG_subrange_type);
     let index_tag = dwarf.unit.get_mut(index_id);
-    index_tag.set(DW_AT_type, AttributeValue::ThisUnitEntryRef(index_type));
-    index_tag.set(DW_AT_count, AttributeValue::ThisUnitEntryRef(len_member));
+    index_tag.set(DW_AT_type, AttributeValue::UnitRef(index_type));
+    index_tag.set(DW_AT_count, AttributeValue::UnitRef(len_member));
 
     id
 }
@@ -171,15 +169,15 @@ impl Dwarf {
         let tag = dwarf_add_subroutine_type(&mut self.dwarf);
         self.dwarf.unit.get_mut(tag).set(
             DW_AT_type,
-            AttributeValue::ThisUnitEntryRef(self.debug_types[&method_type.return_type]),
+            AttributeValue::UnitRef(self.debug_types[&method_type.return_type]),
         );
 
         for param in &method_type.params {
             let param_tag = self.dwarf.unit.add(tag, DW_TAG_formal_parameter);
-            self.dwarf.unit.get_mut(param_tag).set(
-                DW_AT_type,
-                AttributeValue::ThisUnitEntryRef(self.debug_types[param]),
-            )
+            self.dwarf
+                .unit
+                .get_mut(param_tag)
+                .set(DW_AT_type, AttributeValue::UnitRef(self.debug_types[param]))
         }
 
         let tag = dwarf_add_pointer_type(&mut self.dwarf, None, tag);
@@ -265,7 +263,7 @@ impl DebugWriter for Dwarf {
         let prototype_name = class_name.clone() + ".$prototype";
         let tag_id = self.debug_types[&TypeDebug::class_type(&class_name)];
 
-        let tag_id = if let AttributeValue::ThisUnitEntryRef(id) =
+        let tag_id = if let AttributeValue::UnitRef(id) =
             self.dwarf.unit.get(tag_id).get(DW_AT_type).unwrap()
         {
             *id
@@ -366,23 +364,18 @@ impl DebugWriter for Dwarf {
                 DW_AT_artificial,
                 AttributeValue::Flag(procedure_debug.artificial),
             );
-            sub_program.set(
-                DW_AT_frame_base,
-                AttributeValue::Exprloc(Expression(vec![DW_OP_reg6.0])),
-            );
+            let mut frame_base = Expression::new();
+            frame_base.op_reg(gimli::Register(6));
+            sub_program.set(DW_AT_frame_base, AttributeValue::Exprloc(frame_base));
             sub_program.set(
                 DW_AT_type,
-                AttributeValue::ThisUnitEntryRef(self.debug_types[&procedure_debug.return_type]),
+                AttributeValue::UnitRef(self.debug_types[&procedure_debug.return_type]),
             );
             if procedure_debug.parent.is_some() {
-                sub_program.set(
-                    DW_AT_static_link,
-                    AttributeValue::Exprloc(Expression(vec![
-                        DW_OP_fbreg.0,
-                        0x78, // -8 in SLEB128
-                        DW_OP_deref.0,
-                    ])),
-                )
+                let mut static_link = Expression::new();
+                static_link.op_fbreg(-8);
+                static_link.op_deref();
+                sub_program.set(DW_AT_static_link, AttributeValue::Exprloc(static_link))
             }
 
             if !procedure_debug.lines.is_empty() {
@@ -416,13 +409,9 @@ impl DebugWriter for Dwarf {
                     },
                 );
                 let node = self.dwarf.unit.get_mut(node_id);
-                let mut offset_expr = vec![DW_OP_fbreg.0];
-                gimli::leb128::write::signed(&mut offset_expr, var.offset as i64).unwrap();
-
-                node.set(
-                    DW_AT_location,
-                    AttributeValue::Exprloc(Expression(offset_expr)),
-                );
+                let mut offset_expr = Expression::new();
+                offset_expr.op_fbreg(var.offset as i64);
+                node.set(DW_AT_location, AttributeValue::Exprloc(offset_expr));
 
                 node.set(DW_AT_name, AttributeValue::String(var.name.as_str().into()));
 
@@ -432,7 +421,7 @@ impl DebugWriter for Dwarf {
 
                 node.set(
                     DW_AT_type,
-                    AttributeValue::ThisUnitEntryRef(self.debug_types[&var.var_type]),
+                    AttributeValue::UnitRef(self.debug_types[&var.var_type]),
                 );
             }
 
@@ -452,14 +441,14 @@ impl DebugWriter for Dwarf {
         let node_id = self.dwarf.unit.add(root_id, DW_TAG_variable);
         let node = self.dwarf.unit.get_mut(node_id);
 
-        let mut location = vec![DW_OP_addr.0];
-        location.extend_from_slice(&global_debug.offset.to_le_bytes());
-        location.extend_from_slice(&GLOBAL_RELOC_HACK_MAGIC.to_le_bytes());
+        let mut location = Expression::new();
+        location.op_addr(Address::Symbol {
+            symbol: self.symbol_pool.len(),
+            addend: global_debug.offset as i64,
+        });
+        self.symbol_pool.push(GLOBAL_SECTION.to_owned());
 
-        node.set(
-            DW_AT_location,
-            AttributeValue::Exprloc(Expression(location)),
-        );
+        node.set(DW_AT_location, AttributeValue::Exprloc(location));
 
         node.set(DW_AT_name, AttributeValue::String(global_debug.name.into()));
 
@@ -472,7 +461,7 @@ impl DebugWriter for Dwarf {
 
         node.set(
             DW_AT_type,
-            AttributeValue::ThisUnitEntryRef(self.debug_types[&global_debug.var_type]),
+            AttributeValue::UnitRef(self.debug_types[&global_debug.var_type]),
         );
     }
 
@@ -495,22 +484,8 @@ impl DebugWriter for Dwarf {
 
         dwarf_sections
             .for_each_mut(|id, data| -> std::result::Result<(), () /*should be !*/> {
-                let (mut data, relocs, self_relocs) = data.take();
+                let (data, relocs, self_relocs) = data.take();
                 let mut links = vec![];
-
-                if data.len() >= 4 {
-                    for i in 0..data.len() - 3 {
-                        if data[i..i + 4] == GLOBAL_RELOC_HACK_MAGIC.to_le_bytes() {
-                            data[i..i + 4].copy_from_slice(&[0; 4]);
-                            links.push(DebugChunkLink {
-                                link_type: DebugChunkLinkType::Absolute,
-                                pos: i - 4,
-                                to: GLOBAL_SECTION.to_owned(),
-                                size: 8,
-                            });
-                        }
-                    }
-                }
 
                 for reloc in relocs {
                     links.push(DebugChunkLink {
