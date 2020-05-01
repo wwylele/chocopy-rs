@@ -2037,8 +2037,8 @@ fn gen_str(platform: Platform) -> Chunk {
 
 fn gen_object_init(platform: Platform) -> Chunk {
     let mut code = Emitter::new_simple("object.__init__", platform);
-    // mov rax,[rsp+16]
-    code.emit(&[0x48, 0x8B, 0x44, 0x24, 0x10]);
+    // mov rax,[rbp+16]
+    code.emit(&[0x48, 0x8B, 0x45, 0x10]);
     code.emit_drop();
     code.emit_none_literal();
     code.end_proc();
@@ -2061,8 +2061,8 @@ fn gen_object_init(platform: Platform) -> Chunk {
 fn gen_len(platform: Platform) -> Chunk {
     let mut code = Emitter::new_simple("len", platform);
     match platform {
-        Platform::Windows => code.emit(&[0x48, 0x8B, 0x4C, 0x24, 0x10]), //  mov rcx,[rsp+16]
-        Platform::Linux | Platform::Macos => code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]), // mov rdi,[rsp+16]
+        Platform::Windows => code.emit(&[0x48, 0x8B, 0x4D, 0x10]), //  mov rcx,[rbp+16]
+        Platform::Linux | Platform::Macos => code.emit(&[0x48, 0x8B, 0x7D, 0x10]), // mov rdi,[rbp+16]
     }
     code.prepare_call(platform.stack_reserve());
     code.call(BUILTIN_LEN);
@@ -2107,8 +2107,8 @@ fn gen_input(platform: Platform) -> Chunk {
 fn gen_print(platform: Platform) -> Chunk {
     let mut code = Emitter::new_simple("print", platform);
     match platform {
-        Platform::Windows => code.emit(&[0x48, 0x8B, 0x4C, 0x24, 0x10]), // mov rcx,[rsp+16]
-        Platform::Linux | Platform::Macos => code.emit(&[0x48, 0x8B, 0x7C, 0x24, 0x10]), // mov rdi,[rsp+16]
+        Platform::Windows => code.emit(&[0x48, 0x8B, 0x4D, 0x10]), //  mov rcx,[rbp+16]
+        Platform::Linux | Platform::Macos => code.emit(&[0x48, 0x8B, 0x7D, 0x10]), // mov rdi,[rbp+16]
     }
     code.prepare_call(platform.stack_reserve());
     code.call(BUILTIN_PRINT);
