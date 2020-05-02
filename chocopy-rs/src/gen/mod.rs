@@ -371,6 +371,9 @@ pub fn gen(
     }
 
     let mut section_map = HashMap::new();
+    let text_section = obj.section_id(StandardSection::Text);
+    let ro_section = obj.section_id(StandardSection::ReadOnlyData);
+    let ro_reloc_section = obj.section_id(StandardSection::ReadOnlyDataWithRel);
 
     for chunk in &code_set.chunks {
         debug.add_chunk(&chunk);
@@ -381,9 +384,7 @@ pub fn gen(
                 SymbolScope::Compilation
             };
 
-            let (section, offset) =
-                obj.add_subsection(StandardSection::Text, chunk.name.as_bytes(), &chunk.code, 1);
-
+            let offset = obj.append_section_data(text_section, &chunk.code, 1);
             obj.add_symbol(Symbol {
                 name: chunk.name.as_bytes().into(),
                 value: offset,
@@ -391,19 +392,18 @@ pub fn gen(
                 kind: SymbolKind::Text,
                 scope,
                 weak: false,
-                section: SymbolSection::Section(section),
+                section: SymbolSection::Section(text_section),
                 flags: SymbolFlags::None,
             });
-            section_map.insert(&chunk.name, (section, offset));
+            section_map.insert(&chunk.name, (text_section, offset));
         } else {
-            let parent_section = if chunk.links.is_empty() {
-                StandardSection::ReadOnlyData
+            let section = if chunk.links.is_empty() {
+                ro_section
             } else {
-                StandardSection::ReadOnlyDataWithRel
+                ro_reloc_section
             };
-            let (section, offset) =
-                obj.add_subsection(parent_section, chunk.name.as_bytes(), &chunk.code, 8);
 
+            let offset = obj.append_section_data(section, &chunk.code, 8);
             obj.add_symbol(Symbol {
                 name: chunk.name.as_bytes().into(),
                 value: offset,
@@ -444,12 +444,7 @@ pub fn gen(
                 ChunkLinkTarget::Data(data) => {
                     let name = format!("$str{}", data_id);
                     data_id += 1;
-                    let (id, offset) = obj.add_subsection(
-                        StandardSection::ReadOnlyData,
-                        name.as_bytes(),
-                        &data,
-                        1,
-                    );
+                    let offset = obj.append_section_data(ro_section, &data, 1);
 
                     obj.add_symbol(Symbol {
                         name: name.into(),
@@ -458,7 +453,7 @@ pub fn gen(
                         kind: SymbolKind::Data,
                         scope: SymbolScope::Compilation,
                         weak: false,
-                        section: SymbolSection::Section(id),
+                        section: SymbolSection::Section(ro_section),
                         flags: SymbolFlags::None,
                     })
                 }
