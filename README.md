@@ -1,10 +1,10 @@
 # ChocoPy compiler written in Rust
 
-![Rust](https://github.com/wwylele/chocopy-rs/workflows/Rust/badge.svg)
+[![Build](https://github.com/wwylele/chocopy-rs/workflows/Rust/badge.svg)](https://github.com/wwylele/chocopy-rs/actions)
 
 > [ChocoPy](https://chocopy.org/) is a programming language designed for classroom use in undergraduate compilers courses. ChocoPy is a restricted subset of Python 3, which can easily be compiled to a target such as RISC-V. The language is fully specified using formal grammar, typing rules, and operational semantics. ChocoPy is used to teach CS 164 at UC Berkeley. ChocoPy has been designed by Rohan Padhye and Koushik Sen, with substantial contributions from Paul Hilfinger.
 
-So this was a course project for me. But I also want to try something else, so here it is, a second implementation that
+So this was a course project for me. But I also want to try something else (plus 2020 is not a good year to go outside LOL), so here it is, a second implementation that
  - is written in ~~Java~~ Rust,
  - has a parser ~~built using JFlex and CUP~~ hand-written,
  - targets ~~RISC-V~~ x86-64, and
@@ -37,7 +37,7 @@ chocopy-rs needs a linker and some basic libraries to produce native executable:
  - Linux / macOS: ld (with GCC or Clang as interface), libc
    - chocopy-rs invokes command `cc`
 
-These are not needed if you only use chocopy-rs to produce AST JSON or object file.
+These are not required if you only use chocopy-rs to produce AST JSON or object file.
 
 ## Usage
 
@@ -51,6 +51,9 @@ chocopy-rs input.py output.exe --static
 # compile source file input.py to object file output.o
 chocopy-rs input.py output.o --obj
 
+# same as above, but genernates the object file in ELF format for linux
+chocopy-rs input.py output.o --obj --platform linux
+
 # parse source file and output untyped AST JSON to STDOUT
 chocopy-rs input.py --ast
 
@@ -58,3 +61,14 @@ chocopy-rs input.py --ast
 chocopy-rs input.py --typed
 
 ```
+
+## Debugging
+
+The compiler also generates debugging information for ChocoPy programs:
+ - A separate `*.pdb` file for Windows
+ - DWARF embedded in the program for Linux / macOS
+
+With debugging information, ChocoPy programs can be debugged with common tools:
+ - Windows: WinDbg / Visual Studio Windows Debugger
+ - Linux: GDB / LLDB
+ - macOS: I haven't tested it but maybe LLDB works
