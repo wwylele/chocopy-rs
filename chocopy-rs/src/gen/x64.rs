@@ -237,7 +237,7 @@ impl<'a> Emitter<'a> {
         if frame_size % 16 == 8 {
             frame_size += 8;
         }
-        procedure_debug.frame_size = frame_size as u32 + 8;
+        procedure_debug.frame_size = frame_size as u32;
         self.code[7..11].copy_from_slice(&frame_size.to_le_bytes());
         Chunk {
             name: self.name,

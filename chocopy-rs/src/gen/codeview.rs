@@ -104,6 +104,9 @@ pub struct Codeview {
     type_index: u32,
     string_table: Vec<u8>,
     type_map: HashMap<String, u32>,
+    pdata: Vec<u8>,
+    pdata_links: Vec<DebugChunkLink>,
+    xdata: Vec<u8>,
 }
 
 impl Codeview {
@@ -177,6 +180,9 @@ impl Codeview {
             type_index: 0x1000,
             string_table,
             type_map: HashMap::new(),
+            pdata: vec![],
+            pdata_links: vec![],
+            xdata: vec![],
         };
 
         let mut leaf_current_dir = vec![];
@@ -464,7 +470,7 @@ impl DebugWriter for Codeview {
             proc.write_u32(func_id_id);
             proc.write_u32(0); // offset
             proc.write_u16(0); // segment
-            proc.write_u8(0); // flags
+            proc.write_u8(1 | (1 << 5)); // CV_PFLAG_CUST_CALL | CV_PFLAG_NOFPO
             proc.write_str(&chunk.name);
 
             let mut frame_proc = vec![];
@@ -474,7 +480,7 @@ impl DebugWriter for Codeview {
             frame_proc.write_u32(0); // save regs
             frame_proc.write_u32(0); // exception handler
             frame_proc.write_u16(0); // exception handler id
-            frame_proc.write_u32((1 << 16) | (1 << 20)); // flags: RSP as frame pointer
+            frame_proc.write_u32((2 << 16) | (2 << 14)); // flags: RBP as frame pointer
 
             let mut symbols = vec![];
             symbols.write_record(proc_id_type, proc);
@@ -550,6 +556,40 @@ impl DebugWriter for Codeview {
                 self.symbol_stream
                     .write_subsection(SubsectionType::Lines, lines);
             }
+
+            let xdata_offset = self.xdata.len();
+            self.xdata.write_u8(1); // version
+            self.xdata.write_u8(11); // prolog
+            self.xdata.write_u8(3); // code count
+            self.xdata.write_u8(0); // frame register
+            self.xdata.write_u16(0x010B); // UWOP_ALLOC_LARGE
+            self.xdata.write_u16((procedure.frame_size / 8) as u16);
+            self.xdata.write_u16(0x5001); // UWOP_PUSH_NONVOL RBP
+            self.xdata.write_u16(0); // padding
+
+            self.pdata_links.push(DebugChunkLink {
+                link_type: DebugChunkLinkType::ImageRelative,
+                pos: self.pdata.len(),
+                to: chunk.name.clone(),
+                size: 4,
+            });
+            self.pdata.write_u32(0);
+
+            self.pdata_links.push(DebugChunkLink {
+                link_type: DebugChunkLinkType::ImageRelative,
+                pos: self.pdata.len(),
+                to: chunk.name.clone(),
+                size: 4,
+            });
+            self.pdata.write_u32(chunk.code.len() as u32);
+
+            self.pdata_links.push(DebugChunkLink {
+                link_type: DebugChunkLinkType::ImageRelative,
+                pos: self.pdata.len(),
+                to: ".xdata".to_owned(),
+                size: 4,
+            });
+            self.pdata.write_u32(xdata_offset as u32);
         }
     }
 
@@ -592,11 +632,25 @@ impl DebugWriter for Codeview {
                 name: ".debug$S".to_owned(),
                 code: self.symbol_stream,
                 links: self.symbol_links,
+                discardable: true,
             },
             DebugChunk {
                 name: ".debug$T".to_owned(),
                 code: self.type_stream,
                 links: vec![],
+                discardable: true,
+            },
+            DebugChunk {
+                name: ".pdata".to_owned(),
+                code: self.pdata,
+                links: self.pdata_links,
+                discardable: false,
+            },
+            DebugChunk {
+                name: ".xdata".to_owned(),
+                code: self.xdata,
+                links: vec![],
+                discardable: false,
             },
         ]
     }
