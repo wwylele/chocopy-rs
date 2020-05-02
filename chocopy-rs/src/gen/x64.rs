@@ -232,11 +232,12 @@ impl<'a> Emitter<'a> {
         self.emit(&offset.to_le_bytes());
     }
 
-    pub fn finalize(mut self, procedure_debug: ProcedureDebug) -> Chunk {
+    pub fn finalize(mut self, mut procedure_debug: ProcedureDebug) -> Chunk {
         let mut frame_size = self.max_parameter as i32 - self.max_stack_top;
         if frame_size % 16 == 8 {
             frame_size += 8;
         }
+        procedure_debug.frame_size = frame_size as u32 + 8;
         self.code[7..11].copy_from_slice(&frame_size.to_le_bytes());
         Chunk {
             name: self.name,
