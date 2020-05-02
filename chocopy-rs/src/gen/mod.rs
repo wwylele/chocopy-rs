@@ -307,8 +307,16 @@ pub fn gen(
             current_dir,
             obj_path.as_os_str().to_str().unwrap_or(""),
         )?),
-        Platform::Linux => Box::new(dwarf::Dwarf::new(source_path, current_dir)),
-        Platform::Macos => Box::new(debug::DummyDebug),
+        Platform::Linux => Box::new(dwarf::Dwarf::new(
+            dwarf::DwarfFlavor::Linux,
+            source_path,
+            current_dir,
+        )),
+        Platform::Macos => Box::new(dwarf::Dwarf::new(
+            dwarf::DwarfFlavor::Macos,
+            source_path,
+            current_dir,
+        )),
     };
 
     let binary_format = match platform {
@@ -475,7 +483,11 @@ pub fn gen(
     let debug_chunks = debug.finalize();
     let mut debug_section_map = HashMap::new();
     for chunk in &debug_chunks {
-        let section = obj.add_section("".into(), chunk.name.as_bytes().into(), SectionKind::Debug);
+        let section = obj.add_section(
+            obj.segment_name(StandardSegment::Debug).into(),
+            chunk.name.as_bytes().into(),
+            SectionKind::Debug,
+        );
         obj.append_section_data(section, &chunk.code, 8);
         debug_section_map.insert(chunk.name.clone(), section);
     }

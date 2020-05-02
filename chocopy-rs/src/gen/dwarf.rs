@@ -84,7 +84,14 @@ fn dwarf_add_array_type(
     id
 }
 
+#[derive(PartialEq, Eq)]
+pub(super) enum DwarfFlavor {
+    Linux,
+    Macos,
+}
+
 pub(super) struct Dwarf {
+    flavor: DwarfFlavor,
     dwarf: DwarfUnit,
     size_t_id: UnitEntryId,
     int_t_id: UnitEntryId,
@@ -99,10 +106,14 @@ pub(super) struct Dwarf {
 }
 
 impl Dwarf {
-    pub fn new(source_path: &str, current_dir: &str) -> Dwarf {
+    pub fn new(flavor: DwarfFlavor, source_path: &str, current_dir: &str) -> Dwarf {
+        let version = match flavor {
+            DwarfFlavor::Linux => 4,
+            DwarfFlavor::Macos => 2,
+        };
         let encoding = gimli::Encoding {
             format: gimli::Format::Dwarf32,
-            version: 4,
+            version,
             address_size: 8,
         };
         let mut dwarf = DwarfUnit::new(encoding);
@@ -147,6 +158,7 @@ impl Dwarf {
         let object_prototype_ptr_id = dwarf_add_pointer_type(&mut dwarf, None, object_prototype_id);
 
         Dwarf {
+            flavor,
             dwarf,
             size_t_id,
             int_t_id,
@@ -349,7 +361,10 @@ impl DebugWriter for Dwarf {
             );
             sub_program.set(
                 DW_AT_high_pc,
-                AttributeValue::Udata(chunk.code.len() as u64),
+                AttributeValue::Address(Address::Symbol {
+                    symbol: self.symbol_pool.len(),
+                    addend: chunk.code.len() as i64,
+                }),
             );
             sub_program.set(DW_AT_decl_file, AttributeValue::Data1(1));
             sub_program.set(
@@ -496,13 +511,15 @@ impl DebugWriter for Dwarf {
                     });
                 }
 
-                for self_reloc in self_relocs {
-                    links.push(DebugChunkLink {
-                        link_type: DebugChunkLinkType::Absolute,
-                        pos: self_reloc.offset,
-                        to: self_reloc.section.to_owned(),
-                        size: self_reloc.size,
-                    });
+                if self.flavor == DwarfFlavor::Linux {
+                    for self_reloc in self_relocs {
+                        links.push(DebugChunkLink {
+                            link_type: DebugChunkLinkType::Absolute,
+                            pos: self_reloc.offset,
+                            to: self_reloc.section.to_owned(),
+                            size: self_reloc.size,
+                        });
+                    }
                 }
 
                 chunks.push(DebugChunk {
