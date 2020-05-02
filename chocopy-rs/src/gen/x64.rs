@@ -1938,21 +1938,14 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
 fn gen_dtor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chunk {
     let mut code = Emitter::new_simple(&(class_name.to_owned() + ".$dtor"), platform);
     // Note: This uses C ABI instead of chocopy ABI
+    // WARNING: DO NOT USE RDI/RSI in any generated code inside dtor!
 
-    let mut rdi = None;
-    let mut rsi = None;
     let object = code.alloc_stack(TicketType::Reference);
 
     match platform {
         Platform::Windows => {
             // mov [rbp+{}],rcx
             code.emit_with_stack(&[0x48, 0x89, 0x8D], &object);
-            rdi = Some(code.alloc_stack(TicketType::Plain));
-            rsi = Some(code.alloc_stack(TicketType::Plain));
-            // mov [rbp+{}],rdi
-            code.emit_with_stack(&[0x48, 0x89, 0xBD], &rdi.as_ref().unwrap());
-            // mov [rbp+{}],rsi
-            code.emit_with_stack(&[0x48, 0x89, 0xB5], &rsi.as_ref().unwrap());
         }
         Platform::Linux | Platform::Macos => {
             // mov [rbp+{}],rdi
@@ -1968,18 +1961,6 @@ fn gen_dtor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
             code.emit(&attribute.offset.to_le_bytes());
             code.emit_drop();
         }
-    }
-    match platform {
-        Platform::Windows => {
-            // mov rdi,[rbp+{}]
-            code.emit_with_stack(&[0x48, 0x8B, 0xBD], &rdi.as_ref().unwrap());
-            // mov rsi,[rbp+{}]
-            code.emit_with_stack(&[0x48, 0x8B, 0xB5], &rsi.as_ref().unwrap());
-
-            code.free_stack(rsi.unwrap());
-            code.free_stack(rdi.unwrap())
-        }
-        Platform::Linux | Platform::Macos => (),
     }
     code.free_stack(object);
     code.end_proc();
