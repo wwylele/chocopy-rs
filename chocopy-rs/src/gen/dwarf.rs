@@ -526,6 +526,7 @@ impl DebugWriter for Dwarf {
                     name: id.name().to_owned(),
                     code: data,
                     links,
+                    discardable: true,
                 });
 
                 Ok(())

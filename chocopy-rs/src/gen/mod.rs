@@ -149,6 +149,7 @@ enum DebugChunkLinkType {
     Absolute,
     SectionRelative,
     SectionId,
+    ImageRelative,
 }
 
 struct DebugChunkLink {
@@ -162,6 +163,7 @@ struct DebugChunk {
     name: String,
     code: Vec<u8>,
     links: Vec<DebugChunkLink>,
+    discardable: bool,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -483,10 +485,15 @@ pub fn gen(
     let debug_chunks = debug.finalize();
     let mut debug_section_map = HashMap::new();
     for chunk in &debug_chunks {
+        let kind = if chunk.discardable {
+            SectionKind::Debug
+        } else {
+            SectionKind::ReadOnlyData
+        };
         let section = obj.add_section(
             obj.segment_name(StandardSegment::Debug).into(),
             chunk.name.as_bytes().into(),
-            SectionKind::Debug,
+            kind,
         );
         obj.append_section_data(section, &chunk.code, 8);
         debug_section_map.insert(chunk.name.clone(), section);
@@ -501,6 +508,7 @@ pub fn gen(
                 DebugChunkLinkType::Absolute => RelocationKind::Absolute,
                 DebugChunkLinkType::SectionRelative => RelocationKind::SectionOffset,
                 DebugChunkLinkType::SectionId => RelocationKind::SectionIndex,
+                DebugChunkLinkType::ImageRelative => RelocationKind::ImageOffset,
             };
             obj.add_relocation(
                 debug_section_map[&chunk.name],
