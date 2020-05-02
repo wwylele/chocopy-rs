@@ -126,7 +126,7 @@ impl Codeview {
         obj_name.write_str(obj_path);
 
         let mut compile3 = vec![];
-        compile3.write_u32(0); // flags, language = C
+        compile3.write_u32(1); // flags, language = C++
         compile3.write_u16(0xD0); // x86-64
         compile3.write_u16(1); // front major version
         compile3.write_u16(0); // front minor version
@@ -459,22 +459,22 @@ impl DebugWriter for Codeview {
             proc.write_u32(0); // end
             proc.write_u32(0); // next
             proc.write_u32(chunk.code.len() as u32);
-            proc.write_u32(0); // debug start
+            proc.write_u32(11); // debug start
             proc.write_u32(chunk.code.len() as u32); // debug end
             proc.write_u32(func_id_id);
             proc.write_u32(0); // offset
             proc.write_u16(0); // segment
-            proc.write_u8(1 | (1 << 5)); // flags: CV_PFLAG_NOFPO | CV_PFLAG_CUST_CALL
+            proc.write_u8(0); // flags
             proc.write_str(&chunk.name);
 
             let mut frame_proc = vec![];
-            frame_proc.write_u32(0); // frame length
+            frame_proc.write_u32(procedure.frame_size);
             frame_proc.write_u32(0); // pad
             frame_proc.write_u32(0); // pad offset
             frame_proc.write_u32(0); // save regs
             frame_proc.write_u32(0); // exception handler
             frame_proc.write_u16(0); // exception handler id
-            frame_proc.write_u32((2 << 14) | (2 << 16)); // flags: RBP as frame pointer
+            frame_proc.write_u32((1 << 16) | (1 << 20)); // flags: RSP as frame pointer
 
             let mut symbols = vec![];
             symbols.write_record(proc_id_type, proc);

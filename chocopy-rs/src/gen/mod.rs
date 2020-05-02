@@ -112,6 +112,7 @@ struct ProcedureDebug {
     return_type: TypeDebug,
     params: Vec<VarDebug>,
     locals: Vec<VarDebug>,
+    frame_size: u32,
 }
 
 impl ProcedureDebug {

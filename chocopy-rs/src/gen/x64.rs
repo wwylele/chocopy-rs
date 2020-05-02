@@ -1831,6 +1831,7 @@ fn gen_function(
         return_type: TypeDebug::from_annotation(&function.return_type),
         params: params_debug,
         locals: locals_debug,
+        frame_size: 0,
     })];
 
     // Note: put children functions after the parent one
@@ -1929,6 +1930,7 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
         return_type: TypeDebug::class_type(class_name),
         params: vec![],
         locals: vec![],
+        frame_size: 0,
     })
 }
 
@@ -1993,6 +1995,7 @@ fn gen_dtor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
             var_type: TypeDebug::class_type(class_name),
         }],
         locals: vec![],
+        frame_size: 0,
     })
 }
 
@@ -2008,6 +2011,7 @@ fn gen_int(platform: Platform) -> Chunk {
         return_type: TypeDebug::class_type("int"),
         params: vec![],
         locals: vec![],
+        frame_size: 0,
     })
 }
 
@@ -2023,6 +2027,7 @@ fn gen_bool(platform: Platform) -> Chunk {
         return_type: TypeDebug::class_type("bool"),
         params: vec![],
         locals: vec![],
+        frame_size: 0,
     })
 }
 
@@ -2038,6 +2043,7 @@ fn gen_str(platform: Platform) -> Chunk {
         return_type: TypeDebug::class_type("str"),
         params: vec![],
         locals: vec![],
+        frame_size: 0,
     })
 }
 
@@ -2061,6 +2067,7 @@ fn gen_object_init(platform: Platform) -> Chunk {
             var_type: TypeDebug::class_type("object"),
         }],
         locals: vec![],
+        frame_size: 0,
     })
 }
 
@@ -2086,6 +2093,7 @@ fn gen_len(platform: Platform) -> Chunk {
             var_type: TypeDebug::class_type("object"),
         }],
         locals: vec![],
+        frame_size: 0,
     })
 }
 
@@ -2107,6 +2115,7 @@ fn gen_input(platform: Platform) -> Chunk {
         params: vec![],
         lines: vec![],
         locals: vec![],
+        frame_size: 0,
     })
 }
 
@@ -2132,6 +2141,7 @@ fn gen_print(platform: Platform) -> Chunk {
             var_type: TypeDebug::class_type("object"),
         }],
         locals: vec![],
+        frame_size: 0,
     })
 }
 
@@ -2204,6 +2214,7 @@ fn gen_main(
         return_type: TypeDebug::class_type("<None>"),
         params: vec![],
         locals: vec![],
+        frame_size: 0,
     })
 }
 
