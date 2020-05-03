@@ -92,7 +92,7 @@ Stack frame layout is similar to the one described in the implementation guide, 
 3. temporary storage for intermediate results of expression evaluation or other operations,
 4. the values of the local variables of the function,
 5. the static link of the current function (if applicable),
-6. the saved frame pointer of its callerm
+6. the saved frame pointer of its caller,
 7. the saved return address. Its own actual parameters are in the frame immediately below it.
 
 The local variables are stored in the same order as described in the implementation guide: vairables declared first has the highest address towards the bottom of the stack. However, the parameters are stored in a different order: the leftmost parameter has the lowest address towards the top of the stack.
