@@ -2143,16 +2143,11 @@ fn gen_main(
         platform,
     );
 
-    let mut rdi = None;
-    let mut rsi = None;
-
     if platform == Platform::Windows {
-        rdi = Some(main_code.alloc_stack(TicketType::Plain));
-        rsi = Some(main_code.alloc_stack(TicketType::Plain));
-        // mov [rbp+{}],rdi
-        main_code.emit_with_stack(&[0x48, 0x89, 0xBD], &rdi.as_ref().unwrap());
-        // mov [rbp+{}],rsi
-        main_code.emit_with_stack(&[0x48, 0x89, 0xB5], &rsi.as_ref().unwrap());
+        // mov [rbp+16],rdi
+        main_code.emit(&[0x48, 0x89, 0x7D, 0x10]);
+        // mov [rbp+24],rsi
+        main_code.emit(&[0x48, 0x89, 0x75, 0x18]);
     }
 
     for declaration in &ast.declarations {
@@ -2174,13 +2169,10 @@ fn gen_main(
     }
 
     if platform == Platform::Windows {
-        // mov rdi,[rbp+{}]
-        main_code.emit_with_stack(&[0x48, 0x8B, 0xBD], &rdi.as_ref().unwrap());
-        // mov rsi,[rbp+{}]
-        main_code.emit_with_stack(&[0x48, 0x8B, 0xB5], &rsi.as_ref().unwrap());
-
-        main_code.free_stack(rsi.unwrap());
-        main_code.free_stack(rdi.unwrap())
+        // mov rdi,[rbp+16]
+        main_code.emit(&[0x48, 0x8B, 0x7D, 0x10]);
+        // mov rsi,[rbp+24]
+        main_code.emit(&[0x48, 0x8B, 0x75, 0x18]);
     }
 
     main_code.end_proc();
