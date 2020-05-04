@@ -208,8 +208,7 @@ impl CodeSet {
             .chain(
                 self.classes_debug
                     .iter()
-                    .map(|(_, class)| class.used_types())
-                    .flatten(),
+                    .flat_map(|(_, class)| class.used_types()),
             )
     }
 
@@ -612,9 +611,15 @@ kernel32.lib advapi32.lib ws2_32.lib userenv.lib {} \
     };
 
     if !ld_output.status.success() {
-        println!("Error from linker:");
-        std::io::stdout().write_all(&ld_output.stdout).unwrap();
-        std::io::stderr().write_all(&ld_output.stderr).unwrap();
+        eprintln!("Error: Linker returned {}", ld_output.status);
+        if !ld_output.stdout.is_empty() {
+            eprintln!("STDOUT from linker:");
+            std::io::stderr().write_all(&ld_output.stdout).unwrap();
+        }
+        if !ld_output.stderr.is_empty() {
+            eprintln!("STDERR from linker:");
+            std::io::stderr().write_all(&ld_output.stderr).unwrap();
+        }
     }
 
     std::fs::remove_file(&obj_path)?;

@@ -1050,23 +1050,20 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                 }
                 _ => {
                     let second = self.take();
-                    match second.token {
-                        Token::Colon => {
-                            self.push_back(second);
-                            self.push_back(head);
-                            let (var_def, mut error) = self.parse_var_def();
-                            if let Some(var_def) = var_def {
-                                declarations.push(Declaration::VarDef(var_def));
-                            } else {
-                                self.skip_to_next_line();
-                            }
-                            errors.append(&mut error);
+                    if second.token == Token::Colon {
+                        self.push_back(second);
+                        self.push_back(head);
+                        let (var_def, mut error) = self.parse_var_def();
+                        if let Some(var_def) = var_def {
+                            declarations.push(Declaration::VarDef(var_def));
+                        } else {
+                            self.skip_to_next_line();
                         }
-                        _ => {
-                            self.push_back(second);
-                            self.push_back(head);
-                            break;
-                        }
+                        errors.append(&mut error);
+                    } else {
+                        self.push_back(second);
+                        self.push_back(head);
+                        break;
                     }
                 }
             }
@@ -1388,37 +1385,34 @@ pub fn parse(get_token: impl Iterator<Item = ComplexToken>) -> Program {
             }
             _ => {
                 let second = tokens.take();
-                match second.token {
-                    Token::Colon => {
-                        tokens.push_back(second);
-                        tokens.push_back(head);
-                        let (var_def, mut error) = tokens.parse_var_def();
-                        if let Some(var_def) = var_def {
-                            declarations.push(Declaration::VarDef(var_def));
-                        } else {
-                            tokens.skip_to_next_line();
-                        }
-                        errors.append(&mut error);
-                        end = tokens.prev_pos().unwrap_or(start);
+                if second.token == Token::Colon {
+                    tokens.push_back(second);
+                    tokens.push_back(head);
+                    let (var_def, mut error) = tokens.parse_var_def();
+                    if let Some(var_def) = var_def {
+                        declarations.push(Declaration::VarDef(var_def));
+                    } else {
+                        tokens.skip_to_next_line();
                     }
-                    _ => {
-                        tokens.push_back(second);
-                        tokens.push_back(head);
-                        let (stmt_list, mut error) = tokens.parse_stmt_list();
-                        errors.append(&mut error);
-                        statements = Some(stmt_list);
-                        end = tokens.prev_pos().unwrap_or(start);
+                    errors.append(&mut error);
+                    end = tokens.prev_pos().unwrap_or(start);
+                } else {
+                    tokens.push_back(second);
+                    tokens.push_back(head);
+                    let (stmt_list, mut error) = tokens.parse_stmt_list();
+                    errors.append(&mut error);
+                    statements = Some(stmt_list);
+                    end = tokens.prev_pos().unwrap_or(start);
 
-                        loop {
-                            let token = tokens.take();
-                            if token.token == Token::Eof {
-                                break;
-                            } else {
-                                errors.push(CompilerError::unexpected(token));
-                            }
+                    loop {
+                        let token = tokens.take();
+                        if token.token == Token::Eof {
+                            break;
+                        } else {
+                            errors.push(CompilerError::unexpected(token));
                         }
-                        break;
                     }
+                    break;
                 }
             }
         }

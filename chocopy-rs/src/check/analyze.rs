@@ -414,13 +414,12 @@ impl CallExpr {
             .map(|arg| arg.analyze(errors, o, m))
             .collect();
 
-        let function = match o.get(&self.function.name) {
-            Some(EnvSlot::Func(f)) => f,
-            _ => {
-                let msg = error_function(&self.function.name);
-                self.add_error(errors, msg);
-                return TYPE_OBJECT.clone();
-            }
+        let function = if let Some(EnvSlot::Func(f)) = o.get(&self.function.name) {
+            f
+        } else {
+            let msg = error_function(&self.function.name);
+            self.add_error(errors, msg);
+            return TYPE_OBJECT.clone();
         };
 
         // Reference program: don't attach type to constructor

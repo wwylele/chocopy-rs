@@ -110,7 +110,7 @@ pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mu
 /// # Safety
 ///  - `pointer` must be previously returned by `alloc_obj`.
 ///  - The `prototype` field must be intact.
-///  - For ArrayObject, the `len` field must be intact.
+///  - For `ArrayObject`, the `len` field must be intact.
 ///  - Other safety requirements to call `dtor` on `pointer` must be hold.
 #[export_name = "$free_obj"]
 pub unsafe extern "C" fn free_obj(pointer: *mut Object) {
@@ -135,7 +135,7 @@ pub unsafe extern "C" fn free_obj(pointer: *mut Object) {
 /// # Safety
 ///  - `pointer` must be previously returned by `alloc_obj`.
 ///  - The `prototype` field must be intact.
-///  - For ArrayObject, the `len` field must be intact.
+///  - For `ArrayObject`, the `len` field must be intact.
 ///  - Other safety requirements to call `dtor` on `pointer` must be hold.
 #[export_name = "$len"]
 pub unsafe extern "C" fn len(pointer: *mut Object) -> i32 {

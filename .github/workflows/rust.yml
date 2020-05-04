@@ -22,14 +22,11 @@ jobs:
     - uses: actions/setup-python@v1
       with:
         python-version: '3.8'
+      if: runner.os == 'Linux'
     - name: Verify integration test cases
       run: cargo run --package chocopy-rs-tester -- chocopy-rs/test/pa3 --python
       if: runner.os == 'Linux'
     - name: Run integration tests
       run: cargo run --package chocopy-rs-tester -- chocopy-rs/test/pa3
-    - name: Run integration tests (static)
-      run: cargo run --package chocopy-rs-tester -- chocopy-rs/test/pa3 --static
-    - name: Run official integration tests
-      run: cargo run --package chocopy-rs-tester -- chocopy-rs/test/original/pa3
-    - name: Run official integration tests (static)
+    - name: Run official integration tests (--static)
       run: cargo run --package chocopy-rs-tester -- chocopy-rs/test/original/pa3 --static

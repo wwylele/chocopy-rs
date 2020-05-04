@@ -129,7 +129,7 @@ fn main() {
     let static_lib = option == Some("--static");
     let python_command;
     if python {
-        python_command = Some(args.get(3).map(|s| s.as_str()).unwrap_or("python"));
+        python_command = Some(args.get(3).map_or("python", |s| s.as_str()));
         println!(
             "Testing using python interpreter {}",
             python_command.unwrap()
@@ -184,16 +184,16 @@ fn main() {
             no_case = false;
             print!("Case {} ---- ", case);
 
-            let command = if !python {
+            let command = if python {
+                let mut p = std::process::Command::new(python_command.unwrap());
+                p.arg(&file_path);
+                p
+            } else {
                 let mut command = std::process::Command::new(&exe_path);
                 if static_lib {
                     command.arg("--static");
                 }
                 command
-            } else {
-                let mut p = std::process::Command::new(python_command.unwrap());
-                p.arg(&file_path);
-                p
             };
 
             match test_one_case(command, &input, &expected_output) {
