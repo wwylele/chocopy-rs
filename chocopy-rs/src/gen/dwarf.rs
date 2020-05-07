@@ -140,7 +140,11 @@ impl Dwarf {
 
         let comp_dir = dwarf.strings.add(current_dir);
         let comp_name = dwarf.strings.add(source_path);
-        let producer = dwarf.strings.add("chocopy-rs");
+        let producer = dwarf.strings.add(format!(
+            "{} {}",
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION")
+        ));
 
         let root_id = dwarf.unit.root();
         let compile_unit = dwarf.unit.get_mut(root_id);

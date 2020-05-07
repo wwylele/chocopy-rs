@@ -128,18 +128,26 @@ impl Codeview {
         obj_name.write_u32(0); // signature
         obj_name.write_str(obj_path);
 
+        let version_major = env!("CARGO_PKG_VERSION_MAJOR");
+        let version_minor = env!("CARGO_PKG_VERSION_MINOR");
+        let version_patch = env!("CARGO_PKG_VERSION_PATCH");
+
+        let version_major = version_major.parse().unwrap_or(0);
+        let version_minor = version_minor.parse().unwrap_or(0);
+        let version_patch = version_patch.parse().unwrap_or(0);
+
         let mut compile3 = vec![];
         compile3.write_u32(1); // flags, language = C++
         compile3.write_u16(0xD0); // x86-64
-        compile3.write_u16(1); // front major version
-        compile3.write_u16(0); // front minor version
-        compile3.write_u16(1); // front build version
+        compile3.write_u16(version_major); // front major version
+        compile3.write_u16(version_minor); // front minor version
+        compile3.write_u16(version_patch); // front build version
         compile3.write_u16(0); // front QFE version
-        compile3.write_u16(1); // back major version
-        compile3.write_u16(0); // back minor version
-        compile3.write_u16(1); // back build version
+        compile3.write_u16(version_major); // back major version
+        compile3.write_u16(version_minor); // back minor version
+        compile3.write_u16(version_patch); // back build version
         compile3.write_u16(0); // back QFE version
-        compile3.write_str("chocopy-rs");
+        compile3.write_str(env!("CARGO_PKG_NAME"));
 
         let mut unit_info = vec![];
         unit_info.write_record(RecordType::ObjName, obj_name);
@@ -192,7 +200,12 @@ impl Codeview {
 
         let mut leaf_build_tool = vec![];
         leaf_build_tool.write_u32(0);
-        leaf_build_tool.write_str("chocopy-rs.exe");
+        leaf_build_tool.write_str(
+            std::env::current_exe()?
+                .as_os_str()
+                .to_str()
+                .ok_or(PathError)?,
+        );
         let id_build_tool = codeview.write_leaf(LeafType::StringId, leaf_build_tool);
 
         let mut leaf_source_path = vec![];

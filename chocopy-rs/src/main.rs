@@ -89,10 +89,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let program = args[0].clone();
 
     let mut opts = Options::new();
-    opts.optflag("h", "help", "print this help menu");
-    opts.optflag("a", "ast", "print bare AST");
-    opts.optflag("t", "typed", "print typed AST");
-    opts.optflag("o", "obj", "output object file without linking");
+    opts.optflag("h", "help", "Print this help menu");
+    opts.optflag("a", "ast", "Print bare AST");
+    opts.optflag("t", "typed", "Print typed AST");
+    opts.optflag("o", "obj", "Output object file without linking");
     opts.optflag("s", "static", "Link against library statically if possible");
     opts.optopt(
         "p",
@@ -100,6 +100,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Specify target platform",
         "[windows|linux|macos]",
     );
+
+    opts.optflag("", "version", "Display version");
 
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
@@ -112,6 +114,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if matches.opt_present("h") {
         print_usage(&program, opts);
+        return Ok(());
+    }
+
+    if matches.opt_present("version") {
+        println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
 
