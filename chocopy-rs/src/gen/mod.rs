@@ -386,46 +386,41 @@ pub fn gen(
 
     for chunk in &code_set.chunks {
         debug.add_chunk(&chunk);
+        let section;
+        let align;
+        let kind;
         if let ChunkExtra::Procedure(_) = chunk.extra {
-            let scope = if chunk.name == BUILTIN_CHOCOPY_MAIN {
-                SymbolScope::Linkage
-            } else {
-                SymbolScope::Compilation
-            };
-
-            let offset = obj.append_section_data(text_section, &chunk.code, 1);
-            obj.add_symbol(Symbol {
-                name: chunk.name.as_bytes().into(),
-                value: offset,
-                size: chunk.code.len() as u64,
-                kind: SymbolKind::Text,
-                scope,
-                weak: false,
-                section: SymbolSection::Section(text_section),
-                flags: SymbolFlags::None,
-            });
-            section_map.insert(&chunk.name, (text_section, offset));
+            section = text_section;
+            align = 1;
+            kind = SymbolKind::Text;
         } else {
-            let section = if chunk.links.is_empty() {
-                ro_section
+            if chunk.links.is_empty() {
+                section = ro_section;
             } else {
-                ro_reloc_section
-            };
-
-            let offset = obj.append_section_data(section, &chunk.code, 8);
-            obj.add_symbol(Symbol {
-                name: chunk.name.as_bytes().into(),
-                value: offset,
-                size: chunk.code.len() as u64,
-                kind: SymbolKind::Data,
-                scope: SymbolScope::Compilation,
-                weak: false,
-                section: SymbolSection::Section(section),
-                flags: SymbolFlags::None,
-            });
-
-            section_map.insert(&chunk.name, (section, offset));
+                section = ro_reloc_section;
+            }
+            align = 8;
+            kind = SymbolKind::Data;
         }
+
+        let scope = if chunk.name == BUILTIN_CHOCOPY_MAIN {
+            SymbolScope::Linkage
+        } else {
+            SymbolScope::Compilation
+        };
+
+        let offset = obj.append_section_data(section, &chunk.code, align);
+        obj.add_symbol(Symbol {
+            name: chunk.name.as_bytes().into(),
+            value: offset,
+            size: chunk.code.len() as u64,
+            kind,
+            scope,
+            weak: false,
+            section: SymbolSection::Section(section),
+            flags: SymbolFlags::None,
+        });
+        section_map.insert(&chunk.name, (section, offset));
     }
 
     let mut data_id = 0;
