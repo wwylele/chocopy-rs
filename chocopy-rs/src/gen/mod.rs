@@ -8,8 +8,8 @@ use crate::local_env::*;
 use crate::node::*;
 use debug::*;
 use object::{
-    target_lexicon::*, write::*, RelocationEncoding, RelocationKind, SectionKind, SymbolFlags,
-    SymbolKind, SymbolScope,
+    write::*, Architecture, BinaryFormat, Endianness, RelocationEncoding, RelocationKind,
+    SectionKind, SymbolFlags, SymbolKind, SymbolScope,
 };
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -311,9 +311,9 @@ pub fn gen_object(
     let binary_format = match platform {
         Platform::Windows => BinaryFormat::Coff,
         Platform::Linux => BinaryFormat::Elf,
-        Platform::Macos => BinaryFormat::Macho,
+        Platform::Macos => BinaryFormat::MachO,
     };
-    let mut obj = Object::new(binary_format, Architecture::X86_64);
+    let mut obj = Object::new(binary_format, Architecture::X86_64, Endianness::Little);
 
     let import_function = |obj: &mut Object, name: &str| {
         obj.add_symbol(Symbol {
