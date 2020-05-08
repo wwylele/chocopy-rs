@@ -276,12 +276,10 @@ fn windows_path_escape(path: &Path) -> std::result::Result<String, Box<dyn std::
     Ok(path.to_owned())
 }
 
-pub fn gen(
+pub fn gen_object(
     source_path: &str,
     ast: Program,
-    path: &str,
-    no_link: bool,
-    static_lib: bool,
+    obj_path: &Path,
     platform: Platform,
 ) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let current_dir_buf = std::env::current_dir();
@@ -291,16 +289,6 @@ pub fn gen(
         .ok()
         .flatten()
         .unwrap_or("");
-
-    let obj_path = if no_link {
-        let obj_path = Path::new(path);
-        obj_path.to_owned()
-    } else {
-        let mut obj_path = std::env::temp_dir();
-        let obj_name = format!("chocopy-{}.o", rand::random::<u32>());
-        obj_path.push(obj_name);
-        obj_path
-    };
 
     let mut debug: Box<dyn DebugWriter> = match platform {
         Platform::Windows => Box::new(codeview::Codeview::new(
@@ -520,12 +508,16 @@ pub fn gen(
 
     let mut obj_file = std::fs::File::create(&obj_path)?;
     obj_file.write_all(&obj.write()?)?;
-    drop(obj_file);
 
-    if no_link {
-        return Ok(());
-    }
+    Ok(())
+}
 
+pub fn link(
+    obj_path: &Path,
+    path: &str,
+    static_lib: bool,
+    platform: Platform,
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let lib_file = match platform {
         Platform::Windows => "chocopy_rs_std.lib",
         Platform::Linux | Platform::Macos => "libchocopy_rs_std.a",
@@ -564,11 +556,11 @@ pub fn gen(
             // with the commands we want, and execute that batch file.
             let batch_content = format!(
                 "@echo off
-call \"{}\" amd64
-link /NOLOGO /NXCOMPAT /OPT:REF,NOICF \
-\"{}\" \"{}\" /OUT:\"{}\" \
-kernel32.lib advapi32.lib ws2_32.lib userenv.lib {} \
-/SUBSYSTEM:CONSOLE /DEBUG",
+    call \"{}\" amd64
+    link /NOLOGO /NXCOMPAT /OPT:REF,NOICF \
+    \"{}\" \"{}\" /OUT:\"{}\" \
+    kernel32.lib advapi32.lib ws2_32.lib userenv.lib {} \
+    /SUBSYSTEM:CONSOLE /DEBUG",
                 windows_path_escape(&vcvarsall)?,
                 windows_path_escape(&obj_path)?,
                 windows_path_escape(&lib_path)?,
@@ -616,6 +608,35 @@ kernel32.lib advapi32.lib ws2_32.lib userenv.lib {} \
             std::io::stderr().write_all(&ld_output.stderr).unwrap();
         }
     }
+
+    Ok(())
+}
+
+pub fn gen(
+    source_path: &str,
+    ast: Program,
+    path: &str,
+    no_link: bool,
+    static_lib: bool,
+    platform: Platform,
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let obj_path = if no_link {
+        let obj_path = Path::new(path);
+        obj_path.to_owned()
+    } else {
+        let mut obj_path = std::env::temp_dir();
+        let obj_name = format!("chocopy-{}.o", rand::random::<u32>());
+        obj_path.push(obj_name);
+        obj_path
+    };
+
+    gen_object(source_path, ast, &obj_path, platform)?;
+
+    if no_link {
+        return Ok(());
+    }
+
+    link(&obj_path, path, static_lib, platform)?;
 
     std::fs::remove_file(&obj_path)?;
 
