@@ -9,3 +9,4 @@ name = "chocopy_rs_std"
 crate-type = ["staticlib"]
 
 [dependencies]
+chocopy-rs-common = { path = "../chocopy-rs-common" }

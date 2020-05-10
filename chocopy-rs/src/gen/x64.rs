@@ -1,4 +1,5 @@
 use super::*;
+use chocopy_rs_common::*;
 
 struct FuncSlot {
     link_name: String,
@@ -225,7 +226,7 @@ impl<'a> Emitter<'a> {
     pub fn call_virtual(&mut self, offset: u32) {
         // mov rdi,[rsp]
         self.emit(&[0x48, 0x8B, 0x3C, 0x24]);
-        // mov rax,[rdi]
+        // mov rax,[rdi], assumed OBJECT_PROTOTYPE_OFFSET = 0
         self.emit(&[0x48, 0x8B, 0x07]);
         // call [rax+{}]
         self.emit(&[0xFF, 0x90]);
@@ -310,8 +311,8 @@ impl<'a> Emitter<'a> {
         // je
         self.emit(&[0x0f, 0x84]);
         let skip_a = self.jump_from();
-        // sub QWORD PTR [rax+8],1
-        self.emit(&[0x48, 0x83, 0x68, 0x08, 0x01]);
+        // sub QWORD PTR [rax+OBJECT_REF_COUNT_OFFSET],1
+        self.emit(&[0x48, 0x83, 0x68, OBJECT_REF_COUNT_OFFSET as u8, 0x01]);
 
         // jne
         self.emit(&[0x0f, 0x85]);
@@ -333,8 +334,8 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x48, 0x85, 0xC0]);
         // je
         self.emit(&[0x74, 0x04]);
-        // incq [rax+8]
-        self.emit(&[0x48, 0xFF, 0x40, 0x08]);
+        // incq [rax+OBJECT_REF_COUNT_OFFSET]
+        self.emit(&[0x48, 0xFF, 0x40, OBJECT_REF_COUNT_OFFSET as u8]);
     }
 
     pub fn emit_none_literal(&mut self) {
@@ -1917,7 +1918,7 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
     code.prepare_call(1);
     // mov [rsp],rax
     code.emit(&[0x48, 0x89, 0x04, 0x24]);
-    code.call_virtual(16);
+    code.call_virtual(PROTOTYPE_INIT_OFFSET);
 
     // mov rax,[rbp+{}]
     code.emit_with_stack(&[0x48, 0x8B, 0x85], &object);
@@ -2223,7 +2224,7 @@ fn add_class(
                     8
                 };
                 class_slot.object_size += (size - class_slot.object_size % size) % size;
-                let offset = class_slot.object_size + 16;
+                let offset = class_slot.object_size + OBJECT_ATTRIBUTE_OFFSET;
                 let name = &v.var.identifier.name;
                 class_slot.attributes.insert(
                     name.clone(),
@@ -2261,7 +2262,7 @@ fn add_class(
                     class_slot
                         .methods
                         .insert(method_name.clone(), MethodSlot { offset, link_name });
-                    class_slot.prototype_size += 8;
+                    class_slot.prototype_size += FUNCTION_POINTER_SIZE;
 
                     let params = f
                         .params
@@ -2290,17 +2291,17 @@ fn add_class(
     classes_debug.insert(class_name.clone(), class_debug);
 }
 
-fn gen_special_proto(name: &str, size: i32, tag: i32, dtor: &str) -> Chunk {
-    let mut code = vec![0; 24];
-    code[0..4].copy_from_slice(&size.to_le_bytes());
-    code[4..8].copy_from_slice(&tag.to_le_bytes());
+fn gen_special_proto(name: &str, size: i32, tag: TypeTag, dtor: &str) -> Chunk {
+    let mut code = vec![0; OBJECT_PROTOTYPE_SIZE as usize];
+    code[PROTOTYPE_SIZE_OFFSET as usize..][..4].copy_from_slice(&size.to_le_bytes());
+    code[PROTOTYPE_TAG_OFFSET as usize..][..4].copy_from_slice(&(tag as i32).to_le_bytes());
     let links = vec![
         ChunkLink {
-            pos: 8,
+            pos: PROTOTYPE_DTOR_OFFSET as usize,
             to: ChunkLinkTarget::Symbol(dtor.to_owned()),
         },
         ChunkLink {
-            pos: 16,
+            pos: PROTOTYPE_INIT_OFFSET as usize,
             to: ChunkLinkTarget::Symbol("object.__init__".to_owned()),
         },
     ];
@@ -2319,14 +2320,14 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
     base_methods.insert(
         "$dtor".to_owned(),
         MethodSlot {
-            offset: 8,
+            offset: PROTOTYPE_DTOR_OFFSET,
             link_name: "object.$dtor".to_owned(),
         },
     );
     base_methods.insert(
         "__init__".to_owned(),
         MethodSlot {
-            offset: 16,
+            offset: PROTOTYPE_INIT_OFFSET,
             link_name: "object.__init__".to_owned(),
         },
     );
@@ -2336,7 +2337,7 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
             attributes: HashMap::new(),
             object_size: 0,
             methods: base_methods,
-            prototype_size: 24,
+            prototype_size: OBJECT_PROTOTYPE_SIZE,
         },
     );
     let mut global_offset = 0;
@@ -2348,7 +2349,7 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
             size: 0,
             attributes: vec![],
             methods: std::iter::once((
-                16,
+                PROTOTYPE_INIT_OFFSET,
                 (
                     "__init__".to_owned(),
                     MethodDebug {
@@ -2464,8 +2465,10 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
         chunks.push(gen_dtor(&class_name, &class_slot, platform));
 
         let mut prototype = vec![0; class_slot.prototype_size as usize];
-        prototype[0..4].copy_from_slice(&class_slot.object_size.to_le_bytes());
-        // prototype[4..8] is type tag fill with 0
+        prototype[PROTOTYPE_SIZE_OFFSET as usize..][..4]
+            .copy_from_slice(&class_slot.object_size.to_le_bytes());
+        prototype[PROTOTYPE_TAG_OFFSET as usize..][..4]
+            .copy_from_slice(&(TypeTag::Other as i32).to_le_bytes());
         let links = class_slot
             .methods
             .iter()
@@ -2490,25 +2493,40 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
     chunks.push(gen_input(platform));
     chunks.push(gen_print(platform));
 
-    chunks.push(gen_special_proto(INT_PROTOTYPE, 4, 1, "object.$dtor"));
-    chunks.push(gen_special_proto(BOOL_PROTOTYPE, 1, 2, "object.$dtor"));
-    chunks.push(gen_special_proto(STR_PROTOTYPE, -1, 3, "object.$dtor"));
+    chunks.push(gen_special_proto(
+        INT_PROTOTYPE,
+        4,
+        TypeTag::Int,
+        "object.$dtor",
+    ));
+    chunks.push(gen_special_proto(
+        BOOL_PROTOTYPE,
+        1,
+        TypeTag::Bool,
+        "object.$dtor",
+    ));
+    chunks.push(gen_special_proto(
+        STR_PROTOTYPE,
+        -1,
+        TypeTag::Str,
+        "object.$dtor",
+    ));
     chunks.push(gen_special_proto(
         INT_LIST_PROTOTYPE,
         -4,
-        -1,
+        TypeTag::List,
         "object.$dtor",
     ));
     chunks.push(gen_special_proto(
         BOOL_LIST_PROTOTYPE,
         -1,
-        -1,
+        TypeTag::List,
         "object.$dtor",
     ));
     chunks.push(gen_special_proto(
         OBJECT_LIST_PROTOTYPE,
         -8,
-        -1,
+        TypeTag::List,
         "[object].$dtor",
     ));
 

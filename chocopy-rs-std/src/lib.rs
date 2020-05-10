@@ -1,39 +1,10 @@
+use chocopy_rs_common::*;
 use std::alloc::*;
 use std::mem::*;
 use std::process::exit;
 use std::sync::atomic::*;
 
 static ALLOC_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-#[repr(i32)]
-pub enum TypeTag {
-    Other = 0,
-    Int = 1,
-    Bool = 2,
-    Str = 3,
-    List = -1,
-}
-
-#[repr(C)]
-pub struct Prototype {
-    size: i32,
-    tag: TypeTag,
-    dtor: unsafe extern "C" fn(*mut Object),
-    // followed by other method pointers
-}
-
-#[repr(C)]
-pub struct Object {
-    prototype: *const Prototype,
-    ref_count: u64,
-    // followed by attributes
-}
-
-#[repr(C)]
-pub struct ArrayObject {
-    object: Object,
-    len: u64,
-}
 
 fn align_up(size: usize) -> usize {
     let unit = 8;

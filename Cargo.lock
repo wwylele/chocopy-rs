@@ -7,12 +7,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d2e7343e7fc9de883d1b0341e0b13970f764c14101234857d2ddafa1cb1cac2"
 
 [[package]]
-name = "arrayvec"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cff77d8686867eceff3105329d4698d96c2391c176d5d03adc90c7389162b5b8"
-
-[[package]]
 name = "autocfg"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -68,6 +62,7 @@ name = "chocopy-rs"
 version = "0.1.0"
 dependencies = [
  "cc",
+ "chocopy-rs-common",
  "enum_dispatch",
  "getopts",
  "gimli",
@@ -80,8 +75,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "chocopy-rs-common"
+version = "0.1.0"
+
+[[package]]
 name = "chocopy-rs-std"
 version = "0.1.0"
+dependencies = [
+ "chocopy-rs-common",
+]
 
 [[package]]
 name = "chocopy-rs-tester"
@@ -170,13 +172,10 @@ dependencies = [
 [[package]]
 name = "gimli"
 version = "0.20.0"
-source = "git+https://github.com/gimli-rs/gimli#f346d6fe5434ae3fde26f4c1bf3ff31760690667"
+source = "git+https://github.com/gimli-rs/gimli#be9ea4e340cdb3b8aa9daaffb768c3d12964c2ca"
 dependencies = [
- "arrayvec",
- "byteorder",
  "fallible-iterator",
  "indexmap",
- "smallvec",
  "stable_deref_trait",
 ]
 
@@ -224,7 +223,7 @@ dependencies = [
 [[package]]
 name = "object"
 version = "0.18.0"
-source = "git+https://github.com/gimli-rs/object#fc6b9b93f6a3619863852db1aaa387c37466435b"
+source = "git+https://github.com/gimli-rs/object#5034c02dcf9d930acf411773c5da30be12736e96"
 dependencies = [
  "crc32fast",
  "flate2",
@@ -317,18 +316,18 @@ checksum = "ed3d612bc64430efeb3f7ee6ef26d590dce0c43249217bddc62112540c7941e1"
 
 [[package]]
 name = "serde"
-version = "1.0.106"
+version = "1.0.110"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36df6ac6412072f67cf767ebbde4133a5b2e88e76dc6187fa7104cd16f783399"
+checksum = "99e7b308464d16b56eba9964e4972a3eee817760ab60d88c3f86e1fecb08204c"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.106"
+version = "1.0.110"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e549e3abf4fb8621bd1609f11dfc9f5e50320802273b12f3811a67e6716ea6c"
+checksum = "818fbf6bfa9a42d3bfcaca148547aa00c7b915bec71d1757aa2d44ca68771984"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -337,20 +336,14 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.52"
+version = "1.0.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7894c8ed05b7a3a279aeb79025fdec1d3158080b75b98a08faf2806bb799edd"
+checksum = "993948e75b189211a9b31a7528f950c6adc21f9720b6438ff80a7fa2f864cea2"
 dependencies = [
  "itoa",
  "ryu",
  "serde",
 ]
-
-[[package]]
-name = "smallvec"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7cb5678e1615754284ec264d9bb5b4c27d2018577fd90ac0ceb578591ed5ee4"
 
 [[package]]
 name = "stable_deref_trait"
