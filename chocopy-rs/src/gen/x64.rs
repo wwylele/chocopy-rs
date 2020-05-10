@@ -287,8 +287,8 @@ impl<'a> Emitter<'a> {
         // mov rcx,[rbp+{}]
         self.emit_with_stack(&[0x48, 0x8B, 0x8D], &value);
         self.free_stack(value);
-        // mov DWORD PTR [rax+0x10],ecx
-        self.emit(&[0x89, 0x48, 0x10]);
+        // mov DWORD PTR [rax+OBJECT_ATTRIBUTE_OFFSET],ecx
+        self.emit(&[0x89, 0x48, OBJECT_ATTRIBUTE_OFFSET as u8]);
     }
 
     pub fn emit_box_bool(&mut self) {
@@ -301,8 +301,8 @@ impl<'a> Emitter<'a> {
         // mov rcx,[rbp+{}]
         self.emit_with_stack(&[0x48, 0x8B, 0x8D], &value);
         self.free_stack(value);
-        // mov BYTE PTR [rax+0x10],cl
-        self.emit(&[0x88, 0x48, 0x10]);
+        // mov BYTE PTR [rax+OBJECT_ATTRIBUTE_OFFSET],cl
+        self.emit(&[0x88, 0x48, OBJECT_ATTRIBUTE_OFFSET as u8]);
     }
 
     pub fn emit_drop(&mut self) {
@@ -360,8 +360,8 @@ impl<'a> Emitter<'a> {
         self.emit(&(s.len() as u32).to_le_bytes());
         self.call_builtin_alloc(STR_PROTOTYPE);
         if !s.is_empty() {
-            // lea rdi,[rax+24]
-            self.emit(&[0x48, 0x8D, 0x78, 0x18]);
+            // lea rdi,[rax+ARRAY_ELEMENT_OFFSET]
+            self.emit(&[0x48, 0x8D, 0x78, ARRAY_ELEMENT_OFFSET as u8]);
             // lea rsi,[rip+{STR}]
             self.emit(&[0x48, 0x8d, 0x35]);
             self.links.push(ChunkLink {
@@ -387,8 +387,8 @@ impl<'a> Emitter<'a> {
 
     pub fn emit_string_add(&mut self, expr: &BinaryExpr) {
         self.emit_expression(&expr.left);
-        // mov rsi,QWORD PTR [rax+0x10]
-        self.emit(&[0x48, 0x8B, 0x70, 0x10]);
+        // mov rsi,QWORD PTR [rax+ARRAY_LEN_OFFSET]
+        self.emit(&[0x48, 0x8B, 0x70, ARRAY_LEN_OFFSET as u8]);
         let left = self.alloc_stack(TicketType::Reference);
         let left_len = self.alloc_stack(TicketType::Plain);
         // mov [rbp+{}],rax
@@ -400,8 +400,8 @@ impl<'a> Emitter<'a> {
         // mov rsi,[rbp+{}]
         self.emit_with_stack(&[0x48, 0x8B, 0xB5], &left_len);
         self.free_stack(left_len);
-        // add rsi,QWORD PTR [rax+0x10]
-        self.emit(&[0x48, 0x03, 0x70, 0x10]);
+        // add rsi,QWORD PTR [rax+ARRAY_LEN_OFFSET]
+        self.emit(&[0x48, 0x03, 0x70, ARRAY_LEN_OFFSET as u8]);
         let right = self.alloc_stack(TicketType::Reference);
         // mov [rbp+{}],rax
         self.emit_with_stack(&[0x48, 0x89, 0x85], &right);
@@ -413,11 +413,11 @@ impl<'a> Emitter<'a> {
         self.emit_with_stack(&[0x4C, 0x8B, 0x95], &left);
 
         /*
-        lea rdi,[rax+24]
-        mov rcx,[r10+16]
+        lea rdi,[rax+ARRAY_ELEMENT_OFFSET]
+        mov rcx,[r10+ARRAY_LEN_OFFSET]
         test rcx,rcx
         je skip1
-        lea rsi,[r10+24]
+        lea rsi,[r10+ARRAY_ELEMENT_OFFSET]
         loop1:
         mov dl,[rsi]
         mov [rdi],dl
@@ -425,10 +425,10 @@ impl<'a> Emitter<'a> {
         inc rdi
         loop loop1
         skip1:
-        mov rcx,[r11+16]
+        mov rcx,[r11+ARRAY_LEN_OFFSET]
         test rcx,rcx
         je skip2
-        lea rsi,[r11+24]
+        lea rsi,[r11+ARRAY_ELEMENT_OFFSET]
         loop2:
         mov dl,[rsi]
         mov [rdi],dl
@@ -437,10 +437,14 @@ impl<'a> Emitter<'a> {
         loop loop2
         skip2:
         */
+        #[rustfmt::skip]
         self.emit(&[
-            0x48, 0x8D, 0x78, 0x18, 0x49, 0x8B, 0x4A, 0x10, 0x48, 0x85, 0xC9, 0x74, 0x10, 0x49,
-            0x8D, 0x72, 0x18, 0x8A, 0x16, 0x88, 0x17, 0x48, 0xFF, 0xC6, 0x48, 0xFF, 0xC7, 0xE2,
-            0xF4, 0x49, 0x8B, 0x4B, 0x10, 0x48, 0x85, 0xC9, 0x74, 0x10, 0x49, 0x8D, 0x73, 0x18,
+            0x48, 0x8D, 0x78, ARRAY_ELEMENT_OFFSET as u8,
+            0x49, 0x8B, 0x4A, ARRAY_LEN_OFFSET as u8,
+            0x48, 0x85, 0xC9, 0x74, 0x10, 0x49, 0x8D, 0x72, ARRAY_ELEMENT_OFFSET as u8,
+            0x8A, 0x16, 0x88, 0x17, 0x48, 0xFF, 0xC6, 0x48, 0xFF, 0xC7, 0xE2, 0xF4, 0x49, 0x8B, 0x4B,
+            ARRAY_LEN_OFFSET as u8, 0x48, 0x85, 0xC9, 0x74, 0x10, 0x49, 0x8D, 0x73,
+            ARRAY_ELEMENT_OFFSET as u8,
             0x8A, 0x16, 0x88, 0x17, 0x48, 0xFF, 0xC6, 0x48, 0xFF, 0xC7, 0xE2, 0xF4,
         ]);
 
@@ -465,15 +469,15 @@ impl<'a> Emitter<'a> {
         // rax: destintion buffer
         // rsi: source list object
 
-        // mov rcx,[rsi+16]
-        self.emit(&[0x48, 0x8B, 0x4E, 0x10]);
+        // mov rcx,[rsi+ARRAY_LEN_OFFSET]
+        self.emit(&[0x48, 0x8B, 0x4E, ARRAY_LEN_OFFSET as u8]);
         // test rcx,rcx
         self.emit(&[0x48, 0x85, 0xC9]);
         // je skip
         self.emit(&[0x0F, 0x84]);
         let skip = self.jump_from();
-        // add rsi,24
-        self.emit(&[0x48, 0x83, 0xC6, 0x18]);
+        // add rsi,ARRAY_ELEMENT_OFFSET
+        self.emit(&[0x48, 0x83, 0xC6, ARRAY_ELEMENT_OFFSET as u8]);
         let loop_pos = self.jump_to();
 
         let dest = self.alloc_stack(TicketType::Plain);
@@ -556,8 +560,8 @@ impl<'a> Emitter<'a> {
 
         self.emit_expression(&expr.left);
         self.emit_check_none();
-        // mov rsi,QWORD PTR [rax+0x10]
-        self.emit(&[0x48, 0x8B, 0x70, 0x10]);
+        // mov rsi,QWORD PTR [rax+ARRAY_LEN_OFFSET]
+        self.emit(&[0x48, 0x8B, 0x70, ARRAY_LEN_OFFSET as u8]);
         let left = self.alloc_stack(TicketType::Reference);
         // mov [rbp+{}],rax
         self.emit_with_stack(&[0x48, 0x89, 0x85], &left);
@@ -569,8 +573,8 @@ impl<'a> Emitter<'a> {
         // mov rsi,[rbp+{}]
         self.emit_with_stack(&[0x48, 0x8B, 0xB5], &left_size);
         self.free_stack(left_size);
-        // add rsi,QWORD PTR [rax+0x10]
-        self.emit(&[0x48, 0x03, 0x70, 0x10]);
+        // add rsi,QWORD PTR [rax+ARRAY_LEN_OFFSET]
+        self.emit(&[0x48, 0x03, 0x70, ARRAY_LEN_OFFSET as u8]);
         let right = self.alloc_stack(TicketType::Reference);
         // mov [rbp+{}],rax
         self.emit_with_stack(&[0x48, 0x89, 0x85], &right);
@@ -578,8 +582,8 @@ impl<'a> Emitter<'a> {
         let result = self.alloc_stack(TicketType::Reference);
         // mov [rbp+{}],rax
         self.emit_with_stack(&[0x48, 0x89, 0x85], &result);
-        // add rax,24
-        self.emit(&[0x48, 0x83, 0xC0, 0x18]);
+        // add rax,ARRAY_ELEMENT_OFFSET
+        self.emit(&[0x48, 0x83, 0xC0, ARRAY_ELEMENT_OFFSET as u8]);
 
         // mov rsi,[rbp+{}]
         self.emit_with_stack(&[0x48, 0x8B, 0xB5], &left);
@@ -622,14 +626,14 @@ impl<'a> Emitter<'a> {
         self.emit_with_stack(&[0x4C, 0x8B, 0x9D], &left);
 
         /*
-        mov rcx,[rax+16]
-        mov rdx,[r11+16]
+        mov rcx,[rax+ARRAY_LEN_OFFSET]
+        mov rdx,[r11+ARRAY_LEN_OFFSET]
         cmp rcx,rdx
         jne not_equal
         test rcx,rcx
         je equal
-        lea rdi,[rax+24]
-        lea rsi,[r11+24]
+        lea rdi,[rax+ARRAY_ELEMENT_OFFSET]
+        lea rsi,[r11+ARRAY_ELEMENT_OFFSET]
         lo:
         mov dl,[rdi]
         cmp dl,[rsi]
@@ -644,11 +648,16 @@ impl<'a> Emitter<'a> {
         xor rdx,rdx
         finish:
         */
+        #[rustfmt::skip]
         self.emit(&[
-            0x48, 0x8B, 0x48, 0x10, 0x49, 0x8B, 0x53, 0x10, 0x48, 0x39, 0xD1, 0x75, 0x24, 0x48,
-            0x85, 0xC9, 0x74, 0x16, 0x48, 0x8D, 0x78, 0x18, 0x49, 0x8D, 0x73, 0x18, 0x8A, 0x17,
-            0x3A, 0x16, 0x75, 0x11, 0x48, 0xFF, 0xC7, 0x48, 0xFF, 0xC6, 0xE2, 0xF2, 0x48, 0xC7,
-            0xC2, 0x01, 0x00, 0x00, 0x00, 0xEB, 0x03, 0x48, 0x31, 0xD2,
+            0x48, 0x8B, 0x48, ARRAY_LEN_OFFSET as u8,
+            0x49, 0x8B, 0x53, ARRAY_LEN_OFFSET as u8,
+            0x48, 0x39, 0xD1, 0x75, 0x24, 0x48, 0x85, 0xC9, 0x74, 0x16,
+            0x48, 0x8D, 0x78, ARRAY_ELEMENT_OFFSET as u8,
+            0x49, 0x8D, 0x73, ARRAY_ELEMENT_OFFSET as u8,
+            0x8A, 0x17, 0x3A, 0x16, 0x75, 0x11, 0x48, 0xFF, 0xC7, 0x48,
+            0xFF, 0xC6, 0xE2, 0xF2, 0x48, 0xC7, 0xC2, 0x01, 0x00, 0x00, 0x00,
+            0xEB, 0x03, 0x48, 0x31, 0xD2
         ]);
 
         if expr.operator == BinaryOp::Ne {
@@ -873,7 +882,7 @@ impl<'a> Emitter<'a> {
                     "int" | "bool" | "str" | "<None>" | "<Empty>"
                 ) {
                     assert!(name == "__init__");
-                    16
+                    PROTOTYPE_INIT_OFFSET
                 } else {
                     self.classes()[&c.class_name].methods[name].offset
                 }
@@ -925,18 +934,18 @@ impl<'a> Emitter<'a> {
         // mov r11,[rbp+{}]
         self.emit_with_stack(&[0x4C, 0x8B, 0x9D], &list);
         self.free_stack(list);
-        // cmp rsi,[r11+16]
-        self.emit(&[0x49, 0x3B, 0x73, 0x10]);
+        // cmp rsi,[r11+ARRAY_LEN_OFFSET]
+        self.emit(&[0x49, 0x3B, 0x73, ARRAY_LEN_OFFSET as u8]);
         // jb
         self.emit(&[0x0F, 0x82]);
         let ok = self.jump_from();
         self.prepare_call(self.platform.stack_reserve());
         self.call(BUILTIN_OUT_OF_BOUND);
         self.to_here(ok);
-        // mov r10b,[r11+rsi+24]
-        self.emit(&[0x45, 0x8A, 0x54, 0x33, 0x18]);
-        // mov [rax+24],r10b
-        self.emit(&[0x44, 0x88, 0x50, 0x18]);
+        // mov r10b,[r11+rsi+ARRAY_ELEMENT_OFFSET]
+        self.emit(&[0x45, 0x8A, 0x54, 0x33, ARRAY_ELEMENT_OFFSET as u8]);
+        // mov [rax+ARRAY_ELEMENT_OFFSET],r10b
+        self.emit(&[0x44, 0x88, 0x50, ARRAY_ELEMENT_OFFSET as u8]);
         let result = self.alloc_stack(TicketType::Reference);
         // mov [rbp+{}],rax
         self.emit_with_stack(&[0x48, 0x89, 0x85], &result);
@@ -966,8 +975,8 @@ impl<'a> Emitter<'a> {
             panic!()
         };
 
-        // cmp rax,[rsi+16]
-        self.emit(&[0x48, 0x3B, 0x46, 0x10]);
+        // cmp rax,[rsi+ARRAY_LEN_OFFSET]
+        self.emit(&[0x48, 0x3B, 0x46, ARRAY_LEN_OFFSET as u8]);
         // jb
         self.emit(&[0x0F, 0x82]);
         let ok = self.jump_from();
@@ -976,14 +985,14 @@ impl<'a> Emitter<'a> {
         self.to_here(ok);
 
         if element_type == &*TYPE_INT {
-            // mov eax,[rsi+rax*4+24]
-            self.emit(&[0x8B, 0x44, 0x86, 0x18]);
+            // mov eax,[rsi+rax*4+ARRAY_ELEMENT_OFFSET]
+            self.emit(&[0x8B, 0x44, 0x86, ARRAY_ELEMENT_OFFSET as u8]);
         } else if element_type == &*TYPE_BOOL {
-            // mov al,[rsi+rax+24]
-            self.emit(&[0x8A, 0x44, 0x06, 0x18]);
+            // mov al,[rsi+rax+ARRAY_ELEMENT_OFFSET]
+            self.emit(&[0x8A, 0x44, 0x06, ARRAY_ELEMENT_OFFSET as u8]);
         } else {
-            // mov rax,[rsi+rax*8+24]
-            self.emit(&[0x48, 0x8B, 0x44, 0xC6, 0x18]);
+            // mov rax,[rsi+rax*8+ARRAY_ELEMENT_OFFSET]
+            self.emit(&[0x48, 0x8B, 0x44, 0xC6, ARRAY_ELEMENT_OFFSET as u8]);
             self.emit_clone();
         }
 
@@ -1121,15 +1130,15 @@ impl<'a> Emitter<'a> {
             if element_type == &*TYPE_INT {
                 // mov [rdi+{}],eax
                 self.emit(&[0x89, 0x87]);
-                self.emit(&((i * 4 + 24) as u32).to_le_bytes());
+                self.emit(&((i * 4) as u32 + ARRAY_ELEMENT_OFFSET).to_le_bytes());
             } else if element_type == &*TYPE_BOOL {
                 // mov [rdi+{}],al
                 self.emit(&[0x88, 0x87]);
-                self.emit(&((i + 24) as u32).to_le_bytes());
+                self.emit(&(i as u32 + ARRAY_ELEMENT_OFFSET).to_le_bytes());
             } else {
                 // mov [rdi+{}],rax
                 self.emit(&[0x48, 0x89, 0x87]);
-                self.emit(&((i * 8 + 24) as u32).to_le_bytes());
+                self.emit(&((i * 8) as u32 + ARRAY_ELEMENT_OFFSET).to_le_bytes());
             }
         }
 
@@ -1374,8 +1383,8 @@ impl<'a> Emitter<'a> {
                     // mov rsi,[rbp+{}]
                     self.emit_with_stack(&[0x48, 0x8B, 0xB5], &list);
 
-                    // cmp rax,[rsi+16]
-                    self.emit(&[0x48, 0x3B, 0x46, 0x10]);
+                    // cmp rax,[rsi+ARRAY_LEN_OFFSET]
+                    self.emit(&[0x48, 0x3B, 0x46, ARRAY_LEN_OFFSET as u8]);
                     // jb
                     self.emit(&[0x0F, 0x82]);
                     let ok = self.jump_from();
@@ -1385,18 +1394,18 @@ impl<'a> Emitter<'a> {
 
                     let dest = self.alloc_stack(TicketType::Plain);
                     if target_type == &*TYPE_INT {
-                        // lea rsi,[rsi+rax*4+24]
-                        self.emit(&[0x48, 0x8D, 0x74, 0x86, 0x18]);
+                        // lea rsi,[rsi+rax*4+ARRAY_ELEMENT_OFFSET]
+                        self.emit(&[0x48, 0x8D, 0x74, 0x86, ARRAY_ELEMENT_OFFSET as u8]);
                         // mov [rbp+{}],rsi
                         self.emit_with_stack(&[0x48, 0x89, 0xB5], &dest);
                     } else if target_type == &*TYPE_BOOL {
-                        // lea rsi,[rsi+rax+24]
-                        self.emit(&[0x48, 0x8D, 0x74, 0x06, 0x18]);
+                        // lea rsi,[rsi+rax+ARRAY_ELEMENT_OFFSET]
+                        self.emit(&[0x48, 0x8D, 0x74, 0x06, ARRAY_ELEMENT_OFFSET as u8]);
                         // mov [rbp+{}],rsi
                         self.emit_with_stack(&[0x48, 0x89, 0xB5], &dest);
                     } else {
-                        // lea rsi,[rsi+rax*8+24]
-                        self.emit(&[0x48, 0x8D, 0x74, 0xC6, 0x18]);
+                        // lea rsi,[rsi+rax*8+ARRAY_ELEMENT_OFFSET]
+                        self.emit(&[0x48, 0x8D, 0x74, 0xC6, ARRAY_ELEMENT_OFFSET as u8]);
                         // mov rax,[rsi]
                         self.emit(&[0x48, 0x8B, 0x06]);
                         // mov [rbp+{}],rsi
@@ -1503,8 +1512,8 @@ impl<'a> Emitter<'a> {
         //// Check the index range
         // mov rsi,[rbp+{}]
         self.emit_with_stack(&[0x48, 0x8B, 0xB5], &list);
-        // cmp rax,[rsi+16]
-        self.emit(&[0x48, 0x3B, 0x46, 0x10]);
+        // cmp rax,[rsi+ARRAY_LEN_OFFSET]
+        self.emit(&[0x48, 0x3B, 0x46, ARRAY_LEN_OFFSET as u8]);
         // je
         self.emit(&[0x0f, 0x84]);
         let end = self.jump_from();
@@ -1524,10 +1533,10 @@ impl<'a> Emitter<'a> {
             self.emit_with_stack(&[0x48, 0x8B, 0xB5], &counter);
             // mov r11,[rbp+{}]
             self.emit_with_stack(&[0x4C, 0x8B, 0x9D], &list);
-            // mov r10b,[r11+rsi+24]
-            self.emit(&[0x45, 0x8A, 0x54, 0x33, 0x18]);
-            // mov [rax+24],r10b
-            self.emit(&[0x44, 0x88, 0x50, 0x18]);
+            // mov r10b,[r11+rsi+ARRAY_ELEMENT_OFFSET]
+            self.emit(&[0x45, 0x8A, 0x54, 0x33, ARRAY_ELEMENT_OFFSET as u8]);
+            // mov [rax+ARRAY_ELEMENT_OFFSET],r10b
+            self.emit(&[0x44, 0x88, 0x50, ARRAY_ELEMENT_OFFSET as u8]);
 
             source_type = &*TYPE_STR;
         } else {
@@ -1538,14 +1547,14 @@ impl<'a> Emitter<'a> {
             };
 
             if element_type == &*TYPE_INT {
-                // mov eax,[rsi+rax*4+24]
-                self.emit(&[0x8B, 0x44, 0x86, 0x18]);
+                // mov eax,[rsi+rax*4+ARRAY_ELEMENT_OFFSET]
+                self.emit(&[0x8B, 0x44, 0x86, ARRAY_ELEMENT_OFFSET as u8]);
             } else if element_type == &*TYPE_BOOL {
-                // mov al,[rsi+rax+24]
-                self.emit(&[0x8A, 0x44, 0x06, 0x18]);
+                // mov al,[rsi+rax+ARRAY_ELEMENT_OFFSET]
+                self.emit(&[0x8A, 0x44, 0x06, ARRAY_ELEMENT_OFFSET as u8]);
             } else {
-                // mov rax,[rsi+rax*8+24]
-                self.emit(&[0x48, 0x8B, 0x44, 0xC6, 0x18]);
+                // mov rax,[rsi+rax*8+ARRAY_ELEMENT_OFFSET]
+                self.emit(&[0x48, 0x8B, 0x44, 0xC6, ARRAY_ELEMENT_OFFSET as u8]);
                 self.emit_clone();
             }
 
