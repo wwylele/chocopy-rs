@@ -1,5 +1,4 @@
-use gimli::write::*;
-use gimli::*;
+use gimli::{write::*, *};
 
 #[derive(Clone)]
 pub struct DwarfReloc {
@@ -25,7 +24,7 @@ pub struct DwarfWriter {
 impl DwarfWriter {
     pub fn new() -> DwarfWriter {
         DwarfWriter {
-            inner: EndianVec::new(gimli::LittleEndian),
+            inner: EndianVec::new(LittleEndian),
             relocs: vec![],
             self_relocs: vec![],
         }
@@ -48,14 +47,14 @@ impl Writer for DwarfWriter {
     fn len(&self) -> usize {
         self.inner.len()
     }
-    fn write(&mut self, bytes: &[u8]) -> gimli::write::Result<()> {
+    fn write(&mut self, bytes: &[u8]) -> Result<()> {
         self.inner.write(bytes)
     }
-    fn write_at(&mut self, offset: usize, bytes: &[u8]) -> gimli::write::Result<()> {
+    fn write_at(&mut self, offset: usize, bytes: &[u8]) -> Result<()> {
         self.inner.write_at(offset, bytes)
     }
 
-    fn write_address(&mut self, address: Address, size: u8) -> gimli::write::Result<()> {
+    fn write_address(&mut self, address: Address, size: u8) -> Result<()> {
         match address {
             Address::Symbol { symbol, addend } => {
                 self.relocs.push(DwarfReloc {
@@ -75,7 +74,7 @@ impl Writer for DwarfWriter {
         address: Address,
         eh_pe: constants::DwEhPe,
         size: u8,
-    ) -> gimli::write::Result<()> {
+    ) -> Result<()> {
         match address {
             Address::Symbol { symbol, addend } => {
                 self.relocs.push(DwarfReloc {
@@ -90,16 +89,7 @@ impl Writer for DwarfWriter {
         }
     }
 
-    /// Write an offset that is relative to the start of the given section.
-    ///
-    /// If the writer supports relocations, then it must provide its own implementation
-    /// of this method.
-    fn write_offset(
-        &mut self,
-        val: usize,
-        section: SectionId,
-        size: u8,
-    ) -> gimli::write::Result<()> {
+    fn write_offset(&mut self, val: usize, section: SectionId, size: u8) -> Result<()> {
         self.self_relocs.push(DwarfSelfReloc {
             offset: self.inner.len(),
             size,
@@ -108,17 +98,13 @@ impl Writer for DwarfWriter {
         self.inner.write_offset(val, section, size)
     }
 
-    /// Write an offset that is relative to the start of the given section.
-    ///
-    /// If the writer supports relocations, then it must provide its own implementation
-    /// of this method.
     fn write_offset_at(
         &mut self,
         offset: usize,
         val: usize,
         section: SectionId,
         size: u8,
-    ) -> gimli::write::Result<()> {
+    ) -> Result<()> {
         self.self_relocs.push(DwarfSelfReloc {
             offset,
             size,

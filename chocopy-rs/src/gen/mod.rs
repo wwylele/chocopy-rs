@@ -7,10 +7,7 @@ mod x64;
 use crate::local_env::*;
 use crate::node::*;
 use debug::*;
-use object::{
-    write::*, Architecture, BinaryFormat, Endianness, RelocationEncoding, RelocationKind,
-    SectionKind, SymbolFlags, SymbolKind, SymbolScope,
-};
+use object::{write::*, *};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::convert::*;

@@ -88,9 +88,22 @@ impl StackTicket {
 
 #[derive(PartialEq, Eq)]
 enum TicketType {
-    Unknown,
     Plain,
     Reference,
+}
+
+impl ValueType {
+    fn is_plain(&self) -> bool {
+        *self == *TYPE_INT || *self == *TYPE_BOOL
+    }
+
+    fn ticket_type(&self) -> TicketType {
+        if self.is_plain() {
+            TicketType::Plain
+        } else {
+            TicketType::Reference
+        }
+    }
 }
 
 impl<'a> Emitter<'a> {
@@ -189,7 +202,8 @@ impl<'a> Emitter<'a> {
 
     pub fn end_proc(&mut self) {
         if !self.clean_up_list.is_empty() {
-            let return_value = self.alloc_stack(TicketType::Unknown);
+            // TicketType::Plain here to avoid polluting clean_up_list
+            let return_value = self.alloc_stack(TicketType::Plain);
             // mov [rbp+{}],rax
             self.emit_with_stack(&[0x48, 0x89, 0x85], &return_value);
             for offset in self.clean_up_list.clone() {
@@ -711,7 +725,7 @@ impl<'a> Emitter<'a> {
             self.to_here(skip);
         } else {
             self.emit_expression(&expr.left);
-            let left = self.alloc_stack(TicketType::Unknown);
+            let left = self.alloc_stack(expr.left.get_type().ticket_type());
             // mov [rbp+{}],rax
             self.emit_with_stack(&[0x48, 0x89, 0x85], &left);
             self.emit_expression(&expr.right);
@@ -859,7 +873,7 @@ impl<'a> Emitter<'a> {
                 self.emit_check_none();
             }
 
-            let arg_stack = self.alloc_stack(TicketType::Unknown);
+            let arg_stack = self.alloc_stack(param_type.ticket_type());
             // mov [rbp+{}],rax
             self.emit_with_stack(&[0x48, 0x89, 0x85], &arg_stack);
             args_stack.push(arg_stack);
@@ -996,7 +1010,7 @@ impl<'a> Emitter<'a> {
             self.emit_clone();
         }
 
-        let result = self.alloc_stack(TicketType::Unknown);
+        let result = self.alloc_stack(element_type.ticket_type());
         // mov [rbp+{}],rax
         self.emit_with_stack(&[0x48, 0x89, 0x85], &result);
         // mov rax,rsi
@@ -1034,7 +1048,7 @@ impl<'a> Emitter<'a> {
             self.emit_clone();
         }
 
-        let result = self.alloc_stack(TicketType::Unknown);
+        let result = self.alloc_stack(slot.target_type.ticket_type());
         // mov [rbp+{}],rax
         self.emit_with_stack(&[0x48, 0x89, 0x85], &result);
         // mov rax,rsi
@@ -1186,7 +1200,7 @@ impl<'a> Emitter<'a> {
                 self.emit(&[0x48, 0x8B, 0x80]);
                 self.emit(&offset.to_le_bytes());
             }
-            if target_type != &*TYPE_INT && target_type != &*TYPE_BOOL {
+            if !target_type.is_plain() {
                 self.emit_clone();
             }
         }
@@ -1332,7 +1346,7 @@ impl<'a> Emitter<'a> {
                 self.emit(&offset.to_le_bytes());
             }
 
-            if target_type != &*TYPE_INT && target_type != &*TYPE_BOOL {
+            if !target_type.is_plain() {
                 let dest = self.alloc_stack(TicketType::Plain);
                 let value = self.alloc_stack(TicketType::Reference);
                 // mov [rbp+{}],rdi
@@ -1357,7 +1371,7 @@ impl<'a> Emitter<'a> {
     pub fn emit_assign(&mut self, stmt: &AssignStmt) {
         let source_type = stmt.value.get_type();
         self.emit_expression(&stmt.value);
-        let value = self.alloc_stack(TicketType::Unknown);
+        let value = self.alloc_stack(source_type.ticket_type());
         // mov [rbp+{}],rax
         self.emit_with_stack(&[0x48, 0x89, 0x85], &value);
 
@@ -1367,7 +1381,7 @@ impl<'a> Emitter<'a> {
                 ExprContent::Variable(identifier) => {
                     // mov rax,[rbp+{}]
                     self.emit_with_stack(&[0x48, 0x8B, 0x85], &value);
-                    if source_type != &*TYPE_INT && source_type != &*TYPE_BOOL {
+                    if !source_type.is_plain() {
                         self.emit_clone();
                     }
 
@@ -1415,7 +1429,7 @@ impl<'a> Emitter<'a> {
 
                     // mov rax,[rbp+{}]
                     self.emit_with_stack(&[0x48, 0x8B, 0x85], &value);
-                    if source_type != &*TYPE_INT && source_type != &*TYPE_BOOL {
+                    if !source_type.is_plain() {
                         self.emit_clone();
                     }
                     self.emit_coerce(source_type, target_type);
@@ -1452,7 +1466,7 @@ impl<'a> Emitter<'a> {
                         panic!()
                     };
 
-                    if slot.target_type != *TYPE_INT && slot.target_type != *TYPE_BOOL {
+                    if !slot.target_type.is_plain() {
                         // mov rax,[rax+{}]
                         self.emit(&[0x48, 0x8B, 0x80]);
                         self.emit(&slot.offset.to_le_bytes());
@@ -1461,7 +1475,7 @@ impl<'a> Emitter<'a> {
 
                     // mov rax,[rbp+{}]
                     self.emit_with_stack(&[0x48, 0x8B, 0x85], &value);
-                    if source_type != &*TYPE_INT && source_type != &*TYPE_BOOL {
+                    if !source_type.is_plain() {
                         self.emit_clone();
                     }
                     self.emit_coerce(source_type, &slot.target_type);
@@ -1489,7 +1503,7 @@ impl<'a> Emitter<'a> {
             }
         }
 
-        if source_type != &*TYPE_INT && source_type != &*TYPE_BOOL {
+        if !source_type.is_plain() {
             // mov rax,[rbp+{}]
             self.emit_with_stack(&[0x48, 0x8B, 0x85], &value);
             self.emit_drop();
@@ -1595,7 +1609,7 @@ impl<'a> Emitter<'a> {
         match statement {
             Stmt::ExprStmt(e) => {
                 self.emit_expression(&e.expr);
-                if e.expr.get_type() != &*TYPE_INT && e.expr.get_type() != &*TYPE_BOOL {
+                if !e.expr.get_type().is_plain() {
                     self.emit_drop();
                 }
             }
@@ -1641,7 +1655,7 @@ impl<'a> Emitter<'a> {
 
         let target_type = ValueType::from_annotation(&decl.var.type_);
         self.emit_coerce(decl.value.get_type(), &target_type);
-        let local = self.alloc_stack(if target_type == *TYPE_INT || target_type == *TYPE_BOOL {
+        let local = self.alloc_stack(if target_type.is_plain() {
             TicketType::Plain
         } else {
             TicketType::Reference
@@ -1701,7 +1715,7 @@ impl<'a> Emitter<'a> {
             };
 
         let target_type = ValueType::from_annotation(&decl.var.type_);
-        if target_type != *TYPE_INT && target_type != *TYPE_BOOL {
+        if !target_type.is_plain() {
             // mov rax,[rip+{}]
             self.emit(&[0x48, 0x8B, 0x05]);
             self.emit_link(GLOBAL_SECTION, offset);
@@ -1741,7 +1755,7 @@ fn gen_function(
             }),
         );
         let param_type = ValueType::from_annotation(&param.type_);
-        if param_type != *TYPE_INT && param_type != *TYPE_BOOL {
+        if !param_type.is_plain() {
             clean_up_list.push(offset);
         }
 
@@ -1963,7 +1977,7 @@ fn gen_dtor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
         }
     }
     for attribute in class_slot.attributes.values() {
-        if attribute.target_type != *TYPE_INT && attribute.target_type != *TYPE_BOOL {
+        if !attribute.target_type.is_plain() {
             // mov rax,[rbp+{}]
             code.emit_with_stack(&[0x48, 0x8B, 0x85], &object);
             // mov rax,[rax+{}]

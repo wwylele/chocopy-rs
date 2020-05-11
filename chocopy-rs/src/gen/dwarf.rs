@@ -1,8 +1,7 @@
 use super::debug::*;
 use super::gimli_writer::*;
 use super::*;
-use gimli::constants::*;
-use gimli::write::*;
+use gimli::{constants::*, write::*, *};
 use std::collections::HashMap;
 
 fn dwarf_add_base_type(
@@ -111,8 +110,8 @@ impl Dwarf {
             DwarfFlavor::Linux => 4,
             DwarfFlavor::Macos => 2,
         };
-        let encoding = gimli::Encoding {
-            format: gimli::Format::Dwarf32,
+        let encoding = Encoding {
+            format: Format::Dwarf32,
             version,
             address_size: 8,
         };
@@ -120,7 +119,7 @@ impl Dwarf {
 
         dwarf.unit.line_program = LineProgram::new(
             encoding,
-            gimli::LineEncoding {
+            LineEncoding {
                 minimum_instruction_length: 1,
                 maximum_operations_per_instruction: 1,
                 default_is_stmt: true,
@@ -384,7 +383,7 @@ impl DebugWriter for Dwarf {
                 AttributeValue::Flag(procedure_debug.artificial),
             );
             let mut frame_base = Expression::new();
-            frame_base.op_reg(gimli::Register(6));
+            frame_base.op_reg(Register(6));
             sub_program.set(DW_AT_frame_base, AttributeValue::Exprloc(frame_base));
             sub_program.set(
                 DW_AT_type,
