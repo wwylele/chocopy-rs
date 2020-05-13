@@ -1,18 +1,20 @@
 use chocopy_rs_common::*;
-use std::alloc::*;
 use std::mem::*;
 use std::process::exit;
 use std::sync::atomic::*;
 
 static ALLOC_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-fn align_up(size: usize) -> usize {
-    let unit = 8;
-    let m = size % unit;
-    if m == 0 {
-        size
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+struct AllocUnit(u64);
+
+pub fn divide_up(value: usize) -> usize {
+    let align = size_of::<AllocUnit>();
+    if value == 0 {
+        0
     } else {
-        size + 8 - m
+        1 + (value - 1) / align
     }
 }
 
@@ -46,19 +48,15 @@ pub unsafe extern "C" fn dtor_list(pointer: *mut ArrayObject) {
 ///  - `prototype.dtor` points to a valid function.
 #[export_name = "$alloc_obj"]
 pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mut Object {
-    let size = align_up(if (*prototype).size > 0 {
+    let size = divide_up(if (*prototype).size > 0 {
         assert!(len == 0);
         size_of::<Object>() + (*prototype).size as usize
     } else {
         size_of::<ArrayObject>() + (-(*prototype).size as u64 * len) as usize
     });
 
-    let layout = Layout::from_size_align(size, align_of::<Object>()).unwrap();
-    #[allow(clippy::cast_ptr_alignment)] // I specified alignment here
-    let pointer = alloc(layout) as *mut Object;
-    if pointer.is_null() {
-        out_of_memory();
-    }
+    let pointer =
+        Box::into_raw(vec![AllocUnit(0); size].into_boxed_slice()) as *mut AllocUnit as *mut Object;
 
     let object = Object {
         prototype,
@@ -88,15 +86,17 @@ pub unsafe extern "C" fn free_obj(pointer: *mut Object) {
     assert!((*pointer).ref_count == 0);
     let prototype = (*pointer).prototype;
     ((*prototype).dtor)(pointer);
-    let size = align_up(if (*prototype).size > 0 {
+    let size = divide_up(if (*prototype).size > 0 {
         size_of::<Object>() + (*prototype).size as usize
     } else {
         let len = (*(pointer as *mut ArrayObject)).len;
         size_of::<ArrayObject>() + (-(*prototype).size as u64 * len) as usize
     });
 
-    let layout = Layout::from_size_align(size, align_of::<Object>()).unwrap();
-    dealloc(pointer as *mut u8, layout);
+    drop(Box::from_raw(std::slice::from_raw_parts_mut(
+        pointer as *mut AllocUnit,
+        size,
+    )));
 
     ALLOC_COUNTER.fetch_sub(1, Ordering::SeqCst);
 }
@@ -227,11 +227,6 @@ pub extern "C" fn out_of_bound() -> ! {
 pub extern "C" fn none_op() -> ! {
     println!("Operation on None");
     exit_code(4)
-}
-
-fn out_of_memory() -> ! {
-    println!("Out of memory");
-    exit_code(5)
 }
 
 #[cfg(not(test))]
