@@ -178,6 +178,26 @@ impl<'a> Emitter<'a> {
         self.emit(&ticket.offset.to_le_bytes());
     }
 
+    pub fn emit_ref_map(&mut self) {
+        let min_index = self.clean_up_list.iter().min().cloned().unwrap_or(0) / 8;
+        let max_index = self.clean_up_list.iter().max().cloned().unwrap_or(0) / 8;
+        let len = max_index - min_index + 1;
+        let mut ref_map = vec![0; 8 + (len as usize + 7) / 8];
+        ref_map[0..4].copy_from_slice(&min_index.to_le_bytes());
+        ref_map[4..8].copy_from_slice(&max_index.to_le_bytes());
+        for &offset in &self.clean_up_list {
+            let index = (offset / 8 - min_index) as usize;
+            ref_map[8 + index / 8] |= 1 << (index % 8);
+        }
+
+        self.emit(&[0x0F, 0x18, 0x05]);
+        self.links.push(ChunkLink {
+            pos: self.pos(),
+            to: ChunkLinkTarget::Data(ref_map),
+        });
+        self.emit(&[0; 4]);
+    }
+
     pub fn jump_from(&mut self) -> ForwardJumper {
         let from = self.pos();
         self.emit(&[0; 4]);
@@ -278,6 +298,7 @@ impl<'a> Emitter<'a> {
         self.emit_link(prototype, 0);
         self.prepare_call(self.platform.stack_reserve());
         self.call(BUILTIN_ALLOC_OBJ);
+        self.emit_ref_map();
     }
 
     pub fn emit_check_none(&mut self) {
@@ -925,6 +946,7 @@ impl<'a> Emitter<'a> {
 
             self.call(&link_name);
         }
+        self.emit_ref_map();
     }
 
     pub fn emit_str_index(&mut self, expr: &IndexExpr) {
@@ -1898,6 +1920,7 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
     code.emit_link(class_name.to_owned() + ".$proto", 0);
 
     code.call(BUILTIN_ALLOC_OBJ);
+    code.emit_ref_map();
     let object = code.alloc_stack(TicketType::Reference);
     // mov [rbp+{}],rax
     code.emit_with_stack(&[0x48, 0x89, 0x85], &object);
@@ -1942,6 +1965,7 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
     // mov [rsp],rax
     code.emit(&[0x48, 0x89, 0x04, 0x24]);
     code.call_virtual(PROTOTYPE_INIT_OFFSET);
+    code.emit_ref_map();
 
     // mov rax,[rbp+{}]
     code.emit_with_stack(&[0x48, 0x8B, 0x85], &object);
@@ -2112,6 +2136,7 @@ fn gen_input(platform: Platform) -> Chunk {
     code.emit_link(STR_PROTOTYPE, 0);
     code.prepare_call(platform.stack_reserve());
     code.call(BUILTIN_INPUT);
+    code.emit_ref_map();
     code.end_proc();
     code.finalize(ProcedureDebug {
         decl_line: 0,
