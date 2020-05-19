@@ -2318,6 +2318,7 @@ fn gen_special_proto(name: &str, size: i32, tag: TypeTag, dtor: &str) -> Chunk {
     let mut code = vec![0; OBJECT_PROTOTYPE_SIZE as usize];
     code[PROTOTYPE_SIZE_OFFSET as usize..][..4].copy_from_slice(&size.to_le_bytes());
     code[PROTOTYPE_TAG_OFFSET as usize..][..4].copy_from_slice(&(tag as i32).to_le_bytes());
+    code[PROTOTYPE_MAP_OFFSET as usize..][..8].copy_from_slice(&(0u64).to_le_bytes());
     let links = vec![
         ChunkLink {
             pos: PROTOTYPE_DTOR_OFFSET as usize,
@@ -2492,7 +2493,8 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
             .copy_from_slice(&class_slot.object_size.to_le_bytes());
         prototype[PROTOTYPE_TAG_OFFSET as usize..][..4]
             .copy_from_slice(&(TypeTag::Other as i32).to_le_bytes());
-        let links = class_slot
+        prototype[PROTOTYPE_MAP_OFFSET as usize..][..8].copy_from_slice(&(0u64).to_le_bytes());
+        let mut links: Vec<ChunkLink> = class_slot
             .methods
             .iter()
             .map(|(_, method)| ChunkLink {
@@ -2500,6 +2502,17 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
                 to: ChunkLinkTarget::Symbol(method.link_name.clone()),
             })
             .collect();
+        let mut ref_map = vec![0u8; ((class_slot.object_size as usize / 8) + 7) / 8];
+        for attribute in class_slot.attributes.values() {
+            if !attribute.target_type.is_plain() {
+                let index = (attribute.offset - OBJECT_ATTRIBUTE_OFFSET) as usize / 8;
+                ref_map[index / 8] |= 1 << (index % 8);
+            }
+        }
+        links.push(ChunkLink {
+            pos: PROTOTYPE_MAP_OFFSET as usize,
+            to: ChunkLinkTarget::Data(ref_map),
+        });
         chunks.push(Chunk {
             name: class_name.clone() + ".$proto",
             code: prototype,

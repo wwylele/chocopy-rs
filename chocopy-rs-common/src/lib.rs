@@ -14,12 +14,14 @@ pub enum TypeTag {
 pub struct Prototype {
     pub size: i32,
     pub tag: TypeTag,
+    pub map: *const u8,
     pub dtor: unsafe extern "C" fn(*mut Object),
     // followed by other method pointers
 }
 pub const PROTOTYPE_SIZE_OFFSET: u32 = 0;
 pub const PROTOTYPE_TAG_OFFSET: u32 = PROTOTYPE_SIZE_OFFSET + 4;
-pub const PROTOTYPE_DTOR_OFFSET: u32 = PROTOTYPE_TAG_OFFSET + 4;
+pub const PROTOTYPE_MAP_OFFSET: u32 = PROTOTYPE_TAG_OFFSET + 4;
+pub const PROTOTYPE_DTOR_OFFSET: u32 = PROTOTYPE_MAP_OFFSET + FUNCTION_POINTER_SIZE;
 pub const PROTOTYPE_INIT_OFFSET: u32 = PROTOTYPE_DTOR_OFFSET + FUNCTION_POINTER_SIZE;
 pub const OBJECT_PROTOTYPE_SIZE: u32 = PROTOTYPE_INIT_OFFSET + FUNCTION_POINTER_SIZE;
 pub const PROTOTYPE_HEADER_MEMBER_COUNT: u32 = 3;
