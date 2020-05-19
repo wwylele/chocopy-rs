@@ -285,12 +285,20 @@ impl<'a> Emitter<'a> {
     pub fn call_builtin_alloc(&mut self, prototype: &str) {
         match self.platform {
             Platform::Windows => {
+                // mov r8,rbp
+                self.emit(&[0x49, 0x89, 0xE8]);
+                // mov r9,rsp
+                self.emit(&[0x49, 0x89, 0xE1]);
                 // mov rdx,rsi
                 self.emit(&[0x48, 0x89, 0xF2]);
                 // lea rcx,[rip+{_PROTOTYPE}]
                 self.emit(&[0x48, 0x8D, 0x0D]);
             }
             Platform::Linux | Platform::Macos => {
+                // mov rdx,rbp
+                self.emit(&[0x48, 0x89, 0xEA]);
+                // mov rcx,rsp
+                self.emit(&[0x48, 0x89, 0xE1]);
                 // lea rdi,[rip+{_PROTOTYPE}]
                 self.emit(&[0x48, 0x8D, 0x3D]);
             }
@@ -1905,12 +1913,20 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
     code.prepare_call(platform.stack_reserve());
     match platform {
         Platform::Windows => {
+            // mov r8,rbp
+            code.emit(&[0x49, 0x89, 0xE8]);
+            // mov r9,rsp
+            code.emit(&[0x49, 0x89, 0xE1]);
             // xor rdx,rdx
             code.emit(&[0x48, 0x31, 0xD2]);
             // lea rcx,[rip+{}]
             code.emit(&[0x48, 0x8D, 0x0D]);
         }
         Platform::Linux | Platform::Macos => {
+            // mov rdx,rbp
+            code.emit(&[0x48, 0x89, 0xEA]);
+            // mov rcx,rsp
+            code.emit(&[0x48, 0x89, 0xE1]);
             // xor rsi,rsi
             code.emit(&[0x48, 0x31, 0xF6]);
             // lea rdi,[rip+{}]
@@ -2130,8 +2146,22 @@ fn gen_len(platform: Platform) -> Chunk {
 fn gen_input(platform: Platform) -> Chunk {
     let mut code = Emitter::new_simple("input", platform);
     match platform {
-        Platform::Windows => code.emit(&[0x48, 0x8D, 0x0D]), // lea rcx,[rip+{}]
-        Platform::Linux | Platform::Macos => code.emit(&[0x48, 0x8D, 0x3D]), // lea rdi,[rip+{}]
+        Platform::Windows => {
+            // mov rdx,rbp
+            code.emit(&[0x48, 0x89, 0xEA]);
+            // mov r8,rsp
+            code.emit(&[0x49, 0x89, 0xE0]);
+            // lea rcx,[rip+{}]
+            code.emit(&[0x48, 0x8D, 0x0D]);
+        }
+        Platform::Linux | Platform::Macos => {
+            // mov rsi,rbp
+            code.emit(&[0x48, 0x89, 0xEE]);
+            // mov rdx,rsp
+            code.emit(&[0x48, 0x89, 0xE2]);
+            // lea rdi,[rip+{}]
+            code.emit(&[0x48, 0x8D, 0x3D]);
+        }
     }
     code.emit_link(STR_PROTOTYPE, 0);
     code.prepare_call(platform.stack_reserve());

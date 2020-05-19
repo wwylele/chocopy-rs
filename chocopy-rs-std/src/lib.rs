@@ -47,7 +47,12 @@ pub unsafe extern "C" fn dtor_list(pointer: *mut ArrayObject) {
 ///  - `prototype.tag` is Str or List if and only if `prototype.size < 0`.
 ///  - `prototype.dtor` points to a valid function.
 #[export_name = "$alloc_obj"]
-pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mut Object {
+pub unsafe extern "C" fn alloc_obj(
+    prototype: *const Prototype,
+    len: u64,
+    rbp: *const u64,
+    rsp: *const u64,
+) -> *mut Object {
     let size = divide_up(if (*prototype).size > 0 {
         assert!(len == 0);
         size_of::<Object>() + (*prototype).size as usize
@@ -180,7 +185,11 @@ pub unsafe extern "C" fn print(pointer: *mut Object) -> *mut u8 {
 ///  - `str_proto.tag == TypeTag::Str`.
 ///  - `str_proto.dtor` points to a no-op function.
 #[export_name = "$input"]
-pub unsafe extern "C" fn input(str_proto: *const Prototype) -> *mut Object {
+pub unsafe extern "C" fn input(
+    str_proto: *const Prototype,
+    rbp: *const u64,
+    rsp: *const u64,
+) -> *mut Object {
     let mut input = String::new();
     std::io::stdin().read_line(&mut input).unwrap();
     let input = input.as_bytes();
@@ -192,7 +201,7 @@ pub unsafe extern "C" fn input(str_proto: *const Prototype) -> *mut Object {
         len -= 1;
     }
     let len = len as u64;
-    let pointer = alloc_obj(str_proto, len);
+    let pointer = alloc_obj(str_proto, len, rbp, rsp);
     std::ptr::copy_nonoverlapping(
         input.as_ptr(),
         (pointer as *mut u8).add(size_of::<ArrayObject>()),
