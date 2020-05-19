@@ -1,5 +1,6 @@
 use super::debug::*;
 use super::*;
+use chocopy_rs_common::*;
 use md5::*;
 use std::collections::HashMap;
 use std::fs::*;
@@ -267,13 +268,13 @@ impl Codeview {
             ClassDebug {
                 size: 8,
                 attributes: vec![VarDebug {
-                    offset: 16,
+                    offset: ARRAY_LEN_OFFSET as i32,
                     line: 0,
                     name: "$len".to_owned(),
                     var_type: TypeDebug::class_type("int"),
                 }],
                 methods: std::iter::once((
-                    16,
+                    PROTOTYPE_INIT_OFFSET,
                     (
                         "__init__".to_owned(),
                         MethodDebug {
@@ -324,13 +325,13 @@ impl DebugWriter for Codeview {
         proto_fields.write_u16(MEMBER);
         proto_fields.write_u16(1); // private
         proto_fields.write_u32(0x0074);
-        proto_fields.write_u16(0);
+        proto_fields.write_u16(PROTOTYPE_SIZE_OFFSET as u16);
         proto_fields.write_str("$size");
 
         proto_fields.write_u16(MEMBER);
         proto_fields.write_u16(1); // private
         proto_fields.write_u32(0x0074);
-        proto_fields.write_u16(4);
+        proto_fields.write_u16(PROTOTYPE_TAG_OFFSET as u16);
         proto_fields.write_str("$tag");
 
         let mut arg_list = vec![];
@@ -354,7 +355,7 @@ impl DebugWriter for Codeview {
         proto_fields.write_u16(MEMBER);
         proto_fields.write_u16(1); // private
         proto_fields.write_u32(procedure_pointer_type_id);
-        proto_fields.write_u16(8);
+        proto_fields.write_u16(PROTOTYPE_DTOR_OFFSET as u16);
         proto_fields.write_str("$dtor");
 
         for (&offset, (name, method)) in &class_debug.methods {
@@ -389,12 +390,14 @@ impl DebugWriter for Codeview {
         let proto_fields_id = self.write_leaf(LeafType::FieldList, proto_fields);
 
         let mut proto_storage_type = vec![];
-        proto_storage_type.write_u16(class_debug.methods.len() as u16 + 3); // element count
+        proto_storage_type
+            .write_u16(class_debug.methods.len() as u16 + PROTOTYPE_HEADER_MEMBER_COUNT as u16); // element count
         proto_storage_type.write_u16(0); // no flag
         proto_storage_type.write_u32(proto_fields_id);
         proto_storage_type.write_u32(0); // derived
         proto_storage_type.write_u32(0); // vshape
-        proto_storage_type.write_u16(class_debug.methods.len() as u16 * 8 + 16); // size
+        proto_storage_type
+            .write_u16(class_debug.methods.len() as u16 * 8 + PROTOTYPE_INIT_OFFSET as u16); // size
         proto_storage_type.write_str(&(name.clone() + ".$prototype"));
         let proto_storage_type_id = self.write_leaf(LeafType::Structure, proto_storage_type);
 
@@ -408,13 +411,13 @@ impl DebugWriter for Codeview {
         fields.write_u16(MEMBER);
         fields.write_u16(1); // private
         fields.write_u32(proto_pointer_type_id);
-        fields.write_u16(0);
+        fields.write_u16(OBJECT_PROTOTYPE_OFFSET as u16);
         fields.write_str("$proto");
 
         fields.write_u16(MEMBER);
         fields.write_u16(1); // private
         fields.write_u32(0x0077);
-        fields.write_u16(8);
+        fields.write_u16(OBJECT_REF_COUNT_OFFSET as u16);
         fields.write_str("$ref");
 
         for attribute in &class_debug.attributes {
@@ -427,12 +430,13 @@ impl DebugWriter for Codeview {
         let fields_id = self.write_leaf(LeafType::FieldList, fields);
 
         let mut storage_type = vec![];
-        storage_type.write_u16(class_debug.attributes.len() as u16 + 2); // element count
+        storage_type
+            .write_u16(class_debug.attributes.len() as u16 + OBJECT_HEADER_MEMBER_COUNT as u16); // element count
         storage_type.write_u16(0); // no flag
         storage_type.write_u32(fields_id);
         storage_type.write_u32(0); // derived
         storage_type.write_u32(0); // vshape
-        storage_type.write_u16(class_debug.size as u16 + 16); // size
+        storage_type.write_u16(class_debug.size as u16 + OBJECT_ATTRIBUTE_OFFSET as u16); // size
         storage_type.write_str(&name);
         let storage_type_id = self.write_leaf(LeafType::Structure, storage_type);
 

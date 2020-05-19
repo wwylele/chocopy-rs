@@ -1,6 +1,7 @@
 use super::debug::*;
 use super::gimli_writer::*;
 use super::*;
+use chocopy_rs_common::*;
 use gimli::{constants::*, write::*, *};
 use std::collections::HashMap;
 
@@ -157,7 +158,8 @@ impl Dwarf {
         let int_t_id = dwarf_add_base_type(&mut dwarf, "$int_t", DW_ATE_signed, 4);
         let char_id = dwarf_add_base_type(&mut dwarf, "$char", DW_ATE_signed, 1);
 
-        let object_prototype_id = dwarf_add_struct_type(&mut dwarf, "object", 24);
+        let object_prototype_id =
+            dwarf_add_struct_type(&mut dwarf, "object", OBJECT_PROTOTYPE_SIZE as u64);
         let object_prototype_ptr_id = dwarf_add_pointer_type(&mut dwarf, None, object_prototype_id);
 
         Dwarf {
@@ -224,7 +226,11 @@ impl DebugWriter for Dwarf {
                 let storage_type_id = dwarf_add_struct_type(
                     &mut self.dwarf,
                     &(type_debug.to_string() + ".$storage"),
-                    if is_array { 24 } else { 16 },
+                    if is_array {
+                        ARRAY_ELEMENT_OFFSET as u64
+                    } else {
+                        OBJECT_ATTRIBUTE_OFFSET as u64
+                    },
                 );
 
                 if is_array {
@@ -233,7 +239,7 @@ impl DebugWriter for Dwarf {
                         storage_type_id,
                         "$proto",
                         self.object_prototype_ptr_id,
-                        0,
+                        OBJECT_PROTOTYPE_OFFSET as u64,
                     );
 
                     dwarf_add_member(&mut self.dwarf, storage_type_id, "$ref", self.size_t_id, 8);
@@ -243,7 +249,7 @@ impl DebugWriter for Dwarf {
                         storage_type_id,
                         "$len",
                         self.size_t_id,
-                        16,
+                        OBJECT_REF_COUNT_OFFSET as u64,
                     );
 
                     let element_type = if type_string == "str" {
@@ -260,7 +266,7 @@ impl DebugWriter for Dwarf {
                         storage_type_id,
                         "$array",
                         array_type_id,
-                        24,
+                        ARRAY_ELEMENT_OFFSET as u64,
                     );
                 }
 
@@ -288,7 +294,7 @@ impl DebugWriter for Dwarf {
 
         self.dwarf.unit.get_mut(tag_id).set(
             DW_AT_byte_size,
-            AttributeValue::Udata((class_debug.size + 16) as u64),
+            AttributeValue::Udata((class_debug.size + OBJECT_ATTRIBUTE_OFFSET) as u64),
         );
 
         let prototype_id = if class_name == "object" {
@@ -297,19 +303,37 @@ impl DebugWriter for Dwarf {
             dwarf_add_struct_type(
                 &mut self.dwarf,
                 &prototype_name,
-                ((class_debug.methods.len() + 2) * 8) as u64,
+                (class_debug.methods.len() * 8) as u64 + PROTOTYPE_INIT_OFFSET as u64,
             )
         };
 
-        dwarf_add_member(&mut self.dwarf, prototype_id, "$size", self.int_t_id, 0);
-        dwarf_add_member(&mut self.dwarf, prototype_id, "$tag", self.int_t_id, 4);
+        dwarf_add_member(
+            &mut self.dwarf,
+            prototype_id,
+            "$size",
+            self.int_t_id,
+            PROTOTYPE_SIZE_OFFSET as u64,
+        );
+        dwarf_add_member(
+            &mut self.dwarf,
+            prototype_id,
+            "$tag",
+            self.int_t_id,
+            PROTOTYPE_TAG_OFFSET as u64,
+        );
 
         let dtor_type = self.add_method_type(MethodDebug {
             return_type: TypeDebug::class_type("<None>"),
             params: vec![TypeDebug::class_type(&class_name)],
         });
 
-        dwarf_add_member(&mut self.dwarf, prototype_id, "$dtor", dtor_type, 8);
+        dwarf_add_member(
+            &mut self.dwarf,
+            prototype_id,
+            "$dtor",
+            dtor_type,
+            PROTOTYPE_DTOR_OFFSET as u64,
+        );
 
         for (offset, (method, method_type)) in class_debug.methods {
             let method_type = self.add_method_type(method_type);
@@ -328,8 +352,20 @@ impl DebugWriter for Dwarf {
             dwarf_add_pointer_type(&mut self.dwarf, None, prototype_id)
         };
 
-        dwarf_add_member(&mut self.dwarf, tag_id, "$proto", prototype_ptr_id, 0);
-        dwarf_add_member(&mut self.dwarf, tag_id, "$ref", self.size_t_id, 8);
+        dwarf_add_member(
+            &mut self.dwarf,
+            tag_id,
+            "$proto",
+            prototype_ptr_id,
+            OBJECT_PROTOTYPE_OFFSET as u64,
+        );
+        dwarf_add_member(
+            &mut self.dwarf,
+            tag_id,
+            "$ref",
+            self.size_t_id,
+            OBJECT_REF_COUNT_OFFSET as u64,
+        );
 
         for attribute in class_debug.attributes {
             dwarf_add_member(
