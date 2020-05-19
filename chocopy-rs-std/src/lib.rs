@@ -4,6 +4,7 @@ use std::process::exit;
 use std::sync::atomic::*;
 
 static ALLOC_COUNTER: AtomicU64 = AtomicU64::new(0);
+static INIT_PARAM: AtomicPtr<InitParam> = AtomicPtr::new(std::ptr::null_mut());
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
@@ -208,6 +209,15 @@ pub unsafe extern "C" fn input(
         input.len(),
     );
     pointer
+}
+
+/// Initialize runtime
+///
+/// # Safety
+///  - TODO
+#[export_name = "$init"]
+pub unsafe extern "C" fn init(init_param: *const InitParam) {
+    INIT_PARAM.store(init_param as *mut _, Ordering::SeqCst);
 }
 
 fn exit_code(code: i32) -> ! {

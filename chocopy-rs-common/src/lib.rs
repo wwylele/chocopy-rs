@@ -46,3 +46,17 @@ pub struct ArrayObject {
 
 pub const ARRAY_LEN_OFFSET: u32 = OBJECT_ATTRIBUTE_OFFSET;
 pub const ARRAY_ELEMENT_OFFSET: u32 = ARRAY_LEN_OFFSET + 8;
+
+#[repr(C)]
+pub struct InitParam {
+    pub bottom_frame: *const u64,
+    pub global_section: *const u64,
+    pub global_size: u64,
+    pub global_map: *const u8,
+}
+
+pub const BOTTOM_FRAME_OFFSET: u32 = 0;
+pub const GLOBAL_SECTION_OFFSET: u32 = BOTTOM_FRAME_OFFSET + POINTER_SIZE;
+pub const GLOBAL_SIZE_OFFSET: u32 = GLOBAL_SECTION_OFFSET + POINTER_SIZE;
+pub const GLOBAL_MAP_OFFSET: u32 = GLOBAL_SIZE_OFFSET + 8;
+pub const INIT_PARAM_SIZE: u32 = std::mem::size_of::<InitParam>() as u32;

@@ -30,10 +30,12 @@ const BUILTIN_NONE_OP: &str = "$none_op";
 const BUILTIN_LEN: &str = "$len";
 const BUILTIN_INPUT: &str = "$input";
 const BUILTIN_PRINT: &str = "$print";
+const BUILTIN_INIT: &str = "$init";
 
 const BUILTIN_CHOCOPY_MAIN: &str = "$chocopy_main";
 
 const GLOBAL_SECTION: &str = "$global";
+const INIT_PARAM: &str = "$init_param";
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Platform {
@@ -122,7 +124,7 @@ impl ProcedureDebug {
 
 enum ChunkExtra {
     Procedure(ProcedureDebug),
-    Data,
+    Data { writable: bool },
 }
 
 enum ChunkLinkTarget {
@@ -333,6 +335,7 @@ pub fn gen_object(
     import_function(&mut obj, BUILTIN_LEN);
     import_function(&mut obj, BUILTIN_PRINT);
     import_function(&mut obj, BUILTIN_INPUT);
+    import_function(&mut obj, BUILTIN_INIT);
     import_function(&mut obj, "[object].$dtor");
 
     let code_set = x64::gen_code_set(ast, platform);
@@ -366,6 +369,7 @@ pub fn gen_object(
 
     let mut section_map = HashMap::new();
     let text_section = obj.section_id(StandardSection::Text);
+    let data_section = obj.section_id(StandardSection::Data);
     let ro_section = obj.section_id(StandardSection::ReadOnlyData);
     let ro_reloc_section = obj.section_id(StandardSection::ReadOnlyDataWithRel);
 
@@ -374,18 +378,23 @@ pub fn gen_object(
         let section;
         let align;
         let kind;
-        if let ChunkExtra::Procedure(_) = chunk.extra {
-            section = text_section;
-            align = 1;
-            kind = SymbolKind::Text;
-        } else {
-            if chunk.links.is_empty() {
-                section = ro_section;
-            } else {
-                section = ro_reloc_section;
+        match chunk.extra {
+            ChunkExtra::Procedure(_) => {
+                section = text_section;
+                align = 1;
+                kind = SymbolKind::Text;
             }
-            align = 8;
-            kind = SymbolKind::Data;
+            ChunkExtra::Data { writable } => {
+                section = if writable {
+                    data_section
+                } else if chunk.links.is_empty() {
+                    ro_section
+                } else {
+                    ro_reloc_section
+                };
+                align = 8;
+                kind = SymbolKind::Data;
+            }
         }
 
         let scope = if chunk.name == BUILTIN_CHOCOPY_MAIN {

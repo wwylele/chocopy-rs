@@ -2229,6 +2229,24 @@ fn gen_main(
         main_code.emit(&[0x48, 0x89, 0x75, 0x18]);
     }
 
+    // mov [rip+{}],rbp
+    main_code.emit(&[0x48, 0x89, 0x2D]);
+    main_code.emit_link(INIT_PARAM, BOTTOM_FRAME_OFFSET as i32);
+
+    main_code.prepare_call(platform.stack_reserve());
+    match platform {
+        Platform::Windows => {
+            // lea rcx,[rip+{}]
+            main_code.emit(&[0x48, 0x8D, 0x0D]);
+        }
+        Platform::Linux | Platform::Macos => {
+            // lea rdi,[rip+{}]
+            main_code.emit(&[0x48, 0x8D, 0x3D]);
+        }
+    }
+    main_code.emit_link(INIT_PARAM, 0);
+    main_code.call(BUILTIN_INIT);
+
     for declaration in &ast.declarations {
         if let Declaration::VarDef(v) = declaration {
             main_code.emit_global_var_init(v);
@@ -2269,6 +2287,31 @@ fn gen_main(
         locals: vec![],
         frame_size: 0,
     })
+}
+
+fn gen_init_param(global_size: u64, global_ref_indexs: &[i32]) -> Chunk {
+    let mut code = vec![0; INIT_PARAM_SIZE as usize];
+    code[GLOBAL_SIZE_OFFSET as usize..][..8].copy_from_slice(&global_size.to_le_bytes());
+    let mut ref_map = vec![0; (global_size as usize / 8 + 7) / 8];
+    for index in global_ref_indexs {
+        let index = *index as usize;
+        ref_map[index / 8] |= 1 << (index % 8);
+    }
+    Chunk {
+        name: INIT_PARAM.to_owned(),
+        code,
+        links: vec![
+            ChunkLink {
+                pos: GLOBAL_SECTION_OFFSET as usize,
+                to: ChunkLinkTarget::Symbol(GLOBAL_SECTION.to_owned()),
+            },
+            ChunkLink {
+                pos: GLOBAL_MAP_OFFSET as usize,
+                to: ChunkLinkTarget::Data(ref_map),
+            },
+        ],
+        extra: ChunkExtra::Data { writable: true },
+    }
 }
 
 fn add_class(
@@ -2388,12 +2431,13 @@ fn gen_special_proto(name: &str, size: i32, tag: TypeTag, dtor: &str) -> Chunk {
         name: name.to_owned(),
         code,
         links,
-        extra: ChunkExtra::Data,
+        extra: ChunkExtra::Data { writable: false },
     }
 }
 
 pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
     let mut globals = HashMap::new();
+    let mut global_ref_indexs = vec![];
     let mut classes = HashMap::new();
     let mut base_methods = HashMap::new();
     base_methods.insert(
@@ -2460,6 +2504,10 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
                         level: 0,
                     }),
                 );
+
+                if !target_type.is_plain() {
+                    global_ref_indexs.push(global_offset / 8);
+                }
 
                 globals_debug.push(VarDebug {
                     offset: global_offset,
@@ -2572,7 +2620,7 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
             name: class_name.clone() + ".$proto",
             code: prototype,
             links,
-            extra: ChunkExtra::Data,
+            extra: ChunkExtra::Data { writable: false },
         });
     }
 
@@ -2620,6 +2668,8 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
         TypeTag::List,
         "[object].$dtor",
     ));
+
+    chunks.push(gen_init_param(global_offset as u64, &global_ref_indexs));
 
     CodeSet {
         chunks,
