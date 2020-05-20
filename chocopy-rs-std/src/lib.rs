@@ -3,8 +3,11 @@ use std::mem::*;
 use std::process::exit;
 use std::sync::atomic::*;
 
+mod gc;
+
 static ALLOC_COUNTER: AtomicU64 = AtomicU64::new(0);
 static INIT_PARAM: AtomicPtr<InitParam> = AtomicPtr::new(std::ptr::null_mut());
+static GC_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
@@ -54,6 +57,8 @@ pub unsafe extern "C" fn alloc_obj(
     rbp: *const u64,
     rsp: *const u64,
 ) -> *mut Object {
+    gc::collect(rbp, rsp);
+
     let size = divide_up(if (*prototype).size > 0 {
         assert!(len == 0);
         size_of::<Object>() + (*prototype).size as usize
@@ -67,6 +72,7 @@ pub unsafe extern "C" fn alloc_obj(
     let object = Object {
         prototype,
         ref_count: 1,
+        gc_count: GC_COUNTER.load(Ordering::SeqCst),
     };
 
     if (*prototype).size > 0 {

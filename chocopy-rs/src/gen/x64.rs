@@ -1455,6 +1455,12 @@ impl<'a> Emitter<'a> {
                         // mov [rbp+{}],rsi
                         self.emit_with_stack(&[0x48, 0x89, 0xB5], &dest);
                         self.emit_drop();
+
+                        // TEMPORARY: clean slot to avoid GC scan
+                        // mov rsi,[rbp+{}]
+                        self.emit_with_stack(&[0x48, 0x8B, 0xB5], &dest);
+                        // mov QWORD PTR [rsi],0
+                        self.emit(&[0x48, 0xC7, 0x06, 0x00, 0x00, 0x00, 0x00]);
                     }
 
                     // mov rax,[rbp+{}]
@@ -1501,6 +1507,14 @@ impl<'a> Emitter<'a> {
                         self.emit(&[0x48, 0x8B, 0x80]);
                         self.emit(&slot.offset.to_le_bytes());
                         self.emit_drop();
+
+                        // TEMPORARY: clean slot to avoid GC scan
+                        // mov rax,[rbp+{}]
+                        self.emit_with_stack(&[0x48, 0x8B, 0x85], &object);
+                        // mov QWORD PTR [rax+{}],0
+                        self.emit(&[0x48, 0xC7, 0x80]);
+                        self.emit(&slot.offset.to_le_bytes());
+                        self.emit(&[0; 4]);
                     }
 
                     // mov rax,[rbp+{}]

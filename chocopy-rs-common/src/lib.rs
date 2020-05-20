@@ -30,13 +30,15 @@ pub const PROTOTYPE_HEADER_MEMBER_COUNT: u32 = 3;
 pub struct Object {
     pub prototype: *const Prototype,
     pub ref_count: u64,
+    pub gc_count: u64,
     // followed by attributes
 }
 
 pub const OBJECT_PROTOTYPE_OFFSET: u32 = 0;
 pub const OBJECT_REF_COUNT_OFFSET: u32 = OBJECT_PROTOTYPE_OFFSET + POINTER_SIZE;
-pub const OBJECT_ATTRIBUTE_OFFSET: u32 = OBJECT_REF_COUNT_OFFSET + 8;
-pub const OBJECT_HEADER_MEMBER_COUNT: u32 = 2;
+pub const OBJECT_GC_COUNT_OFFSET: u32 = OBJECT_REF_COUNT_OFFSET + 8;
+pub const OBJECT_ATTRIBUTE_OFFSET: u32 = OBJECT_GC_COUNT_OFFSET + 8;
+pub const OBJECT_HEADER_MEMBER_COUNT: u32 = 3;
 
 #[repr(C)]
 pub struct ArrayObject {
