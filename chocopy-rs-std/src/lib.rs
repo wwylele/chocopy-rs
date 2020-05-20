@@ -2,18 +2,16 @@ use chocopy_rs_common::*;
 use std::cell::*;
 use std::mem::*;
 use std::process::exit;
-use std::sync::atomic::*;
 
 mod gc;
-
-static INIT_PARAM: AtomicPtr<InitParam> = AtomicPtr::new(std::ptr::null_mut());
-static GC_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 struct AllocUnit(u64);
 
 thread_local! {
+    static INIT_PARAM: Cell<*const InitParam> = Cell::new(std::ptr::null());
+    static GC_COUNTER: Cell<u64> = Cell::new(0);
     static OBJECT_STORE: RefCell<Vec<Box<[AllocUnit]>>> = RefCell::new(vec![]);
 }
 
@@ -29,9 +27,11 @@ pub fn divide_up(value: usize) -> usize {
 /// Allocates a ChocoPy object
 ///
 /// # Safety
+///  - `init` already called
 ///  - `prototype.size` is not 0.
 ///  - `prototype.tag` is Str or List if and only if `prototype.size < 0`.
-///  - `prototype.dtor` points to a valid function.
+///  - `prototype.map` points to a valid object reference map
+///  - `rbp` and `rsp` points to the bottom and the top of the top stack frame
 #[export_name = "$alloc_obj"]
 pub unsafe extern "C" fn alloc_obj(
     prototype: *const Prototype,
@@ -54,7 +54,7 @@ pub unsafe extern "C" fn alloc_obj(
 
     let object = Object {
         prototype,
-        gc_count: GC_COUNTER.load(Ordering::SeqCst),
+        gc_count: GC_COUNTER.with(|gc_counter| gc_counter.get()),
     };
 
     if (*prototype).size > 0 {
@@ -70,10 +70,10 @@ pub unsafe extern "C" fn alloc_obj(
 /// Gets the array length of a ChocoPy object
 ///
 /// # Safety
+///  - `init` already called
 ///  - `pointer` must be previously returned by `alloc_obj`.
 ///  - The `prototype` field must be intact.
 ///  - For `ArrayObject`, the `len` field must be intact.
-///  - Other safety requirements to call `dtor` on `pointer` must be hold.
 #[export_name = "$len"]
 pub unsafe extern "C" fn len(pointer: *mut Object) -> i32 {
     if pointer.is_null() {
@@ -90,9 +90,9 @@ pub unsafe extern "C" fn len(pointer: *mut Object) -> i32 {
 /// Prints a ChocoPy object
 ///
 /// # Safety
+///  - `init` already called
 ///  - `pointer` must be previously returned by `alloc_obj`.
 ///  - The `prototype` field must be intact.
-///  - Other safety requirements to call `dtor` on `pointer` must be hold.
 #[export_name = "$print"]
 pub unsafe extern "C" fn print(pointer: *mut Object) -> *mut u8 {
     if pointer.is_null() {
@@ -133,15 +133,10 @@ pub unsafe extern "C" fn print(pointer: *mut Object) -> *mut u8 {
 /// Creates a new str object that holds a line of user input
 ///
 /// # Safety
-///  - `str_proto.size == -1` .
-///  - `str_proto.tag == TypeTag::Str`.
-///  - `str_proto.dtor` points to a no-op function.
+///  - `init` already called
+///  - `rbp` and `rsp` points to the bottom and the top of the top stack frame
 #[export_name = "$input"]
-pub unsafe extern "C" fn input(
-    str_proto: *const Prototype,
-    rbp: *const u64,
-    rsp: *const u64,
-) -> *mut Object {
+pub unsafe extern "C" fn input(rbp: *const u64, rsp: *const u64) -> *mut Object {
     let mut input = String::new();
     std::io::stdin().read_line(&mut input).unwrap();
     let input = input.as_bytes();
@@ -153,6 +148,7 @@ pub unsafe extern "C" fn input(
         len -= 1;
     }
     let len = len as u64;
+    let str_proto = INIT_PARAM.with(|init_param| (*init_param.get()).str_prototype);
     let pointer = alloc_obj(str_proto, len, rbp, rsp);
     std::ptr::copy_nonoverlapping(
         input.as_ptr(),
@@ -165,10 +161,11 @@ pub unsafe extern "C" fn input(
 /// Initialize runtime
 ///
 /// # Safety
-///  - TODO
+///  - `*init_param` never changes after calling this function
+///  - Other safety requirements on `InitParam`
 #[export_name = "$init"]
 pub unsafe extern "C" fn init(init_param: *const InitParam) {
-    INIT_PARAM.store(init_param as *mut _, Ordering::SeqCst);
+    INIT_PARAM.with(|i| i.set(init_param));
 }
 
 fn exit_code(code: i32) -> ! {

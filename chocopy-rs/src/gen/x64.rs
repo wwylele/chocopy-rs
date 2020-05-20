@@ -43,7 +43,7 @@ struct Emitter<'a> {
     current_stack_top: i32, // relative to rbp, non-positive
     max_stack_top: i32,     // relative to rbp, non-positive
     max_parameter: usize,
-    clean_up_list: Vec<i32>, // offsets relative to rbp
+    ref_list: Vec<i32>, // offsets relative to rbp
     level: u32,
     code: Vec<u8>,
     links: Vec<ChunkLink>,
@@ -116,7 +116,7 @@ impl<'a> Emitter<'a> {
         return_type: Option<&'a ValueType>,
         storage_env: Option<&'a StorageEnv>,
         classes: Option<&'a HashMap<String, ClassSlot>>,
-        clean_up_list: Vec<i32>,
+        ref_list: Vec<i32>,
         level: u32,
         platform: Platform,
     ) -> Emitter<'a> {
@@ -128,7 +128,7 @@ impl<'a> Emitter<'a> {
             current_stack_top: 0,
             max_stack_top: 0,
             max_parameter: 0,
-            clean_up_list,
+            ref_list,
             level,
             // push rbp; mov rbp,rsp; add rsp,{}
             code: vec![0x55, 0x48, 0x89, 0xe5, 0x48, 0x81, 0xEC, 0, 0, 0, 0],
@@ -157,7 +157,7 @@ impl<'a> Emitter<'a> {
         self.current_stack_top -= 8;
         self.max_stack_top = std::cmp::min(self.max_stack_top, self.current_stack_top);
         if ticket_type == TicketType::Reference {
-            self.clean_up_list.push(self.current_stack_top);
+            self.ref_list.push(self.current_stack_top);
         }
         StackTicket {
             offset: self.current_stack_top,
@@ -166,8 +166,8 @@ impl<'a> Emitter<'a> {
 
     pub fn free_stack(&mut self, ticket: StackTicket) {
         assert!(ticket.offset == self.current_stack_top);
-        if self.clean_up_list.last() == Some(&self.current_stack_top) {
-            self.clean_up_list.pop();
+        if self.ref_list.last() == Some(&self.current_stack_top) {
+            self.ref_list.pop();
         }
         self.current_stack_top += 8;
         std::mem::forget(ticket);
@@ -179,13 +179,13 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn emit_ref_map(&mut self) {
-        let min_index = self.clean_up_list.iter().min().cloned().unwrap_or(0) / 8;
-        let max_index = self.clean_up_list.iter().max().cloned().unwrap_or(0) / 8;
+        let min_index = self.ref_list.iter().min().cloned().unwrap_or(0) / 8;
+        let max_index = self.ref_list.iter().max().cloned().unwrap_or(0) / 8;
         let len = max_index - min_index + 1;
         let mut ref_map = vec![0; 8 + (len as usize + 7) / 8];
         ref_map[0..4].copy_from_slice(&min_index.to_le_bytes());
         ref_map[4..8].copy_from_slice(&max_index.to_le_bytes());
-        for &offset in &self.clean_up_list {
+        for &offset in &self.ref_list {
             let index = (offset / 8 - min_index) as usize;
             ref_map[8 + index / 8] |= 1 << (index % 8);
         }
@@ -899,12 +899,6 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x45, 0x8A, 0x54, 0x33, ARRAY_ELEMENT_OFFSET as u8]);
         // mov [rax+ARRAY_ELEMENT_OFFSET],r10b
         self.emit(&[0x44, 0x88, 0x50, ARRAY_ELEMENT_OFFSET as u8]);
-        let result = self.alloc_stack(TicketType::Reference);
-        // mov [rbp+{}],rax
-        self.emit_with_stack(&[0x48, 0x89, 0x85], &result);
-        // mov rax,[rbp+{}]
-        self.emit_with_stack(&[0x48, 0x8B, 0x85], &result);
-        self.free_stack(result);
     }
 
     pub fn emit_list_index(&mut self, expr: &IndexExpr) {
@@ -1563,7 +1557,7 @@ fn gen_function(
     };
 
     let mut locals = HashMap::new();
-    let mut clean_up_list = vec![];
+    let mut ref_list = vec![];
 
     let mut params_debug = vec![];
 
@@ -1580,7 +1574,7 @@ fn gen_function(
         );
         let param_type = ValueType::from_annotation(&param.type_);
         if !param_type.is_plain() {
-            clean_up_list.push(offset);
+            ref_list.push(offset);
         }
 
         params_debug.push(VarDebug {
@@ -1638,7 +1632,7 @@ fn gen_function(
         Some(&return_type),
         Some(handle.inner()),
         Some(classes),
-        clean_up_list,
+        ref_list,
         level,
         platform,
     );
@@ -1891,23 +1885,18 @@ fn gen_input(platform: Platform) -> Chunk {
     let mut code = Emitter::new_simple("input", platform);
     match platform {
         Platform::Windows => {
-            // mov rdx,rbp
-            code.emit(&[0x48, 0x89, 0xEA]);
-            // mov r8,rsp
-            code.emit(&[0x49, 0x89, 0xE0]);
-            // lea rcx,[rip+{}]
-            code.emit(&[0x48, 0x8D, 0x0D]);
-        }
-        Platform::Linux | Platform::Macos => {
-            // mov rsi,rbp
-            code.emit(&[0x48, 0x89, 0xEE]);
+            // mov rcx,rbp
+            code.emit(&[0x48, 0x89, 0xE9]);
             // mov rdx,rsp
             code.emit(&[0x48, 0x89, 0xE2]);
-            // lea rdi,[rip+{}]
-            code.emit(&[0x48, 0x8D, 0x3D]);
+        }
+        Platform::Linux | Platform::Macos => {
+            // mov rdi,rbp
+            code.emit(&[0x48, 0x89, 0xEF]);
+            // mov rsi,rsp
+            code.emit(&[0x48, 0x89, 0xE6]);
         }
     }
-    code.emit_link(STR_PROTOTYPE, 0);
     code.prepare_call(platform.stack_reserve());
     code.call(BUILTIN_INPUT);
     code.emit_ref_map();
@@ -2046,6 +2035,10 @@ fn gen_init_param(global_size: u64, global_ref_indexs: &[i32]) -> Chunk {
             ChunkLink {
                 pos: GLOBAL_MAP_OFFSET as usize,
                 to: ChunkLinkTarget::Data(ref_map),
+            },
+            ChunkLink {
+                pos: STR_PROTOTYPE_OFFSET as usize,
+                to: ChunkLinkTarget::Symbol(STR_PROTOTYPE.to_owned()),
             },
         ],
         extra: ChunkExtra::Data { writable: true },

@@ -17,10 +17,11 @@ unsafe fn walk(var: *const u64) {
     }
 
     let object = *var as *mut Object;
-    if (*object).gc_count == GC_COUNTER.load(Ordering::SeqCst) {
+    let gc_counter = GC_COUNTER.with(|gc_counter| gc_counter.get());
+    if (*object).gc_count == gc_counter {
         return;
     }
-    (*object).gc_count = GC_COUNTER.load(Ordering::SeqCst);
+    (*object).gc_count = gc_counter;
 
     match (*(*object).prototype).tag {
         TypeTag::Other => {
@@ -44,8 +45,8 @@ unsafe fn walk(var: *const u64) {
 }
 
 pub unsafe fn collect(rbp: *const u64, rsp: *const u64) {
-    GC_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let init_param = INIT_PARAM.load(Ordering::SeqCst).as_ref().unwrap();
+    GC_COUNTER.with(|gc_counter| gc_counter.set(gc_counter.get().wrapping_add(1)));
+    let init_param = INIT_PARAM.with(|init_param| init_param.get().as_ref().unwrap());
     let mut rip = *rsp.offset(-1) as *const u8;
     let mut current_frame = rbp;
     loop {
@@ -75,10 +76,11 @@ pub unsafe fn collect(rbp: *const u64, rsp: *const u64) {
         }
     }
 
+    let gc_counter = GC_COUNTER.with(|gc_counter| gc_counter.get());
     OBJECT_STORE.with(|object_store| {
         object_store.borrow_mut().retain(|boxed| {
             let object = boxed.as_ptr() as *const Object;
-            (*object).gc_count == GC_COUNTER.load(Ordering::SeqCst)
+            (*object).gc_count == gc_counter
         })
     });
 }
