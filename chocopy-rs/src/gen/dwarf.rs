@@ -242,14 +242,20 @@ impl DebugWriter for Dwarf {
                         OBJECT_PROTOTYPE_OFFSET as u64,
                     );
 
-                    dwarf_add_member(&mut self.dwarf, storage_type_id, "$ref", self.size_t_id, 8);
+                    dwarf_add_member(
+                        &mut self.dwarf,
+                        storage_type_id,
+                        "$gc",
+                        self.size_t_id,
+                        OBJECT_GC_COUNT_OFFSET as u64,
+                    );
 
                     let len_id = dwarf_add_member(
                         &mut self.dwarf,
                         storage_type_id,
                         "$len",
                         self.size_t_id,
-                        OBJECT_REF_COUNT_OFFSET as u64,
+                        ARRAY_LEN_OFFSET as u64,
                     );
 
                     let element_type = if type_string == "str" {
@@ -330,9 +336,9 @@ impl DebugWriter for Dwarf {
         dwarf_add_member(
             &mut self.dwarf,
             prototype_id,
-            "$dtor",
+            "$map",
             dtor_type,
-            PROTOTYPE_DTOR_OFFSET as u64,
+            PROTOTYPE_MAP_OFFSET as u64,
         );
 
         for (offset, (method, method_type)) in class_debug.methods {
@@ -362,9 +368,9 @@ impl DebugWriter for Dwarf {
         dwarf_add_member(
             &mut self.dwarf,
             tag_id,
-            "$ref",
+            "$gc",
             self.size_t_id,
-            OBJECT_REF_COUNT_OFFSET as u64,
+            OBJECT_GC_COUNT_OFFSET as u64,
         );
 
         for attribute in class_debug.attributes {

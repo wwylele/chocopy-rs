@@ -26,28 +26,6 @@ pub fn divide_up(value: usize) -> usize {
     }
 }
 
-/// Destructor for [object] type
-///
-/// # Safety
-///  - `pointer` must be previouly returned by returned by `alloc_obj`.
-///  - The object must be allocated with a [object] prototype (`-prototype.size` is size of a pointer).
-///  - The `prototype` and `len` field must be intact.
-///  - Each list element must be either a valid `Object` pointer (returned by `alloc_obj`) or null.
-#[export_name = "[object].$dtor"]
-pub unsafe extern "C" fn dtor_list(pointer: *mut ArrayObject) {
-    let len = (*pointer).len;
-    let elements = pointer.offset(1) as *mut *mut Object;
-    for i in 0..len {
-        let element = *elements.offset(i as isize);
-        if !element.is_null() {
-            (*element).ref_count -= 1;
-            if (*element).ref_count == 0 {
-                free_obj(element);
-            }
-        }
-    }
-}
-
 /// Allocates a ChocoPy object
 ///
 /// # Safety
@@ -76,7 +54,6 @@ pub unsafe extern "C" fn alloc_obj(
 
     let object = Object {
         prototype,
-        ref_count: 1,
         gc_count: GC_COUNTER.load(Ordering::SeqCst),
     };
 
@@ -89,16 +66,6 @@ pub unsafe extern "C" fn alloc_obj(
 
     pointer
 }
-
-/// Deallocates a ChocoPy object
-///
-/// # Safety
-///  - `pointer` must be previously returned by `alloc_obj`.
-///  - The `prototype` field must be intact.
-///  - For `ArrayObject`, the `len` field must be intact.
-///  - Other safety requirements to call `dtor` on `pointer` must be hold.
-#[export_name = "$free_obj"]
-pub unsafe extern "C" fn free_obj(_: *mut Object) {}
 
 /// Gets the array length of a ChocoPy object
 ///
@@ -117,12 +84,7 @@ pub unsafe extern "C" fn len(pointer: *mut Object) -> i32 {
     if !matches!((*prototype).tag, TypeTag::Str | TypeTag::List) {
         invalid_arg();
     }
-    let len = (*object).len as i32;
-    (*object).object.ref_count -= 1;
-    if (*object).object.ref_count == 0 {
-        free_obj(pointer);
-    }
-    len
+    (*object).len as i32
 }
 
 /// Prints a ChocoPy object
@@ -165,10 +127,6 @@ pub unsafe extern "C" fn print(pointer: *mut Object) -> *mut u8 {
         }
     }
 
-    (*pointer).ref_count -= 1;
-    if (*pointer).ref_count == 0 {
-        free_obj(pointer);
-    }
     std::ptr::null_mut()
 }
 

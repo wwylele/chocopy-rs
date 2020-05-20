@@ -355,8 +355,8 @@ impl DebugWriter for Codeview {
         proto_fields.write_u16(MEMBER);
         proto_fields.write_u16(1); // private
         proto_fields.write_u32(procedure_pointer_type_id);
-        proto_fields.write_u16(PROTOTYPE_DTOR_OFFSET as u16);
-        proto_fields.write_str("$dtor");
+        proto_fields.write_u16(PROTOTYPE_MAP_OFFSET as u16);
+        proto_fields.write_str("$map");
 
         for (&offset, (name, method)) in &class_debug.methods {
             let mut arg_list = vec![];
@@ -417,8 +417,8 @@ impl DebugWriter for Codeview {
         fields.write_u16(MEMBER);
         fields.write_u16(1); // private
         fields.write_u32(0x0077);
-        fields.write_u16(OBJECT_REF_COUNT_OFFSET as u16);
-        fields.write_str("$ref");
+        fields.write_u16(OBJECT_GC_COUNT_OFFSET as u16);
+        fields.write_str("$gc");
 
         for attribute in &class_debug.attributes {
             fields.write_u16(MEMBER);

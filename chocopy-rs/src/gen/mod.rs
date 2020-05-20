@@ -23,7 +23,6 @@ const INT_LIST_PROTOTYPE: &str = "[int].$proto";
 const OBJECT_LIST_PROTOTYPE: &str = "[object].$proto";
 
 const BUILTIN_ALLOC_OBJ: &str = "$alloc_obj";
-const BUILTIN_FREE_OBJ: &str = "$free_obj";
 const BUILTIN_DIV_ZERO: &str = "$div_zero";
 const BUILTIN_OUT_OF_BOUND: &str = "$out_of_bound";
 const BUILTIN_NONE_OP: &str = "$none_op";
@@ -328,7 +327,6 @@ pub fn gen_object(
     };
 
     import_function(&mut obj, BUILTIN_ALLOC_OBJ);
-    import_function(&mut obj, BUILTIN_FREE_OBJ);
     import_function(&mut obj, BUILTIN_DIV_ZERO);
     import_function(&mut obj, BUILTIN_OUT_OF_BOUND);
     import_function(&mut obj, BUILTIN_NONE_OP);
@@ -336,7 +334,6 @@ pub fn gen_object(
     import_function(&mut obj, BUILTIN_PRINT);
     import_function(&mut obj, BUILTIN_INPUT);
     import_function(&mut obj, BUILTIN_INIT);
-    import_function(&mut obj, "[object].$dtor");
 
     let code_set = x64::gen_code_set(ast, platform);
 
