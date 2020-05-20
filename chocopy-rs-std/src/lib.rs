@@ -1,17 +1,21 @@
 use chocopy_rs_common::*;
+use std::cell::*;
 use std::mem::*;
 use std::process::exit;
 use std::sync::atomic::*;
 
 mod gc;
 
-static ALLOC_COUNTER: AtomicU64 = AtomicU64::new(0);
 static INIT_PARAM: AtomicPtr<InitParam> = AtomicPtr::new(std::ptr::null_mut());
 static GC_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 struct AllocUnit(u64);
+
+thread_local! {
+    static OBJECT_STORE: RefCell<Vec<Box<[AllocUnit]>>> = RefCell::new(vec![]);
+}
 
 pub fn divide_up(value: usize) -> usize {
     let align = size_of::<AllocUnit>();
@@ -66,8 +70,9 @@ pub unsafe extern "C" fn alloc_obj(
         size_of::<ArrayObject>() + (-(*prototype).size as u64 * len) as usize
     });
 
-    let pointer =
-        Box::into_raw(vec![AllocUnit(0); size].into_boxed_slice()) as *mut AllocUnit as *mut Object;
+    let mut boxed = vec![AllocUnit(0); size].into_boxed_slice();
+    let pointer = boxed.as_mut_ptr() as *mut Object;
+    OBJECT_STORE.with(|object_store| object_store.borrow_mut().push(boxed));
 
     let object = Object {
         prototype,
@@ -82,7 +87,6 @@ pub unsafe extern "C" fn alloc_obj(
         (pointer as *mut ArrayObject).write(object);
     }
 
-    ALLOC_COUNTER.fetch_add(1, Ordering::SeqCst);
     pointer
 }
 
@@ -94,24 +98,7 @@ pub unsafe extern "C" fn alloc_obj(
 ///  - For `ArrayObject`, the `len` field must be intact.
 ///  - Other safety requirements to call `dtor` on `pointer` must be hold.
 #[export_name = "$free_obj"]
-pub unsafe extern "C" fn free_obj(pointer: *mut Object) {
-    assert!((*pointer).ref_count == 0);
-    let prototype = (*pointer).prototype;
-    ((*prototype).dtor)(pointer);
-    let size = divide_up(if (*prototype).size > 0 {
-        size_of::<Object>() + (*prototype).size as usize
-    } else {
-        let len = (*(pointer as *mut ArrayObject)).len;
-        size_of::<ArrayObject>() + (-(*prototype).size as u64 * len) as usize
-    });
-
-    drop(Box::from_raw(std::slice::from_raw_parts_mut(
-        pointer as *mut AllocUnit,
-        size,
-    )));
-
-    ALLOC_COUNTER.fetch_sub(1, Ordering::SeqCst);
-}
+pub unsafe extern "C" fn free_obj(_: *mut Object) {}
 
 /// Gets the array length of a ChocoPy object
 ///
@@ -256,7 +243,6 @@ pub extern "C" fn none_op() -> ! {
 
 #[cfg(not(test))]
 pub mod crt0_glue {
-    use super::*;
     extern "C" {
         #[link_name = "$chocopy_main"]
         fn chocopy_main();
@@ -267,10 +253,6 @@ pub mod crt0_glue {
     #[export_name = "main"]
     pub unsafe extern "C" fn entry_point() -> i32 {
         chocopy_main();
-        if ALLOC_COUNTER.load(Ordering::SeqCst) != 0 {
-            println!("--- Memory leak detected! ---");
-            exit_code(-1);
-        }
         0
     }
 }

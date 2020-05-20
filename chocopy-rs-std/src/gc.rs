@@ -11,7 +11,7 @@ unsafe fn get_ref_map(rip: *const u8) -> *const u8 {
     rip.offset((offset + 7) as isize)
 }
 
-unsafe fn walk(var: *const u64, counter: &mut u64) {
+unsafe fn walk(var: *const u64) {
     if *var == 0 {
         return;
     }
@@ -21,7 +21,6 @@ unsafe fn walk(var: *const u64, counter: &mut u64) {
         return;
     }
     (*object).gc_count = GC_COUNTER.load(Ordering::SeqCst);
-    *counter += 1;
 
     match (*(*object).prototype).tag {
         TypeTag::Other => {
@@ -30,14 +29,14 @@ unsafe fn walk(var: *const u64, counter: &mut u64) {
             for i in 0..len {
                 let flag = *ref_map.add(i / 8) & (1 << (i % 8));
                 if flag != 0 {
-                    walk((object.add(1) as *const u64).add(i), counter);
+                    walk((object.add(1) as *const u64).add(i));
                 }
             }
         }
         TypeTag::List if (*(*object).prototype).size == -8 => {
             let list = object as *mut ArrayObject;
             for i in 0..(*list).len {
-                walk((list.add(1) as *const u64).add(i as usize), counter);
+                walk((list.add(1) as *const u64).add(i as usize));
             }
         }
         _ => (),
@@ -45,7 +44,6 @@ unsafe fn walk(var: *const u64, counter: &mut u64) {
 }
 
 pub unsafe fn collect(rbp: *const u64, rsp: *const u64) {
-    let mut counter = 0;
     GC_COUNTER.fetch_add(1, Ordering::SeqCst);
     let init_param = INIT_PARAM.load(Ordering::SeqCst).as_ref().unwrap();
     let mut rip = *rsp.offset(-1) as *const u8;
@@ -58,7 +56,7 @@ pub unsafe fn collect(rbp: *const u64, rsp: *const u64) {
             let map_index = (index - min_index) as usize;
             let flag = *ref_map.add(8 + map_index / 8) & (1 << (map_index % 8));
             if flag != 0 {
-                walk(current_frame.offset(index as isize), &mut counter);
+                walk(current_frame.offset(index as isize));
             }
         }
 
@@ -73,11 +71,14 @@ pub unsafe fn collect(rbp: *const u64, rsp: *const u64) {
         let index = index as usize;
         let flag = *init_param.global_map.add(index / 8) & (1 << (index % 8));
         if flag != 0 {
-            walk(init_param.global_section.add(index), &mut counter);
+            walk(init_param.global_section.add(index));
         }
     }
 
-    if counter != ALLOC_COUNTER.load(Ordering::SeqCst) {
-        println!("<What?>");
-    }
+    OBJECT_STORE.with(|object_store| {
+        object_store.borrow_mut().retain(|boxed| {
+            let object = boxed.as_ptr() as *const Object;
+            (*object).gc_count == GC_COUNTER.load(Ordering::SeqCst)
+        })
+    });
 }
