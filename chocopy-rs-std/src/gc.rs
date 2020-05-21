@@ -34,7 +34,7 @@ unsafe fn walk(var: *const u64) {
                 }
             }
         }
-        TypeTag::List if (*(*object).prototype).size == -8 => {
+        TypeTag::RefList => {
             let list = object as *mut ArrayObject;
             for i in 0..(*list).len {
                 walk((list.add(1) as *const u64).add(i as usize));

@@ -81,7 +81,10 @@ pub unsafe extern "C" fn len(pointer: *mut Object) -> i32 {
     }
     let object = pointer as *mut ArrayObject;
     let prototype = (*object).object.prototype;
-    if !matches!((*prototype).tag, TypeTag::Str | TypeTag::List) {
+    if !matches!(
+        (*prototype).tag,
+        TypeTag::Str | TypeTag::PlainList | TypeTag::RefList
+    ) {
         invalid_arg();
     }
     (*object).len as i32

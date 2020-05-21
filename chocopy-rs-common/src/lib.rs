@@ -7,7 +7,8 @@ pub enum TypeTag {
     Int = 1,
     Bool = 2,
     Str = 3,
-    List = -1,
+    PlainList = -1,
+    RefList = -2,
 }
 
 #[repr(C)]

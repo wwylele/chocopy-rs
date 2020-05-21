@@ -56,7 +56,9 @@ For each type with name `C` (including all primitive types), the global symbol `
 
 A prototype object starts with a 4-byte signed integer `$size` that describes the memory layout of objects of type `C`. When it is a positive number, it is the object size without the object header. When it is a negative number, it indicates `C` is an array-like type and the value without the sign is the size of one element.
 
-Following `$size` is a 4-byte signed integer `$tag` for type tag. The type tag value follows the same convention in the implementation guide, except that all user-defined classes use value 0 for the tag.
+Following `$size` is a 4-byte signed integer `$tag` for type tag. The type tag value follows the a similar convention to the one in the implementation guide, except that
+ - `object` and user-defined classes uses `Other = 0`, and
+ - List objects is separated into `PlainList = -1` (for `[int]` or `[bool]`) and `RefList = -2` (for other list), making it easier for the tracing GC to distinguish.
 
 Following `$tag` is the pointer to reference map `$map`, which points to a bit string, indicating whether each 8 bytes in the attribute is a reference for GC tracing.
 
