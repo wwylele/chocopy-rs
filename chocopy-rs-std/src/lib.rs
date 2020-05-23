@@ -1,13 +1,22 @@
 use chocopy_rs_common::*;
+use std::cell::*;
 use std::mem::*;
 use std::process::exit;
-use std::sync::atomic::*;
+use std::ptr::*;
 
-static ALLOC_COUNTER: AtomicU64 = AtomicU64::new(0);
+mod gc;
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 struct AllocUnit(u64);
+
+thread_local! {
+    static INIT_PARAM: Cell<*const InitParam> = Cell::new(std::ptr::null());
+    static GC_COUNTER: Cell<u64> = Cell::new(0);
+    static GC_HEAD: Cell<Option<NonNull<Object>>> = Cell::new(None);
+    static CURRENT_SPACE: Cell<usize> = Cell::new(0);
+    static THRESHOLD_SPACE: Cell<usize> = Cell::new(1024);
+}
 
 pub fn divide_up(value: usize) -> usize {
     let align = size_of::<AllocUnit>();
@@ -18,36 +27,30 @@ pub fn divide_up(value: usize) -> usize {
     }
 }
 
-/// Destructor for [object] type
-///
-/// # Safety
-///  - `pointer` must be previouly returned by returned by `alloc_obj`.
-///  - The object must be allocated with a [object] prototype (`-prototype.size` is size of a pointer).
-///  - The `prototype` and `len` field must be intact.
-///  - Each list element must be either a valid `Object` pointer (returned by `alloc_obj`) or null.
-#[export_name = "[object].$dtor"]
-pub unsafe extern "C" fn dtor_list(pointer: *mut ArrayObject) {
-    let len = (*pointer).len;
-    let elements = pointer.offset(1) as *mut *mut Object;
-    for i in 0..len {
-        let element = *elements.offset(i as isize);
-        if !element.is_null() {
-            (*element).ref_count -= 1;
-            if (*element).ref_count == 0 {
-                free_obj(element);
-            }
-        }
-    }
-}
-
 /// Allocates a ChocoPy object
 ///
 /// # Safety
+///  - `init` already called
 ///  - `prototype.size` is not 0.
 ///  - `prototype.tag` is Str or List if and only if `prototype.size < 0`.
-///  - `prototype.dtor` points to a valid function.
+///  - `prototype.map` points to a valid object reference map
+///  - `rbp` and `rsp` points to the bottom and the top of the top stack frame
 #[export_name = "$alloc_obj"]
-pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mut Object {
+pub unsafe extern "C" fn alloc_obj(
+    prototype: *const Prototype,
+    len: u64,
+    rbp: *const u64,
+    rsp: *const u64,
+) -> *mut Object {
+    if CURRENT_SPACE.with(|current_space| current_space.get())
+        >= THRESHOLD_SPACE.with(|threshold_space| threshold_space.get())
+    {
+        gc::collect(rbp, rsp);
+        let current = CURRENT_SPACE.with(|current_space| current_space.get());
+        let threshold = std::cmp::max(1024, current * 2);
+        THRESHOLD_SPACE.with(|threshold_space| threshold_space.set(threshold));
+    }
+
     let size = divide_up(if (*prototype).size > 0 {
         assert!(len == 0);
         size_of::<Object>() + (*prototype).size as usize
@@ -58,9 +61,14 @@ pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mu
     let pointer =
         Box::into_raw(vec![AllocUnit(0); size].into_boxed_slice()) as *mut AllocUnit as *mut Object;
 
+    CURRENT_SPACE.with(|current_space| current_space.set(current_space.get() + size));
+
+    let gc_next = GC_HEAD.with(|gc_next| gc_next.replace(NonNull::new(pointer)));
+
     let object = Object {
         prototype,
-        ref_count: 1,
+        gc_count: GC_COUNTER.with(|gc_counter| gc_counter.get()),
+        gc_next,
     };
 
     if (*prototype).size > 0 {
@@ -70,44 +78,16 @@ pub unsafe extern "C" fn alloc_obj(prototype: *const Prototype, len: u64) -> *mu
         (pointer as *mut ArrayObject).write(object);
     }
 
-    ALLOC_COUNTER.fetch_add(1, Ordering::SeqCst);
     pointer
-}
-
-/// Deallocates a ChocoPy object
-///
-/// # Safety
-///  - `pointer` must be previously returned by `alloc_obj`.
-///  - The `prototype` field must be intact.
-///  - For `ArrayObject`, the `len` field must be intact.
-///  - Other safety requirements to call `dtor` on `pointer` must be hold.
-#[export_name = "$free_obj"]
-pub unsafe extern "C" fn free_obj(pointer: *mut Object) {
-    assert!((*pointer).ref_count == 0);
-    let prototype = (*pointer).prototype;
-    ((*prototype).dtor)(pointer);
-    let size = divide_up(if (*prototype).size > 0 {
-        size_of::<Object>() + (*prototype).size as usize
-    } else {
-        let len = (*(pointer as *mut ArrayObject)).len;
-        size_of::<ArrayObject>() + (-(*prototype).size as u64 * len) as usize
-    });
-
-    drop(Box::from_raw(std::slice::from_raw_parts_mut(
-        pointer as *mut AllocUnit,
-        size,
-    )));
-
-    ALLOC_COUNTER.fetch_sub(1, Ordering::SeqCst);
 }
 
 /// Gets the array length of a ChocoPy object
 ///
 /// # Safety
+///  - `init` already called
 ///  - `pointer` must be previously returned by `alloc_obj`.
 ///  - The `prototype` field must be intact.
 ///  - For `ArrayObject`, the `len` field must be intact.
-///  - Other safety requirements to call `dtor` on `pointer` must be hold.
 #[export_name = "$len"]
 pub unsafe extern "C" fn len(pointer: *mut Object) -> i32 {
     if pointer.is_null() {
@@ -115,23 +95,21 @@ pub unsafe extern "C" fn len(pointer: *mut Object) -> i32 {
     }
     let object = pointer as *mut ArrayObject;
     let prototype = (*object).object.prototype;
-    if !matches!((*prototype).tag, TypeTag::Str | TypeTag::List) {
+    if !matches!(
+        (*prototype).tag,
+        TypeTag::Str | TypeTag::PlainList | TypeTag::RefList
+    ) {
         invalid_arg();
     }
-    let len = (*object).len as i32;
-    (*object).object.ref_count -= 1;
-    if (*object).object.ref_count == 0 {
-        free_obj(pointer);
-    }
-    len
+    (*object).len as i32
 }
 
 /// Prints a ChocoPy object
 ///
 /// # Safety
+///  - `init` already called
 ///  - `pointer` must be previously returned by `alloc_obj`.
 ///  - The `prototype` field must be intact.
-///  - Other safety requirements to call `dtor` on `pointer` must be hold.
 #[export_name = "$print"]
 pub unsafe extern "C" fn print(pointer: *mut Object) -> *mut u8 {
     if pointer.is_null() {
@@ -166,21 +144,16 @@ pub unsafe extern "C" fn print(pointer: *mut Object) -> *mut u8 {
         }
     }
 
-    (*pointer).ref_count -= 1;
-    if (*pointer).ref_count == 0 {
-        free_obj(pointer);
-    }
     std::ptr::null_mut()
 }
 
 /// Creates a new str object that holds a line of user input
 ///
 /// # Safety
-///  - `str_proto.size == -1` .
-///  - `str_proto.tag == TypeTag::Str`.
-///  - `str_proto.dtor` points to a no-op function.
+///  - `init` already called
+///  - `rbp` and `rsp` points to the bottom and the top of the top stack frame
 #[export_name = "$input"]
-pub unsafe extern "C" fn input(str_proto: *const Prototype) -> *mut Object {
+pub unsafe extern "C" fn input(rbp: *const u64, rsp: *const u64) -> *mut Object {
     let mut input = String::new();
     std::io::stdin().read_line(&mut input).unwrap();
     let input = input.as_bytes();
@@ -192,13 +165,24 @@ pub unsafe extern "C" fn input(str_proto: *const Prototype) -> *mut Object {
         len -= 1;
     }
     let len = len as u64;
-    let pointer = alloc_obj(str_proto, len);
+    let str_proto = INIT_PARAM.with(|init_param| (*init_param.get()).str_prototype);
+    let pointer = alloc_obj(str_proto, len, rbp, rsp);
     std::ptr::copy_nonoverlapping(
         input.as_ptr(),
         (pointer as *mut u8).add(size_of::<ArrayObject>()),
         input.len(),
     );
     pointer
+}
+
+/// Initialize runtime
+///
+/// # Safety
+///  - `*init_param` never changes after calling this function
+///  - Other safety requirements on `InitParam`
+#[export_name = "$init"]
+pub unsafe extern "C" fn init(init_param: *const InitParam) {
+    INIT_PARAM.with(|i| i.set(init_param));
 }
 
 fn exit_code(code: i32) -> ! {
@@ -231,7 +215,6 @@ pub extern "C" fn none_op() -> ! {
 
 #[cfg(not(test))]
 pub mod crt0_glue {
-    use super::*;
     extern "C" {
         #[link_name = "$chocopy_main"]
         fn chocopy_main();
@@ -242,10 +225,6 @@ pub mod crt0_glue {
     #[export_name = "main"]
     pub unsafe extern "C" fn entry_point() -> i32 {
         chocopy_main();
-        if ALLOC_COUNTER.load(Ordering::SeqCst) != 0 {
-            println!("--- Memory leak detected! ---");
-            exit_code(-1);
-        }
         0
     }
 }

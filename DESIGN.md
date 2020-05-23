@@ -14,7 +14,7 @@ chocopy-rs supports intermediate AST (typed or untyped) in JSON format that conf
 
 ## Code generation
 
-The code generation part was worked on before the consulting the [implementation guide](https://chocopy.org/chocopy_implementation_guide.pdf) from the course. Together with the fact that chocopy-rs targets a different architecture, the implementation detail is different from the one in the guide in many ways.
+The code generation part was worked on before consulting the [implementation guide](https://chocopy.org/chocopy_implementation_guide.pdf) from the course. Together with the fact that chocopy-rs targets a different architecture, the implementation detail is different from the one in the guide in many ways.
 
 ### Naming conventions
 
@@ -23,7 +23,6 @@ Symbol names for functions and classes follow a similar rule to the guide, excep
  - The global variable section is named `$global`.
  - Global functions use their function names directly as symbol names.
  - Constructors use type names as symbol names.
- - Destructors use `<TypeName>.$dtor` as symbol names.
  - Methods use `<TypeName>.<FuncName>` as symbol names.
  - Prototypes use `<TypeName>.$proto` as symbol names.
  - Nested functions use `<ParentSymbolName>.<FuncName>` as symbol names.
@@ -47,9 +46,9 @@ This compiler also make use of unwrapped values for `int` and `bool`, which are 
 
 #### Object layout
 
-An object is a record containing a 16-byte header followed by object attributes. The object header contains a 8-byte pointer to the object prototype (`$proto`), and a 8-byte reference counter (`$ref`, for garbage collection).
+An object is a record containing a 24-byte header followed by object attributes. The object header contains a 8-byte pointer to the object prototype (`$proto`), and a 16-byte reserved space for garbage collection (`$gc_count` and `$gc_next`).
 
-Array-like objects (`str` and `[T]`) has a 16-byte `$len` attribute after the object header, followed by the array data. Note that `[int]` and `[bool]` has packed layout where each element is only 4 or 1 byte. `str` is also packed with 1-byte ASCII characters. Strings in `str` are **not** null-terminated, and `\0` is allowed as a valid ASCII character in strings.
+Array-like objects (`str` and `[T]`) has a 8-byte `$len` attribute after the object header, followed by the array data. Note that `[int]` and `[bool]` has packed layout where each element is only 4 or 1 byte. `str` is also packed with 1-byte ASCII characters. Strings in `str` are **not** null-terminated, and `\0` is allowed as a valid ASCII character in strings.
 
 #### Prototype objects
 
@@ -57,9 +56,13 @@ For each type with name `C` (including all primitive types), the global symbol `
 
 A prototype object starts with a 4-byte signed integer `$size` that describes the memory layout of objects of type `C`. When it is a positive number, it is the object size without the object header. When it is a negative number, it indicates `C` is an array-like type and the value without the sign is the size of one element.
 
-Following `$size` is a 4-byte signed integer `$tag` for type tag. The type tag value follows the same convention in the implementation guide, except that all user-defined classes use value 0 for the tag.
+Following `$size` is a 4-byte signed integer `$tag` for type tag. The type tag value follows the a similar convention to the one in the implementation guide, except that
+ - `object` and user-defined classes uses `Other = 0`, and
+ - List objects is separated into `PlainList = -1` (for `[int]` or `[bool]`) and `RefList = -2` (for other list), making it easier for the tracing GC to distinguish.
 
-Following `$tag` is the list of function pointers to methods. The first function pointer `$dtor` points to the destructor, the second function pointer points to the `__init__` method, and so on for other user-defined methods.
+Following `$tag` is the pointer to reference map `$map`, which points to a bit string, indicating whether each 8 bytes in the attribute is a reference for GC tracing.
+
+Following `$map` is the list of function pointers to methods. The first function pointer points to the `__init__` method, and so on for other user-defined methods.
 
 #### Constructors
 
@@ -80,7 +83,6 @@ All functions are called using this calling convention, except for the following
 
  - the main procedure `$chocopy_main`
  - functions in the standard library (all `$`-prefixed functions and `main`)
- - destructors `<TypeName>.$dtor`.
 
  These functions are called using platform's default C ABI (System V ABI for linux, and Microsoft Windows ABI for Windows).
 
@@ -122,8 +124,4 @@ The standard library also provides the program entry point `main`, which directl
 
 ### Garbage collection
 
-chocopy-rs implements simple garbage collection by reference counting. Just like all reference counting, this will fail to collect garbage that contains reference cycle. In such case, the compiled program will report memory leak on exit.
-
-#### Destructors
-
-For each type with name `C`, the global symbol `C.$dtor` (also pointed by `C.$proto.$dtor`) is the destructor for the type. The destructor is called by the standard library when the object is being deallocated. The destructor decreases the reference counter for each of its non-unwrapped, non-None attributes, and recursively deallocate more objects if needed.
+chocopy-rs implements tracing garbage collection.
