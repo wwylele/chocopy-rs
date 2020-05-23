@@ -418,7 +418,13 @@ impl DebugWriter for Codeview {
         fields.write_u16(1); // private
         fields.write_u32(0x0077);
         fields.write_u16(OBJECT_GC_COUNT_OFFSET as u16);
-        fields.write_str("$gc");
+        fields.write_str("$gc_count");
+
+        fields.write_u16(MEMBER);
+        fields.write_u16(1); // private
+        fields.write_u32(0x0077);
+        fields.write_u16(OBJECT_GC_NEXT_OFFSET as u16);
+        fields.write_str("$gc_next");
 
         for attribute in &class_debug.attributes {
             fields.write_u16(MEMBER);

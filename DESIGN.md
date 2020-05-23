@@ -46,9 +46,9 @@ This compiler also make use of unwrapped values for `int` and `bool`, which are 
 
 #### Object layout
 
-An object is a record containing a 16-byte header followed by object attributes. The object header contains a 8-byte pointer to the object prototype (`$proto`), and a 8-byte reserved space for garbage collection (`$gc`).
+An object is a record containing a 24-byte header followed by object attributes. The object header contains a 8-byte pointer to the object prototype (`$proto`), and a 16-byte reserved space for garbage collection (`$gc_count` and `$gc_next`).
 
-Array-like objects (`str` and `[T]`) has a 16-byte `$len` attribute after the object header, followed by the array data. Note that `[int]` and `[bool]` has packed layout where each element is only 4 or 1 byte. `str` is also packed with 1-byte ASCII characters. Strings in `str` are **not** null-terminated, and `\0` is allowed as a valid ASCII character in strings.
+Array-like objects (`str` and `[T]`) has a 8-byte `$len` attribute after the object header, followed by the array data. Note that `[int]` and `[bool]` has packed layout where each element is only 4 or 1 byte. `str` is also packed with 1-byte ASCII characters. Strings in `str` are **not** null-terminated, and `\0` is allowed as a valid ASCII character in strings.
 
 #### Prototype objects
 

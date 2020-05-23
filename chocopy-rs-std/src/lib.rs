@@ -2,6 +2,7 @@ use chocopy_rs_common::*;
 use std::cell::*;
 use std::mem::*;
 use std::process::exit;
+use std::ptr::*;
 
 mod gc;
 
@@ -12,7 +13,7 @@ struct AllocUnit(u64);
 thread_local! {
     static INIT_PARAM: Cell<*const InitParam> = Cell::new(std::ptr::null());
     static GC_COUNTER: Cell<u64> = Cell::new(0);
-    static OBJECT_STORE: RefCell<Vec<Box<[AllocUnit]>>> = RefCell::new(vec![]);
+    static GC_HEAD: Cell<Option<NonNull<Object>>> = Cell::new(None);
 }
 
 pub fn divide_up(value: usize) -> usize {
@@ -48,13 +49,15 @@ pub unsafe extern "C" fn alloc_obj(
         size_of::<ArrayObject>() + (-(*prototype).size as u64 * len) as usize
     });
 
-    let mut boxed = vec![AllocUnit(0); size].into_boxed_slice();
-    let pointer = boxed.as_mut_ptr() as *mut Object;
-    OBJECT_STORE.with(|object_store| object_store.borrow_mut().push(boxed));
+    let pointer =
+        Box::into_raw(vec![AllocUnit(0); size].into_boxed_slice()) as *mut AllocUnit as *mut Object;
+
+    let gc_next = GC_HEAD.with(|gc_next| gc_next.replace(NonNull::new(pointer)));
 
     let object = Object {
         prototype,
         gc_count: GC_COUNTER.with(|gc_counter| gc_counter.get()),
+        gc_next,
     };
 
     if (*prototype).size > 0 {

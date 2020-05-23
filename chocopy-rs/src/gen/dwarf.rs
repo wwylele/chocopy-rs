@@ -245,9 +245,17 @@ impl DebugWriter for Dwarf {
                     dwarf_add_member(
                         &mut self.dwarf,
                         storage_type_id,
-                        "$gc",
+                        "$gc_count",
                         self.size_t_id,
                         OBJECT_GC_COUNT_OFFSET as u64,
+                    );
+
+                    dwarf_add_member(
+                        &mut self.dwarf,
+                        storage_type_id,
+                        "$gc_next",
+                        self.size_t_id,
+                        OBJECT_GC_NEXT_OFFSET as u64,
                     );
 
                     let len_id = dwarf_add_member(
@@ -368,9 +376,16 @@ impl DebugWriter for Dwarf {
         dwarf_add_member(
             &mut self.dwarf,
             tag_id,
-            "$gc",
+            "$gc_count",
             self.size_t_id,
             OBJECT_GC_COUNT_OFFSET as u64,
+        );
+        dwarf_add_member(
+            &mut self.dwarf,
+            tag_id,
+            "$gc_next",
+            self.size_t_id,
+            OBJECT_GC_NEXT_OFFSET as u64,
         );
 
         for attribute in class_debug.attributes {

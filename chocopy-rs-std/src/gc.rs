@@ -77,10 +77,31 @@ pub unsafe fn collect(rbp: *const u64, rsp: *const u64) {
     }
 
     let gc_counter = GC_COUNTER.with(|gc_counter| gc_counter.get());
-    OBJECT_STORE.with(|object_store| {
-        object_store.borrow_mut().retain(|boxed| {
-            let object = boxed.as_ptr() as *const Object;
-            (*object).gc_count == gc_counter
-        })
-    });
+
+    let mut head = GC_HEAD.with(|gc_head| gc_head.get());
+    let mut cur = &mut head;
+
+    while let Some(object) = *cur {
+        let object = object.as_ptr();
+        if (*object).gc_count == gc_counter {
+            cur = &mut (*object).gc_next;
+        } else {
+            *cur = (*object).gc_next;
+
+            let prototype = (*object).prototype;
+            let size = divide_up(if (*prototype).size > 0 {
+                size_of::<Object>() + (*prototype).size as usize
+            } else {
+                let len = (*(object as *mut ArrayObject)).len;
+                size_of::<ArrayObject>() + (-(*prototype).size as u64 * len) as usize
+            });
+
+            drop(Box::from_raw(std::slice::from_raw_parts_mut(
+                object as *mut AllocUnit,
+                size,
+            )));
+        }
+    }
+
+    GC_HEAD.with(|gc_head| gc_head.set(head));
 }
