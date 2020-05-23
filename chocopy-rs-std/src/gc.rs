@@ -17,11 +17,10 @@ unsafe fn walk(var: *const u64) {
     }
 
     let object = *var as *mut Object;
-    let gc_counter = GC_COUNTER.with(|gc_counter| gc_counter.get());
-    if (*object).gc_count == gc_counter {
+    if (*object).gc_count == 1 {
         return;
     }
-    (*object).gc_count = gc_counter;
+    (*object).gc_count = 1;
 
     match (*(*object).prototype).tag {
         TypeTag::Other => {
@@ -45,7 +44,6 @@ unsafe fn walk(var: *const u64) {
 }
 
 pub unsafe fn collect(rbp: *const u64, rsp: *const u64) {
-    GC_COUNTER.with(|gc_counter| gc_counter.set(gc_counter.get().wrapping_add(1)));
     let init_param = INIT_PARAM.with(|init_param| init_param.get().as_ref().unwrap());
     let mut rip = *rsp.offset(-1) as *const u8;
     let mut current_frame = rbp;
@@ -76,14 +74,13 @@ pub unsafe fn collect(rbp: *const u64, rsp: *const u64) {
         }
     }
 
-    let gc_counter = GC_COUNTER.with(|gc_counter| gc_counter.get());
-
     let mut head = GC_HEAD.with(|gc_head| gc_head.get());
     let mut cur = &mut head;
     let mut collect_space = 0;
     while let Some(object) = *cur {
         let object = object.as_ptr();
-        if (*object).gc_count == gc_counter {
+        if (*object).gc_count == 1 {
+            (*object).gc_count = 0;
             cur = &mut (*object).gc_next;
         } else {
             *cur = (*object).gc_next;

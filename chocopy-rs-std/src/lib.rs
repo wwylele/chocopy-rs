@@ -12,7 +12,6 @@ struct AllocUnit(u64);
 
 thread_local! {
     static INIT_PARAM: Cell<*const InitParam> = Cell::new(std::ptr::null());
-    static GC_COUNTER: Cell<u64> = Cell::new(0);
     static GC_HEAD: Cell<Option<NonNull<Object>>> = Cell::new(None);
     static CURRENT_SPACE: Cell<usize> = Cell::new(0);
     static THRESHOLD_SPACE: Cell<usize> = Cell::new(1024);
@@ -67,7 +66,7 @@ pub unsafe extern "C" fn alloc_obj(
 
     let object = Object {
         prototype,
-        gc_count: GC_COUNTER.with(|gc_counter| gc_counter.get()),
+        gc_count: 0,
         gc_next,
     };
 
