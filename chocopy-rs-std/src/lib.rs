@@ -14,6 +14,8 @@ thread_local! {
     static INIT_PARAM: Cell<*const InitParam> = Cell::new(std::ptr::null());
     static GC_COUNTER: Cell<u64> = Cell::new(0);
     static GC_HEAD: Cell<Option<NonNull<Object>>> = Cell::new(None);
+    static CURRENT_SPACE: Cell<usize> = Cell::new(0);
+    static THRESHOLD_SPACE: Cell<usize> = Cell::new(1024);
 }
 
 pub fn divide_up(value: usize) -> usize {
@@ -40,7 +42,14 @@ pub unsafe extern "C" fn alloc_obj(
     rbp: *const u64,
     rsp: *const u64,
 ) -> *mut Object {
-    gc::collect(rbp, rsp);
+    if CURRENT_SPACE.with(|current_space| current_space.get())
+        >= THRESHOLD_SPACE.with(|threshold_space| threshold_space.get())
+    {
+        gc::collect(rbp, rsp);
+        let current = CURRENT_SPACE.with(|current_space| current_space.get());
+        let threshold = std::cmp::max(1024, current * 2);
+        THRESHOLD_SPACE.with(|threshold_space| threshold_space.set(threshold));
+    }
 
     let size = divide_up(if (*prototype).size > 0 {
         assert!(len == 0);
@@ -51,6 +60,8 @@ pub unsafe extern "C" fn alloc_obj(
 
     let pointer =
         Box::into_raw(vec![AllocUnit(0); size].into_boxed_slice()) as *mut AllocUnit as *mut Object;
+
+    CURRENT_SPACE.with(|current_space| current_space.set(current_space.get() + size));
 
     let gc_next = GC_HEAD.with(|gc_next| gc_next.replace(NonNull::new(pointer)));
 

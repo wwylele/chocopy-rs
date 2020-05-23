@@ -80,7 +80,7 @@ pub unsafe fn collect(rbp: *const u64, rsp: *const u64) {
 
     let mut head = GC_HEAD.with(|gc_head| gc_head.get());
     let mut cur = &mut head;
-
+    let mut collect_space = 0;
     while let Some(object) = *cur {
         let object = object.as_ptr();
         if (*object).gc_count == gc_counter {
@@ -100,8 +100,10 @@ pub unsafe fn collect(rbp: *const u64, rsp: *const u64) {
                 object as *mut AllocUnit,
                 size,
             )));
+            collect_space += size;
         }
     }
 
     GC_HEAD.with(|gc_head| gc_head.set(head));
+    CURRENT_SPACE.with(|current_space| current_space.set(current_space.get() - collect_space));
 }
