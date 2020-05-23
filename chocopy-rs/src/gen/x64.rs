@@ -42,8 +42,7 @@ struct Emitter<'a> {
     classes: Option<&'a HashMap<String, ClassSlot>>,
     current_stack_top: i32, // relative to rbp, non-positive
     max_stack_top: i32,     // relative to rbp, non-positive
-    max_parameter: usize,
-    ref_list: Vec<i32>, // offsets relative to rbp
+    ref_list: Vec<i32>,     // offsets relative to rbp
     level: u32,
     code: Vec<u8>,
     links: Vec<ChunkLink>,
@@ -127,7 +126,6 @@ impl<'a> Emitter<'a> {
             classes,
             current_stack_top: 0,
             max_stack_top: 0,
-            max_parameter: 0,
             ref_list,
             level,
             // push rbp; mov rbp,rsp; add rsp,{}
@@ -226,7 +224,10 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn prepare_call(&mut self, stack_reserve: usize) {
-        self.max_parameter = std::cmp::max(self.max_parameter, stack_reserve * 8);
+        self.max_stack_top = std::cmp::min(
+            self.max_stack_top,
+            self.current_stack_top - stack_reserve as i32 * 8,
+        );
     }
 
     pub fn emit_link(&mut self, name: impl Into<String>, offset: i32) {
@@ -253,7 +254,7 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn finalize(mut self, mut procedure_debug: ProcedureDebug) -> Chunk {
-        let mut frame_size = self.max_parameter as i32 - self.max_stack_top;
+        let mut frame_size = -self.max_stack_top;
         if frame_size % 16 == 8 {
             frame_size += 8;
         }
@@ -796,8 +797,6 @@ impl<'a> Emitter<'a> {
         name: &str,
         virtual_call: bool,
     ) {
-        self.prepare_call(args.len());
-
         let mut args_stack = vec![];
 
         for (i, arg) in args.iter().enumerate() {
@@ -816,6 +815,8 @@ impl<'a> Emitter<'a> {
             self.emit_with_stack(&[0x48, 0x89, 0x85], &arg_stack);
             args_stack.push(arg_stack);
         }
+
+        self.prepare_call(args.len());
 
         for (i, arg_stack) in args_stack.into_iter().enumerate().rev() {
             // mov rax,[rbp+{}]
