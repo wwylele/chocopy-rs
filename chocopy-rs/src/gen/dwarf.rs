@@ -336,16 +336,11 @@ impl DebugWriter for Dwarf {
             PROTOTYPE_TAG_OFFSET as u64,
         );
 
-        let dtor_type = self.add_method_type(MethodDebug {
-            return_type: TypeDebug::class_type("<None>"),
-            params: vec![TypeDebug::class_type(&class_name)],
-        });
-
         dwarf_add_member(
             &mut self.dwarf,
             prototype_id,
             "$map",
-            dtor_type,
+            self.int_t_id,
             PROTOTYPE_MAP_OFFSET as u64,
         );
 
