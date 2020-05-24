@@ -830,15 +830,7 @@ impl<'a> Emitter<'a> {
 
         if virtual_call {
             let offset = if let ValueType::ClassValueType(c) = args[0].get_type() {
-                if matches!(
-                    c.class_name.as_str(),
-                    "int" | "bool" | "str" | "<None>" | "<Empty>"
-                ) {
-                    assert!(name == "__init__");
-                    PROTOTYPE_INIT_OFFSET
-                } else {
-                    self.classes()[&c.class_name].methods[name].offset
-                }
+                self.classes()[&c.class_name].methods[name].offset
             } else {
                 panic!()
             };
@@ -1154,6 +1146,27 @@ impl<'a> Emitter<'a> {
             }
             ExprContent::MethodCallExpr(expr) => {
                 let method = &expr.method;
+
+                if let ValueType::ClassValueType(c) = method.object.get_type() {
+                    if matches!(
+                        c.class_name.as_str(),
+                        "int" | "bool" | "str" | "<None>" | "<Empty>"
+                    ) {
+                        assert_eq!(method.member.name, "__init__");
+
+                        self.emit_expression(&method.object);
+
+                        if c.class_name == "<None>" {
+                            self.prepare_call(self.platform.stack_reserve());
+                            self.call(BUILTIN_NONE_OP);
+                        }
+
+                        self.emit_none_literal();
+
+                        return;
+                    }
+                }
+
                 let args: Vec<Expr> = std::iter::once(method.object.clone())
                     .chain(expr.args.iter().cloned())
                     .collect();
@@ -2144,18 +2157,14 @@ fn add_class(
 }
 
 fn gen_special_proto(name: &str, size: i32, tag: TypeTag) -> Chunk {
-    let mut code = vec![0; OBJECT_PROTOTYPE_SIZE as usize];
+    let mut code = vec![0; PROTOTYPE_BASE_SIZE as usize];
     code[PROTOTYPE_SIZE_OFFSET as usize..][..4].copy_from_slice(&size.to_le_bytes());
     code[PROTOTYPE_TAG_OFFSET as usize..][..4].copy_from_slice(&(tag as i32).to_le_bytes());
     code[PROTOTYPE_MAP_OFFSET as usize..][..8].copy_from_slice(&(0u64).to_le_bytes());
-    let links = vec![ChunkLink {
-        pos: PROTOTYPE_INIT_OFFSET as usize,
-        to: ChunkLinkTarget::Symbol("object.__init__".to_owned()),
-    }];
     Chunk {
         name: name.to_owned(),
         code,
-        links,
+        links: vec![],
         extra: ChunkExtra::Data { writable: false },
     }
 }

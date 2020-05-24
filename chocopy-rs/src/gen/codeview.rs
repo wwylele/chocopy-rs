@@ -273,17 +273,7 @@ impl Codeview {
                     name: "$len".to_owned(),
                     var_type: TypeDebug::class_type("int"),
                 }],
-                methods: std::iter::once((
-                    PROTOTYPE_INIT_OFFSET,
-                    (
-                        "__init__".to_owned(),
-                        MethodDebug {
-                            params: vec![],
-                            return_type: TypeDebug::class_type("[]"),
-                        },
-                    ),
-                ))
-                .collect(),
+                methods: BTreeMap::new(),
             },
         );
 
