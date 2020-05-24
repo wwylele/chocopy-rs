@@ -96,7 +96,8 @@ pub(super) struct Dwarf {
     size_t_id: UnitEntryId,
     int_t_id: UnitEntryId,
     char_id: UnitEntryId,
-    list_prototype_ptr_id: UnitEntryId,
+    object_prototype_id: UnitEntryId,
+    object_prototype_ptr_id: UnitEntryId,
     debug_types: HashMap<TypeDebug, UnitEntryId>,
     debug_method_types: HashMap<MethodDebug, UnitEntryId>,
     range_list: Vec<Range>,
@@ -157,25 +158,9 @@ impl Dwarf {
         let int_t_id = dwarf_add_base_type(&mut dwarf, "$int_t", DW_ATE_signed, 4);
         let char_id = dwarf_add_base_type(&mut dwarf, "$char", DW_ATE_signed, 1);
 
-        let list_prototype_id =
-            dwarf_add_struct_type(&mut dwarf, "[].$prototype", OBJECT_PROTOTYPE_SIZE as u64);
-
-        dwarf_add_member(
-            &mut dwarf,
-            list_prototype_id,
-            "$size",
-            int_t_id,
-            PROTOTYPE_SIZE_OFFSET as u64,
-        );
-        dwarf_add_member(
-            &mut dwarf,
-            list_prototype_id,
-            "$tag",
-            int_t_id,
-            PROTOTYPE_TAG_OFFSET as u64,
-        );
-
-        let list_prototype_ptr_id = dwarf_add_pointer_type(&mut dwarf, None, list_prototype_id);
+        let object_prototype_id =
+            dwarf_add_struct_type(&mut dwarf, "object", OBJECT_PROTOTYPE_SIZE as u64);
+        let object_prototype_ptr_id = dwarf_add_pointer_type(&mut dwarf, None, object_prototype_id);
 
         Dwarf {
             flavor,
@@ -183,7 +168,8 @@ impl Dwarf {
             size_t_id,
             int_t_id,
             char_id,
-            list_prototype_ptr_id,
+            object_prototype_id,
+            object_prototype_ptr_id,
             debug_types: HashMap::new(),
             debug_method_types: HashMap::new(),
             range_list: vec![],
@@ -252,7 +238,7 @@ impl DebugWriter for Dwarf {
                         &mut self.dwarf,
                         storage_type_id,
                         "$proto",
-                        self.list_prototype_ptr_id,
+                        self.object_prototype_ptr_id,
                         OBJECT_PROTOTYPE_OFFSET as u64,
                     );
 
@@ -325,11 +311,15 @@ impl DebugWriter for Dwarf {
             AttributeValue::Udata((class_debug.size + OBJECT_ATTRIBUTE_OFFSET) as u64),
         );
 
-        let prototype_id = dwarf_add_struct_type(
-            &mut self.dwarf,
-            &prototype_name,
-            (class_debug.methods.len() * 8) as u64 + PROTOTYPE_INIT_OFFSET as u64,
-        );
+        let prototype_id = if class_name == "object" {
+            self.object_prototype_id
+        } else {
+            dwarf_add_struct_type(
+                &mut self.dwarf,
+                &prototype_name,
+                (class_debug.methods.len() * 8) as u64 + PROTOTYPE_INIT_OFFSET as u64,
+            )
+        };
 
         dwarf_add_member(
             &mut self.dwarf,
@@ -346,11 +336,16 @@ impl DebugWriter for Dwarf {
             PROTOTYPE_TAG_OFFSET as u64,
         );
 
+        let dtor_type = self.add_method_type(MethodDebug {
+            return_type: TypeDebug::class_type("<None>"),
+            params: vec![TypeDebug::class_type(&class_name)],
+        });
+
         dwarf_add_member(
             &mut self.dwarf,
             prototype_id,
             "$map",
-            self.size_t_id,
+            dtor_type,
             PROTOTYPE_MAP_OFFSET as u64,
         );
 
@@ -365,7 +360,11 @@ impl DebugWriter for Dwarf {
             );
         }
 
-        let prototype_ptr_id = dwarf_add_pointer_type(&mut self.dwarf, None, prototype_id);
+        let prototype_ptr_id = if class_name == "object" {
+            self.object_prototype_ptr_id
+        } else {
+            dwarf_add_pointer_type(&mut self.dwarf, None, prototype_id)
+        };
 
         dwarf_add_member(
             &mut self.dwarf,

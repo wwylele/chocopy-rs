@@ -10,13 +10,10 @@ print("hello")
 print(str())
 print(int())
 print(bool())
-print((3 if print("hmm") is None else 4).__init__() is None)
 #!
 #<->#
 #hello
 #
 #0
 #False
-#hmm
-#True
 #<->#
