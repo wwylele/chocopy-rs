@@ -16,52 +16,34 @@ impl CompilerError {
 
 macro_rules! parse_expr_unary {
     ($name:ident, $parse_next:ident, $operator_token:expr => $operator_str:expr) => {
-        fn $name(&mut self) -> (Option<Expr>, Vec<CompilerError>) {
-            let mut errors = vec![];
+        fn $name(&mut self) -> Option<Expr> {
             let start = self.next_pos();
 
             let token = self.take();
             let expr = if token.token == $operator_token {
-                let (expr, mut error) = self.$parse_next();
-                errors.append(&mut error);
+                let expr = self.$parse_next()?;
+
                 let end = self.prev_pos().unwrap_or(start);
-                if let Some(operand) = expr {
-                    Expr::UnaryExpr(Box::new(UnaryExpr {
-                        base: NodeBase::from_positions(start, end),
-                        operator: $operator_str,
-                        operand,
-                    }))
-                } else {
-                    return (None, errors);
-                }
+                Expr::UnaryExpr(Box::new(UnaryExpr {
+                    base: NodeBase::from_positions(start, end),
+                    operator: $operator_str,
+                    operand: expr,
+                }))
             } else {
                 self.push_back(token);
-                let (expr, mut error) = self.$parse_next();
-                errors.append(&mut error);
-                if let Some(expr) = expr {
-                    expr
-                } else {
-                    return (None, errors);
-                }
+                self.$parse_next()?
             };
-            (Some(expr), errors)
+            Some(expr)
         }
     };
 }
 
 macro_rules! parse_expr_binary {
     ($name:ident, $parse_next:ident, $($operator_token:pat => $operator_str:expr),*) => {
-        fn $name(&mut self) -> (Option<Expr>, Vec<CompilerError>) {
-            let mut errors = vec![];
+        fn $name(&mut self) -> Option<Expr> {
             let start = self.next_pos();
 
-            let (expr, mut error) = self.$parse_next();
-            errors.append(&mut error);
-            let mut expr = if let Some(expr) = expr {
-                expr
-            } else {
-                return (None, errors)
-            };
+            let mut expr = self.$parse_next()?;
 
             loop {
                 let token = self.take();
@@ -73,13 +55,7 @@ macro_rules! parse_expr_binary {
                     }
                 };
 
-                let (right, mut error) = self.$parse_next();
-                errors.append(&mut error);
-                let right = if let Some(right) = right {
-                    right
-                } else {
-                    return (None, errors);
-                };
+                let right = self.$parse_next()?;
 
                 let end = self.prev_pos().unwrap_or(start);
 
@@ -90,25 +66,27 @@ macro_rules! parse_expr_binary {
                     right
                 }))
             }
-            (Some(expr), errors)
+            Some(expr)
         }
     };
 }
 
-struct BufferedReceiver<F> {
+struct Parser<F> {
     receiver: F,
     buffer: Vec<ComplexToken>,
     prev_pos_buf: VecDeque<Position>,
     eof: Option<ComplexToken>,
+    errors: Vec<CompilerError>,
 }
 
-impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
-    fn new(receiver: F) -> BufferedReceiver<F> {
-        BufferedReceiver {
+impl<F: Iterator<Item = ComplexToken>> Parser<F> {
+    fn new(receiver: F) -> Parser<F> {
+        Parser {
             receiver,
             buffer: vec![],
             prev_pos_buf: VecDeque::new(),
             eof: None,
+            errors: vec![],
         }
     }
 
@@ -189,76 +167,47 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
         self.prev_pos_buf.back().cloned()
     }
 
-    fn parse_expr1(&mut self) -> (Option<Expr>, Vec<CompilerError>) {
-        let mut errors = vec![];
+    fn parse_expr1(&mut self) -> Option<Expr> {
         let start = self.next_pos();
 
         // Parse "expr if expr else expr"
 
-        let (then_expr, mut error) = self.parse_expr2();
-        errors.append(&mut error);
-        let then_expr = if let Some(then_expr) = then_expr {
-            then_expr
-        } else {
-            return (None, errors);
-        };
+        let then_expr = self.parse_expr2()?;
 
         let token = self.take();
         if token.token != Token::If {
             self.push_back(token);
-            return (Some(then_expr), errors);
+            return Some(then_expr);
         }
 
-        let (condition, mut error) = self.parse_expr1();
-        errors.append(&mut error);
-        let condition = if let Some(condition) = condition {
-            condition
-        } else {
-            return (None, errors);
-        };
+        let condition = self.parse_expr1()?;
 
         let token = self.take();
         if token.token != Token::Else {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
-        let (else_expr, mut error) = self.parse_expr1();
-        errors.append(&mut error);
-        let else_expr = if let Some(else_expr) = else_expr {
-            else_expr
-        } else {
-            return (None, errors);
-        };
+        let else_expr = self.parse_expr1()?;
 
         let end = self.prev_pos().unwrap_or(start);
 
-        (
-            Some(Expr::IfExpr(Box::new(IfExpr {
-                base: NodeBase::from_positions(start, end),
-                condition,
-                then_expr,
-                else_expr,
-            }))),
-            errors,
-        )
+        Some(Expr::IfExpr(Box::new(IfExpr {
+            base: NodeBase::from_positions(start, end),
+            condition,
+            then_expr,
+            else_expr,
+        })))
     }
 
     parse_expr_binary!(parse_expr2, parse_expr3, Token::Or => BinaryOp::Or);
     parse_expr_binary!(parse_expr3, parse_expr4, Token::And => BinaryOp::And);
     parse_expr_unary!(parse_expr4, parse_expr5, Token::Not => UnaryOp::Not);
 
-    fn parse_expr5(&mut self) -> (Option<Expr>, Vec<CompilerError>) {
-        let mut errors = vec![];
+    fn parse_expr5(&mut self) -> Option<Expr> {
         let start = self.next_pos();
 
-        let (left, mut error) = self.parse_expr6();
-        errors.append(&mut error);
-        let left = if let Some(left) = left {
-            left
-        } else {
-            return (None, errors);
-        };
+        let left = self.parse_expr6()?;
 
         let token = self.take();
         let operator = match token.token {
@@ -271,28 +220,19 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
             Token::Is => BinaryOp::Is,
             _ => {
                 self.push_back(token);
-                return (Some(left), errors);
+                return Some(left);
             }
         };
 
-        let (right, mut error) = self.parse_expr6();
-        errors.append(&mut error);
-        let right = if let Some(right) = right {
-            right
-        } else {
-            return (None, errors);
-        };
-
+        let right = self.parse_expr6()?;
         let end = self.prev_pos().unwrap_or(start);
-        (
-            Some(Expr::BinaryExpr(Box::new(BinaryExpr {
-                base: NodeBase::from_positions(start, end),
-                left,
-                operator,
-                right,
-            }))),
-            errors,
-        )
+
+        Some(Expr::BinaryExpr(Box::new(BinaryExpr {
+            base: NodeBase::from_positions(start, end),
+            left,
+            operator,
+            right,
+        })))
     }
 
     parse_expr_binary!(parse_expr6, parse_expr7,
@@ -308,18 +248,11 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
 
     parse_expr_unary!(parse_expr8, parse_expr9, Token::Minus => UnaryOp::Negative);
 
-    fn parse_expr9(&mut self) -> (Option<Expr>, Vec<CompilerError>) {
-        let mut errors = vec![];
+    fn parse_expr9(&mut self) -> Option<Expr> {
         let start = self.next_pos();
 
         // Parse "expr . id", "expr [ expr ]", "expr ( expr,* )"
-        let (expr, mut error) = self.parse_expr10();
-        errors.append(&mut error);
-        let mut expr = if let Some(expr) = expr {
-            expr
-        } else {
-            return (None, errors);
-        };
+        let mut expr = self.parse_expr10()?;
 
         loop {
             let token = self.take();
@@ -331,9 +264,7 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                     if token_head.token != Token::RightPar {
                         self.push_back(token_head);
                         loop {
-                            let (arg, mut error) = self.parse_expr1();
-                            errors.append(&mut error);
-                            if let Some(arg) = arg {
+                            if let Some(arg) = self.parse_expr1() {
                                 args.push(arg);
                             }
                             let token = self.take();
@@ -341,8 +272,8 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                                 Token::Comma => (),
                                 Token::RightPar => break,
                                 _ => {
-                                    errors.push(CompilerError::unexpected(token));
-                                    return (None, errors);
+                                    self.errors.push(CompilerError::unexpected(token));
+                                    return None;
                                 }
                             }
                         }
@@ -373,24 +304,18 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                             }))
                         }
                         _ => {
-                            errors.push(CompilerError::unexpected(token));
-                            return (None, errors);
+                            self.errors.push(CompilerError::unexpected(token));
+                            return None;
                         }
                     }
                 }
                 Token::LeftSquare => {
-                    let (index, mut error) = self.parse_expr1();
-                    errors.append(&mut error);
-                    let index = if let Some(index) = index {
-                        index
-                    } else {
-                        return (None, errors);
-                    };
+                    let index = self.parse_expr1()?;
 
                     let token = self.take();
                     if token.token != Token::RightSquare {
-                        errors.push(CompilerError::unexpected(token));
-                        return (None, errors);
+                        self.errors.push(CompilerError::unexpected(token));
+                        return None;
                     }
 
                     let end = self.prev_pos().unwrap_or(start);
@@ -409,8 +334,8 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                             name,
                         }
                     } else {
-                        errors.push(CompilerError::unexpected(token));
-                        return (None, errors);
+                        self.errors.push(CompilerError::unexpected(token));
+                        return None;
                     };
 
                     let end = self.prev_pos().unwrap_or(start);
@@ -428,11 +353,10 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
             }
         }
 
-        (Some(expr), errors)
+        Some(expr)
     }
 
-    fn parse_expr10(&mut self) -> (Option<Expr>, Vec<CompilerError>) {
-        let mut errors = vec![];
+    fn parse_expr10(&mut self) -> Option<Expr> {
         let start = self.next_pos();
 
         // Parse atomic expression, (), and []
@@ -449,18 +373,13 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                 Expr::StringLiteral(StringLiteral { base, value })
             }
             Token::LeftPar => {
-                let (expr, mut error) = self.parse_expr1();
-                errors.append(&mut error);
-                if let Some(expr) = expr {
-                    let token = self.take();
-                    if token.token != Token::RightPar {
-                        errors.push(CompilerError::unexpected(token));
-                        return (None, errors);
-                    }
-                    expr
-                } else {
-                    return (None, errors);
+                let expr = self.parse_expr1()?;
+                let token = self.take();
+                if token.token != Token::RightPar {
+                    self.errors.push(CompilerError::unexpected(token));
+                    return None;
                 }
+                expr
             }
             Token::LeftSquare => {
                 let mut elements = vec![];
@@ -469,9 +388,7 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                 if token.token != Token::RightSquare {
                     self.push_back(token);
                     loop {
-                        let (element, mut error) = self.parse_expr1();
-                        errors.append(&mut error);
-                        if let Some(element) = element {
+                        if let Some(element) = self.parse_expr1() {
                             elements.push(element);
                         }
                         let token = self.take();
@@ -479,8 +396,8 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                             Token::Comma => (),
                             Token::RightSquare => break,
                             _ => {
-                                errors.push(CompilerError::unexpected(token));
-                                return (None, errors);
+                                self.errors.push(CompilerError::unexpected(token));
+                                return None;
                             }
                         }
                     }
@@ -491,27 +408,21 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                 Expr::ListExpr(ListExpr { base, elements })
             }
             _ => {
-                errors.push(CompilerError::unexpected(token));
-                return (None, errors);
+                self.errors.push(CompilerError::unexpected(token));
+                return None;
             }
         };
 
-        (Some(expr), errors)
+        Some(expr)
     }
 
-    fn parse_assign_or_expr_stmt(&mut self) -> (Option<Stmt>, Vec<CompilerError>) {
+    fn parse_assign_or_expr_stmt(&mut self) -> Option<Stmt> {
         let mut expr_list = vec![];
-        let mut errors = vec![];
+
         let start = self.next_pos();
         let mut end;
         loop {
-            let (expr, mut error) = self.parse_expr1();
-            errors.append(&mut error);
-            if let Some(expr) = expr {
-                expr_list.push(expr);
-            } else {
-                return (None, errors);
-            }
+            expr_list.push(self.parse_expr1()?);
 
             end = self.prev_pos().unwrap_or(start);
             let token = self.take();
@@ -521,19 +432,19 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                     | Some(ExprContent::MemberExpr(_))
                     | Some(ExprContent::IndexExpr(_)) => (),
                     _ => {
-                        errors.push(CompilerError::unexpected(token));
-                        return (None, errors);
+                        self.errors.push(CompilerError::unexpected(token));
+                        return None;
                     }
                 },
                 Token::NewLine => break,
                 _ => {
-                    errors.push(CompilerError::unexpected(token));
-                    return (None, errors);
+                    self.errors.push(CompilerError::unexpected(token));
+                    return None;
                 }
             }
         }
         let base = NodeBase::from_positions(start, end);
-        let stmt = match expr_list.len().cmp(&1) {
+        match expr_list.len().cmp(&1) {
             Ordering::Equal => Some(Stmt::ExprStmt(ExprStmt {
                 base,
                 expr: expr_list.pop().unwrap(),
@@ -547,18 +458,16 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                 }))
             }
             _ => None,
-        };
-        (stmt, errors)
+        }
     }
 
-    fn parse_return(&mut self) -> (Option<ReturnStmt>, Vec<CompilerError>) {
-        let mut errors = vec![];
+    fn parse_return(&mut self) -> Option<ReturnStmt> {
         let start = self.next_pos();
 
         let token = self.take();
         if token.token != Token::Return {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
         let token = self.take();
@@ -567,110 +476,81 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
             None
         } else {
             self.push_back(token);
-            let (expr, mut error) = self.parse_expr1();
-            errors.append(&mut error);
-            if let Some(expr) = expr {
-                Some(expr)
-            } else {
-                return (None, errors);
-            }
+            Some(self.parse_expr1()?)
         };
 
         let end = self.prev_pos().unwrap_or(start);
 
         let token = self.take();
         if token.token != Token::NewLine {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
-        (
-            Some(ReturnStmt {
-                base: NodeBase::from_positions(start, end),
-                value,
-            }),
-            errors,
-        )
+        Some(ReturnStmt {
+            base: NodeBase::from_positions(start, end),
+            value,
+        })
     }
 
-    fn parse_block(&mut self) -> (Option<Vec<Stmt>>, Vec<CompilerError>) {
-        let mut errors = vec![];
-
+    fn parse_block(&mut self) -> Option<Vec<Stmt>> {
         let token = self.take();
         if token.token != Token::Colon {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
         let token = self.take();
         if token.token != Token::NewLine {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
         let token = self.take();
         if token.token != Token::Indent {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
-        let (body, mut error) = self.parse_stmt_list();
-        errors.append(&mut error);
+        let body = self.parse_stmt_list();
 
         let token = self.take();
         if token.token != Token::Dedent {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
-        (Some(body), errors)
+        Some(body)
     }
 
-    fn parse_while(&mut self) -> (Option<WhileStmt>, Vec<CompilerError>) {
-        let mut errors = vec![];
+    fn parse_while(&mut self) -> Option<WhileStmt> {
         let start = self.next_pos();
 
         let token = self.take();
         if token.token != Token::While {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
-        let (expr, mut error) = self.parse_expr1();
-        errors.append(&mut error);
-        let condition = if let Some(expr) = expr {
-            expr
-        } else {
-            return (None, errors);
-        };
-
-        let (body, mut error) = self.parse_block();
-        errors.append(&mut error);
-        let body = if let Some(body) = body {
-            body
-        } else {
-            return (None, errors);
-        };
+        let condition = self.parse_expr1()?;
+        let body = self.parse_block()?;
 
         let end = self.prev_pos().unwrap_or(start);
-        (
-            Some(WhileStmt {
-                base: NodeBase::from_positions(start, end),
-                condition,
-                body,
-            }),
-            errors,
-        )
+
+        Some(WhileStmt {
+            base: NodeBase::from_positions(start, end),
+            condition,
+            body,
+        })
     }
 
-    fn parse_for(&mut self) -> (Option<ForStmt>, Vec<CompilerError>) {
-        let mut errors = vec![];
+    fn parse_for(&mut self) -> Option<ForStmt> {
         let start = self.next_pos();
 
         let token = self.take();
         if token.token != Token::For {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
         let token = self.take();
@@ -681,90 +561,47 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                 name,
             }
         } else {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         };
 
         let token = self.take();
         if token.token != Token::In {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
-        let (expr, mut error) = self.parse_expr1();
-        errors.append(&mut error);
-        let iterable = if let Some(expr) = expr {
-            expr
-        } else {
-            return (None, errors);
-        };
-
-        let (body, mut error) = self.parse_block();
-        errors.append(&mut error);
-        let body = if let Some(body) = body {
-            body
-        } else {
-            return (None, errors);
-        };
+        let iterable = self.parse_expr1()?;
+        let body = self.parse_block()?;
 
         let end = self.prev_pos().unwrap_or(start);
-        (
-            Some(ForStmt {
-                base: NodeBase::from_positions(start, end),
-                identifier,
-                iterable,
-                body,
-            }),
-            errors,
-        )
+
+        Some(ForStmt {
+            base: NodeBase::from_positions(start, end),
+            identifier,
+            iterable,
+            body,
+        })
     }
 
-    fn parse_if(&mut self) -> (Option<IfStmt>, Vec<CompilerError>) {
-        let mut errors = vec![];
+    fn parse_if(&mut self) -> Option<IfStmt> {
         let start = self.next_pos();
 
         let token = self.take();
         if token.token != Token::If && token.token != Token::Elif {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
-        let (expr, mut error) = self.parse_expr1();
-        errors.append(&mut error);
-        let condition = if let Some(expr) = expr {
-            expr
-        } else {
-            return (None, errors);
-        };
-
-        let (then_body, mut error) = self.parse_block();
-        errors.append(&mut error);
-        let then_body = if let Some(then_body) = then_body {
-            then_body
-        } else {
-            return (None, errors);
-        };
+        let condition = self.parse_expr1()?;
+        let then_body = self.parse_block()?;
 
         let token = self.take();
         let else_body = match token.token {
-            Token::Else => {
-                let (else_body, mut error) = self.parse_block();
-                errors.append(&mut error);
-                if let Some(else_body) = else_body {
-                    else_body
-                } else {
-                    return (None, errors);
-                }
-            }
+            Token::Else => self.parse_block()?,
             Token::Elif => {
                 self.push_back(token);
-                let (else_body, mut error) = self.parse_if();
-                errors.append(&mut error);
-                if let Some(else_body) = else_body {
-                    vec![Stmt::IfStmt(else_body)]
-                } else {
-                    return (None, errors);
-                }
+                vec![Stmt::IfStmt(self.parse_if()?)]
             }
             _ => {
                 self.push_back(token);
@@ -773,20 +610,17 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
         };
 
         let end = self.prev_pos().unwrap_or(start);
-        (
-            Some(IfStmt {
-                base: NodeBase::from_positions(start, end),
-                condition,
-                then_body,
-                else_body,
-            }),
-            errors,
-        )
+
+        Some(IfStmt {
+            base: NodeBase::from_positions(start, end),
+            condition,
+            then_body,
+            else_body,
+        })
     }
 
-    fn parse_stmt_list(&mut self) -> (Vec<Stmt>, Vec<CompilerError>) {
+    fn parse_stmt_list(&mut self) -> Vec<Stmt> {
         let mut stmt_list = vec![];
-        let mut errors = vec![];
 
         loop {
             let token = self.take();
@@ -798,15 +632,13 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                 Token::Pass => {
                     let token = self.take();
                     if token.token != Token::NewLine {
-                        errors.push(CompilerError::unexpected(token));
+                        self.errors.push(CompilerError::unexpected(token));
                         self.skip_to_next_line();
                     }
                 }
                 Token::Return => {
                     self.push_back(token);
-                    let (return_stmt, mut error) = self.parse_return();
-                    errors.append(&mut error);
-                    if let Some(return_stmt) = return_stmt {
+                    if let Some(return_stmt) = self.parse_return() {
                         stmt_list.push(Stmt::ReturnStmt(return_stmt));
                     } else {
                         self.skip_to_next_line();
@@ -814,9 +646,7 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                 }
                 Token::While => {
                     self.push_back(token);
-                    let (while_stmt, mut error) = self.parse_while();
-                    errors.append(&mut error);
-                    if let Some(while_stmt) = while_stmt {
+                    if let Some(while_stmt) = self.parse_while() {
                         stmt_list.push(Stmt::WhileStmt(while_stmt));
                     } else {
                         self.skip_to_next_line();
@@ -824,9 +654,7 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                 }
                 Token::For => {
                     self.push_back(token);
-                    let (for_stmt, mut error) = self.parse_for();
-                    errors.append(&mut error);
-                    if let Some(for_stmt) = for_stmt {
+                    if let Some(for_stmt) = self.parse_for() {
                         stmt_list.push(Stmt::ForStmt(for_stmt));
                     } else {
                         self.skip_to_next_line();
@@ -834,9 +662,7 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                 }
                 Token::If => {
                     self.push_back(token);
-                    let (if_stmt, mut error) = self.parse_if();
-                    errors.append(&mut error);
-                    if let Some(if_stmt) = if_stmt {
+                    if let Some(if_stmt) = self.parse_if() {
                         stmt_list.push(Stmt::IfStmt(if_stmt));
                     } else {
                         self.skip_to_next_line();
@@ -844,9 +670,7 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                 }
                 _ => {
                     self.push_back(token);
-                    let (stmt, mut error) = self.parse_assign_or_expr_stmt();
-                    errors.append(&mut error);
-                    if let Some(stmt) = stmt {
+                    if let Some(stmt) = self.parse_assign_or_expr_stmt() {
                         stmt_list.push(stmt);
                     } else {
                         self.skip_to_next_line();
@@ -855,19 +679,18 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
             }
         }
 
-        (stmt_list, errors)
+        stmt_list
     }
 
-    fn parse_decl_in_class(&mut self) -> (Option<Vec<Declaration>>, Vec<CompilerError>) {
+    fn parse_decl_in_class(&mut self) -> Option<Vec<Declaration>> {
         let mut declarations = vec![];
-        let mut errors = vec![];
 
         let token = self.take();
         if token.token == Token::Pass {
             let token = self.take();
             if token.token != Token::NewLine {
-                errors.push(CompilerError::unexpected(token));
-                return (None, errors);
+                self.errors.push(CompilerError::unexpected(token));
+                return None;
             }
         } else {
             // Parse "[func_def|var_def]* }"
@@ -882,39 +705,34 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                     }
                     Token::Def => {
                         self.push_back(token);
-                        let (func_def, mut error) = self.parse_func_def();
-                        if let Some(func_def) = func_def {
+                        if let Some(func_def) = self.parse_func_def() {
                             declarations.push(Declaration::FuncDef(func_def));
                         } else {
                             self.skip_to_next_line();
                         }
-                        errors.append(&mut error);
                     }
                     _ => {
                         self.push_back(token);
-                        let (var_def, mut error) = self.parse_var_def();
-                        if let Some(var_def) = var_def {
+                        if let Some(var_def) = self.parse_var_def() {
                             declarations.push(Declaration::VarDef(var_def));
                         } else {
                             self.skip_to_next_line();
                         }
-                        errors.append(&mut error);
                     }
                 }
             }
         }
-        (Some(declarations), errors)
+        Some(declarations)
     }
 
-    fn parse_class_def(&mut self) -> (Option<ClassDef>, Vec<CompilerError>) {
-        let mut errors = vec![];
+    fn parse_class_def(&mut self) -> Option<ClassDef> {
         let start = self.next_pos();
 
         // Parse "class ID ( ID ) : \n {"
         let token = self.take();
         if token.token != Token::Class {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
         let token = self.take();
@@ -924,14 +742,14 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                 name,
             }
         } else {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         };
 
         let token = self.take();
         if token.token != Token::LeftPar {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
         let token = self.take();
@@ -941,79 +759,67 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                 name,
             }
         } else {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         };
 
         let token = self.take();
         if token.token != Token::RightPar {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
         let token = self.take();
         if token.token != Token::Colon {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
         let token = self.take();
         if token.token != Token::NewLine {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
         let token = self.take();
         if token.token != Token::Indent {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
         // Parse body
-        let (declarations, mut error) = self.parse_decl_in_class();
-        errors.append(&mut error);
-        let declarations = if let Some(declarations) = declarations {
-            declarations
-        } else {
-            return (None, errors);
-        };
+        let declarations = self.parse_decl_in_class()?;
 
         // end at NEWLINE, excluding DEDENT
         let end = self.prev_pos().unwrap_or(start);
 
         let token = self.take();
         if token.token != Token::Dedent {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
-        (
-            Some(ClassDef {
-                base: NodeBase::from_positions(start, end),
-                name,
-                super_class,
-                declarations,
-            }),
-            errors,
-        )
+        Some(ClassDef {
+            base: NodeBase::from_positions(start, end),
+            name,
+            super_class,
+            declarations,
+        })
     }
 
-    fn parse_decl_in_func(&mut self) -> (Option<Vec<Declaration>>, Vec<CompilerError>) {
+    fn parse_decl_in_func(&mut self) -> Option<Vec<Declaration>> {
         let mut declarations = vec![];
-        let mut errors = vec![];
 
         loop {
             let head = self.take();
             match head.token {
                 Token::Def => {
                     self.push_back(head);
-                    let (func_def, mut error) = self.parse_func_def();
-                    if let Some(func_def) = func_def {
+                    if let Some(func_def) = self.parse_func_def() {
                         declarations.push(Declaration::FuncDef(func_def));
                     } else {
                         self.skip_to_next_line();
                     }
-                    errors.append(&mut error);
                 }
                 scope @ Token::Global | scope @ Token::Nonlocal => {
                     let start = head.location.start;
@@ -1024,7 +830,7 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                             name,
                         }
                     } else {
-                        errors.push(CompilerError::unexpected(token));
+                        self.errors.push(CompilerError::unexpected(token));
                         self.skip_to_next_line();
                         continue;
                     };
@@ -1033,7 +839,7 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
 
                     let token = self.take();
                     if token.token != Token::NewLine {
-                        errors.push(CompilerError::unexpected(token));
+                        self.errors.push(CompilerError::unexpected(token));
                         self.skip_to_next_line();
                         continue;
                     }
@@ -1053,13 +859,11 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                     if second.token == Token::Colon {
                         self.push_back(second);
                         self.push_back(head);
-                        let (var_def, mut error) = self.parse_var_def();
-                        if let Some(var_def) = var_def {
+                        if let Some(var_def) = self.parse_var_def() {
                             declarations.push(Declaration::VarDef(var_def));
                         } else {
                             self.skip_to_next_line();
                         }
-                        errors.append(&mut error);
                     } else {
                         self.push_back(second);
                         self.push_back(head);
@@ -1069,18 +873,17 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
             }
         }
 
-        (Some(declarations), errors)
+        Some(declarations)
     }
 
-    fn parse_func_def(&mut self) -> (Option<FuncDef>, Vec<CompilerError>) {
-        let mut errors = vec![];
+    fn parse_func_def(&mut self) -> Option<FuncDef> {
         let start = self.next_pos();
 
         // Parse "def ID ("
         let token = self.take();
         if token.token != Token::Def {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
         let token = self.take();
@@ -1090,14 +893,14 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                 name,
             }
         } else {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         };
 
         let token = self.take();
         if token.token != Token::LeftPar {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
         // Parse "typed_var,* )"
@@ -1106,13 +909,7 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
         if token.token != Token::RightPar {
             self.push_back(token);
             loop {
-                let (typed_var, mut error) = self.parse_typed_var();
-                errors.append(&mut error);
-                let typed_var = if let Some(typed_var) = typed_var {
-                    typed_var
-                } else {
-                    return (None, errors);
-                };
+                let typed_var = self.parse_typed_var()?;
                 params.push(typed_var);
 
                 let token = self.take();
@@ -1120,8 +917,8 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                     Token::Comma => (),
                     Token::RightPar => break,
                     _ => {
-                        errors.push(CompilerError::unexpected(token));
-                        return (None, errors);
+                        self.errors.push(CompilerError::unexpected(token));
+                        return None;
                     }
                 }
             }
@@ -1135,91 +932,67 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                 class_name: "<None>".to_owned(),
             }),
             Token::Arrow => {
-                let (return_type, mut error) = self.parse_type_annotation();
-                errors.append(&mut error);
-                let return_type = if let Some(return_type) = return_type {
-                    return_type
-                } else {
-                    return (None, errors);
-                };
+                let return_type = self.parse_type_annotation()?;
 
                 let token = self.take();
                 if token.token != Token::Colon {
-                    errors.push(CompilerError::unexpected(token));
-                    return (None, errors);
+                    self.errors.push(CompilerError::unexpected(token));
+                    return None;
                 }
 
                 return_type
             }
             _ => {
-                errors.push(CompilerError::unexpected(token));
-                return (None, errors);
+                self.errors.push(CompilerError::unexpected(token));
+                return None;
             }
         };
 
         let token = self.take();
         if token.token != Token::NewLine {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
         let token = self.take();
         if token.token != Token::Indent {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
         // Parse declarations
-        let (declarations, mut error) = self.parse_decl_in_func();
-        errors.append(&mut error);
-        let declarations = if let Some(declarations) = declarations {
-            declarations
-        } else {
-            return (None, errors);
-        };
+        let declarations = self.parse_decl_in_func()?;
 
         // Parse statements
-        let (stmt_list, mut error) = self.parse_stmt_list();
-        errors.append(&mut error);
-        let statements = stmt_list;
+        let statements = self.parse_stmt_list();
 
         let end = self.prev_pos().unwrap_or(start); // exludes DEDENT
 
         let token = self.take();
         if token.token != Token::Dedent {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
-        (
-            Some(FuncDef {
-                base: NodeBase::from_positions(start, end),
-                name,
-                params,
-                return_type,
-                declarations,
-                statements,
-            }),
-            errors,
-        )
+        Some(FuncDef {
+            base: NodeBase::from_positions(start, end),
+            name,
+            params,
+            return_type,
+            declarations,
+            statements,
+        })
     }
-    fn parse_var_def(&mut self) -> (Option<VarDef>, Vec<CompilerError>) {
-        let mut errors = vec![];
+    fn parse_var_def(&mut self) -> Option<VarDef> {
         let start = self.next_pos();
 
         // Parse "typed_var = literal \n"
-        let (typed_var, mut error) = self.parse_typed_var();
-        errors.append(&mut error);
-        let typed_var = if let Some(typed_var) = typed_var {
-            typed_var
-        } else {
-            return (None, errors);
-        };
+        let typed_var = self.parse_typed_var()?;
 
         let token = self.take();
         if token.token != Token::Assign {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
         let token = self.take();
@@ -1233,8 +1006,8 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                 Literal::StringLiteral(StringLiteral { base, value })
             }
             _ => {
-                errors.push(CompilerError::unexpected(token));
-                return (None, errors);
+                self.errors.push(CompilerError::unexpected(token));
+                return None;
             }
         };
 
@@ -1243,69 +1016,54 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
 
         let token = self.take();
         if token.token != Token::NewLine {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
-        (
-            Some(VarDef {
-                base: NodeBase::from_positions(start, end),
-                var: typed_var,
-                value,
-            }),
-            errors,
-        )
+        Some(VarDef {
+            base: NodeBase::from_positions(start, end),
+            var: typed_var,
+            value,
+        })
     }
 
-    fn parse_type_annotation(&mut self) -> (Option<TypeAnnotation>, Vec<CompilerError>) {
-        let mut errors = vec![];
+    fn parse_type_annotation(&mut self) -> Option<TypeAnnotation> {
         let start = self.next_pos();
 
         let token = self.take();
         match token.token {
             Token::Identifier(class_name) | Token::IdString(class_name) => {
                 let end = self.prev_pos().unwrap_or(start);
-                (
-                    Some(TypeAnnotation::ClassType(ClassType {
-                        base: NodeBase::from_positions(start, end),
-                        class_name,
-                    })),
-                    errors,
-                )
+
+                Some(TypeAnnotation::ClassType(ClassType {
+                    base: NodeBase::from_positions(start, end),
+                    class_name,
+                }))
             }
             Token::LeftSquare => {
-                let (element_type, mut error) = self.parse_type_annotation();
-                errors.append(&mut error);
-                let element_type = if let Some(element_type) = element_type {
-                    element_type
-                } else {
-                    return (None, errors);
-                };
+                let element_type = self.parse_type_annotation()?;
 
                 let token = self.take();
                 if token.token != Token::RightSquare {
-                    errors.push(CompilerError::unexpected(token));
-                    return (None, errors);
+                    self.errors.push(CompilerError::unexpected(token));
+                    return None;
                 }
 
                 let end = self.prev_pos().unwrap_or(start);
-                (
-                    Some(TypeAnnotation::ListType(Box::new(ListType {
-                        base: NodeBase::from_positions(start, end),
-                        element_type,
-                    }))),
-                    errors,
-                )
+
+                Some(TypeAnnotation::ListType(Box::new(ListType {
+                    base: NodeBase::from_positions(start, end),
+                    element_type,
+                })))
             }
             _ => {
-                errors.push(CompilerError::unexpected(token));
-                (None, errors)
+                self.errors.push(CompilerError::unexpected(token));
+                None
             }
         }
     }
 
-    fn parse_typed_var(&mut self) -> (Option<TypedVar>, Vec<CompilerError>) {
-        let mut errors = vec![];
+    fn parse_typed_var(&mut self) -> Option<TypedVar> {
         let start = self.next_pos();
 
         // Parse "ID : type"
@@ -1316,117 +1074,107 @@ impl<F: Iterator<Item = ComplexToken>> BufferedReceiver<F> {
                 name,
             }
         } else {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         };
 
         let token = self.take();
         if token.token != Token::Colon {
-            errors.push(CompilerError::unexpected(token));
-            return (None, errors);
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
         }
 
-        let (type_, mut error) = self.parse_type_annotation();
-        errors.append(&mut error);
-        let type_ = if let Some(type_) = type_ {
-            type_
-        } else {
-            return (None, errors);
-        };
+        let type_ = self.parse_type_annotation()?;
 
         let end = self.prev_pos().unwrap_or(start);
 
-        (
-            Some(TypedVar {
-                base: NodeBase::from_positions(start, end),
-                identifier,
-                type_,
-            }),
-            errors,
-        )
+        Some(TypedVar {
+            base: NodeBase::from_positions(start, end),
+            identifier,
+            type_,
+        })
+    }
+
+    fn parse_program(mut self) -> Program {
+        let mut declarations = vec![];
+        let mut statements = None;
+
+        let start = self.next_pos();
+        let mut end = start; // end excludes EOF
+
+        loop {
+            let head = self.take();
+            match head.token {
+                Token::Eof => break,
+                Token::Class => {
+                    self.push_back(head);
+                    if let Some(class_def) = self.parse_class_def() {
+                        declarations.push(Declaration::ClassDef(class_def));
+                    } else {
+                        self.skip_to_next_line();
+                    }
+
+                    end = self.prev_pos().unwrap_or(start);
+                }
+                Token::Def => {
+                    self.push_back(head);
+                    if let Some(func_def) = self.parse_func_def() {
+                        declarations.push(Declaration::FuncDef(func_def));
+                    } else {
+                        self.skip_to_next_line();
+                    }
+
+                    end = self.prev_pos().unwrap_or(start);
+                }
+                _ => {
+                    let second = self.take();
+                    if second.token == Token::Colon {
+                        self.push_back(second);
+                        self.push_back(head);
+                        if let Some(var_def) = self.parse_var_def() {
+                            declarations.push(Declaration::VarDef(var_def));
+                        } else {
+                            self.skip_to_next_line();
+                        }
+
+                        end = self.prev_pos().unwrap_or(start);
+                    } else {
+                        self.push_back(second);
+                        self.push_back(head);
+                        let stmt_list = self.parse_stmt_list();
+
+                        statements = Some(stmt_list);
+                        end = self.prev_pos().unwrap_or(start);
+
+                        loop {
+                            let token = self.take();
+                            if token.token == Token::Eof {
+                                break;
+                            } else {
+                                self.errors.push(CompilerError::unexpected(token));
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        let statements = statements.unwrap_or_default();
+
+        Program {
+            base: NodeBase::from_positions(start, end),
+            declarations,
+            statements,
+            errors: Errors {
+                base: NodeBase::new(0, 0, 0, 0),
+                errors: self.errors,
+            },
+        }
     }
 }
 
 pub fn parse(get_token: impl Iterator<Item = ComplexToken>) -> Program {
-    let mut tokens = BufferedReceiver::new(get_token);
-
-    let mut declarations = vec![];
-    let mut statements = None;
-    let mut errors = vec![];
-
-    let start = tokens.next_pos();
-    let mut end = start; // end excludes EOF
-
-    loop {
-        let head = tokens.take();
-        match head.token {
-            Token::Eof => break,
-            Token::Class => {
-                tokens.push_back(head);
-                let (class_def, mut error) = tokens.parse_class_def();
-                if let Some(class_def) = class_def {
-                    declarations.push(Declaration::ClassDef(class_def));
-                } else {
-                    tokens.skip_to_next_line();
-                }
-                errors.append(&mut error);
-                end = tokens.prev_pos().unwrap_or(start);
-            }
-            Token::Def => {
-                tokens.push_back(head);
-                let (func_def, mut error) = tokens.parse_func_def();
-                if let Some(func_def) = func_def {
-                    declarations.push(Declaration::FuncDef(func_def));
-                } else {
-                    tokens.skip_to_next_line();
-                }
-                errors.append(&mut error);
-                end = tokens.prev_pos().unwrap_or(start);
-            }
-            _ => {
-                let second = tokens.take();
-                if second.token == Token::Colon {
-                    tokens.push_back(second);
-                    tokens.push_back(head);
-                    let (var_def, mut error) = tokens.parse_var_def();
-                    if let Some(var_def) = var_def {
-                        declarations.push(Declaration::VarDef(var_def));
-                    } else {
-                        tokens.skip_to_next_line();
-                    }
-                    errors.append(&mut error);
-                    end = tokens.prev_pos().unwrap_or(start);
-                } else {
-                    tokens.push_back(second);
-                    tokens.push_back(head);
-                    let (stmt_list, mut error) = tokens.parse_stmt_list();
-                    errors.append(&mut error);
-                    statements = Some(stmt_list);
-                    end = tokens.prev_pos().unwrap_or(start);
-
-                    loop {
-                        let token = tokens.take();
-                        if token.token == Token::Eof {
-                            break;
-                        } else {
-                            errors.push(CompilerError::unexpected(token));
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    let statements = statements.unwrap_or_default();
-
-    Program {
-        base: NodeBase::from_positions(start, end),
-        declarations,
-        statements,
-        errors: Errors {
-            base: NodeBase::new(0, 0, 0, 0),
-            errors,
-        },
-    }
+    let parser = Parser::new(get_token);
+    parser.parse_program()
 }
