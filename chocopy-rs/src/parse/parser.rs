@@ -15,7 +15,7 @@ impl CompilerError {
 }
 
 macro_rules! parse_expr_unary {
-    ($name:ident, $parse_next:ident, $operator_token:expr => $operator_str:expr) => {
+    ($name:ident, $parse_next:ident, $operator_token:expr => $operator_name:expr) => {
         fn $name(&mut self) -> Option<Expr> {
             let start = self.next_pos();
 
@@ -26,7 +26,7 @@ macro_rules! parse_expr_unary {
                 let end = self.prev_pos().unwrap_or(start);
                 Expr::UnaryExpr(Box::new(UnaryExpr {
                     base: NodeBase::from_positions(start, end),
-                    operator: $operator_str,
+                    operator: $operator_name,
                     operand: expr,
                 }))
             } else {
@@ -39,7 +39,7 @@ macro_rules! parse_expr_unary {
 }
 
 macro_rules! parse_expr_binary {
-    ($name:ident, $parse_next:ident, $($operator_token:pat => $operator_str:expr),*) => {
+    ($name:ident, $parse_next:ident, $($operator_token:pat => $operator_name:expr),*) => {
         fn $name(&mut self) -> Option<Expr> {
             let start = self.next_pos();
 
@@ -48,7 +48,7 @@ macro_rules! parse_expr_binary {
             loop {
                 let token = self.take();
                 let operator = match token.token {
-                    $( $operator_token => $operator_str, )*
+                    $( $operator_token => $operator_name, )*
                     _ => {
                         self.push_back(token);
                         break;
@@ -167,6 +167,15 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
         self.prev_pos_buf.back().cloned()
     }
 
+    fn eat(&mut self, expected_token: Token) -> Option<()> {
+        let token = self.take();
+        if token.token != expected_token {
+            self.errors.push(CompilerError::unexpected(token));
+            return None;
+        }
+        Some(())
+    }
+
     fn parse_expr1(&mut self) -> Option<Expr> {
         let start = self.next_pos();
 
@@ -182,11 +191,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
 
         let condition = self.parse_expr1()?;
 
-        let token = self.take();
-        if token.token != Token::Else {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::Else)?;
 
         let else_expr = self.parse_expr1()?;
 
@@ -312,11 +317,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
                 Token::LeftSquare => {
                     let index = self.parse_expr1()?;
 
-                    let token = self.take();
-                    if token.token != Token::RightSquare {
-                        self.errors.push(CompilerError::unexpected(token));
-                        return None;
-                    }
+                    self.eat(Token::RightSquare)?;
 
                     let end = self.prev_pos().unwrap_or(start);
 
@@ -374,11 +375,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
             }
             Token::LeftPar => {
                 let expr = self.parse_expr1()?;
-                let token = self.take();
-                if token.token != Token::RightPar {
-                    self.errors.push(CompilerError::unexpected(token));
-                    return None;
-                }
+                self.eat(Token::RightPar)?;
                 expr
             }
             Token::LeftSquare => {
@@ -464,11 +461,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
     fn parse_return(&mut self) -> Option<ReturnStmt> {
         let start = self.next_pos();
 
-        let token = self.take();
-        if token.token != Token::Return {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::Return)?;
 
         let token = self.take();
         let value = if token.token == Token::NewLine {
@@ -481,11 +474,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
 
         let end = self.prev_pos().unwrap_or(start);
 
-        let token = self.take();
-        if token.token != Token::NewLine {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::NewLine)?;
 
         Some(ReturnStmt {
             base: NodeBase::from_positions(start, end),
@@ -494,31 +483,13 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
     }
 
     fn parse_block(&mut self) -> Option<Vec<Stmt>> {
-        let token = self.take();
-        if token.token != Token::Colon {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
-
-        let token = self.take();
-        if token.token != Token::NewLine {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
-
-        let token = self.take();
-        if token.token != Token::Indent {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::Colon)?;
+        self.eat(Token::NewLine)?;
+        self.eat(Token::Indent)?;
 
         let body = self.parse_stmt_list();
 
-        let token = self.take();
-        if token.token != Token::Dedent {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::Dedent)?;
 
         Some(body)
     }
@@ -526,11 +497,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
     fn parse_while(&mut self) -> Option<WhileStmt> {
         let start = self.next_pos();
 
-        let token = self.take();
-        if token.token != Token::While {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::While)?;
 
         let condition = self.parse_expr1()?;
         let body = self.parse_block()?;
@@ -547,11 +514,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
     fn parse_for(&mut self) -> Option<ForStmt> {
         let start = self.next_pos();
 
-        let token = self.take();
-        if token.token != Token::For {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::For)?;
 
         let token = self.take();
         let identifier = if let Token::Identifier(name) = token.token {
@@ -565,11 +528,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
             return None;
         };
 
-        let token = self.take();
-        if token.token != Token::In {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::In)?;
 
         let iterable = self.parse_expr1()?;
         let body = self.parse_block()?;
@@ -687,11 +646,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
 
         let token = self.take();
         if token.token == Token::Pass {
-            let token = self.take();
-            if token.token != Token::NewLine {
-                self.errors.push(CompilerError::unexpected(token));
-                return None;
-            }
+            self.eat(Token::NewLine)?;
         } else {
             // Parse "[func_def|var_def]* }"
             self.push_back(token);
@@ -729,11 +684,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
         let start = self.next_pos();
 
         // Parse "class ID ( ID ) : \n {"
-        let token = self.take();
-        if token.token != Token::Class {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::Class)?;
 
         let token = self.take();
         let name = if let Token::Identifier(name) = token.token {
@@ -746,11 +697,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
             return None;
         };
 
-        let token = self.take();
-        if token.token != Token::LeftPar {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::LeftPar)?;
 
         let token = self.take();
         let super_class = if let Token::Identifier(name) = token.token {
@@ -763,29 +710,10 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
             return None;
         };
 
-        let token = self.take();
-        if token.token != Token::RightPar {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
-
-        let token = self.take();
-        if token.token != Token::Colon {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
-
-        let token = self.take();
-        if token.token != Token::NewLine {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
-
-        let token = self.take();
-        if token.token != Token::Indent {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::RightPar)?;
+        self.eat(Token::Colon)?;
+        self.eat(Token::NewLine)?;
+        self.eat(Token::Indent)?;
 
         // Parse body
         let declarations = self.parse_decl_in_class()?;
@@ -793,11 +721,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
         // end at NEWLINE, excluding DEDENT
         let end = self.prev_pos().unwrap_or(start);
 
-        let token = self.take();
-        if token.token != Token::Dedent {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::Dedent)?;
 
         Some(ClassDef {
             base: NodeBase::from_positions(start, end),
@@ -880,11 +804,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
         let start = self.next_pos();
 
         // Parse "def ID ("
-        let token = self.take();
-        if token.token != Token::Def {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::Def)?;
 
         let token = self.take();
         let name = if let Token::Identifier(name) = token.token {
@@ -897,11 +817,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
             return None;
         };
 
-        let token = self.take();
-        if token.token != Token::LeftPar {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::LeftPar)?;
 
         // Parse "typed_var,* )"
         let token = self.take();
@@ -934,11 +850,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
             Token::Arrow => {
                 let return_type = self.parse_type_annotation()?;
 
-                let token = self.take();
-                if token.token != Token::Colon {
-                    self.errors.push(CompilerError::unexpected(token));
-                    return None;
-                }
+                self.eat(Token::Colon)?;
 
                 return_type
             }
@@ -948,17 +860,8 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
             }
         };
 
-        let token = self.take();
-        if token.token != Token::NewLine {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
-
-        let token = self.take();
-        if token.token != Token::Indent {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::NewLine)?;
+        self.eat(Token::Indent)?;
 
         // Parse declarations
         let declarations = self.parse_decl_in_func()?;
@@ -968,11 +871,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
 
         let end = self.prev_pos().unwrap_or(start); // exludes DEDENT
 
-        let token = self.take();
-        if token.token != Token::Dedent {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::Dedent)?;
 
         Some(FuncDef {
             base: NodeBase::from_positions(start, end),
@@ -989,11 +888,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
         // Parse "typed_var = literal \n"
         let typed_var = self.parse_typed_var()?;
 
-        let token = self.take();
-        if token.token != Token::Assign {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::Assign)?;
 
         let token = self.take();
         let base = NodeBase::from_location(token.location);
@@ -1014,11 +909,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
         // end excludes NEWLINE
         let end = self.prev_pos().unwrap_or(start);
 
-        let token = self.take();
-        if token.token != Token::NewLine {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::NewLine)?;
 
         Some(VarDef {
             base: NodeBase::from_positions(start, end),
@@ -1043,11 +934,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
             Token::LeftSquare => {
                 let element_type = self.parse_type_annotation()?;
 
-                let token = self.take();
-                if token.token != Token::RightSquare {
-                    self.errors.push(CompilerError::unexpected(token));
-                    return None;
-                }
+                self.eat(Token::RightSquare)?;
 
                 let end = self.prev_pos().unwrap_or(start);
 
@@ -1078,11 +965,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
             return None;
         };
 
-        let token = self.take();
-        if token.token != Token::Colon {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        }
+        self.eat(Token::Colon)?;
 
         let type_ = self.parse_type_annotation()?;
 
