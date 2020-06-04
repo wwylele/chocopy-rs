@@ -4,7 +4,7 @@
 
 > [ChocoPy](https://chocopy.org/) is a programming language designed for classroom use in undergraduate compilers courses. ChocoPy is a restricted subset of Python 3, which can easily be compiled to a target such as RISC-V. The language is fully specified using formal grammar, typing rules, and operational semantics. ChocoPy is used to teach CS 164 at UC Berkeley. ChocoPy has been designed by Rohan Padhye and Koushik Sen, with substantial contributions from Paul Hilfinger.
 
-So this was a course project for me. But I also want to try something else (plus 2020 is not a good year to go outside LOL), so here it is, a second implementation that
+So this was a course project for me. But I also want to try something else (plus 2020 March-April was not a good time to go outside LOL), so here it is, a second implementation that
  - is written in ~~Java~~ Rust,
  - has a parser ~~built using JFlex and CUP~~ hand-written,
  - targets ~~RISC-V~~ x86-64, and
