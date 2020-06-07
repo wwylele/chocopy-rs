@@ -1,3 +1,5 @@
+// Debug info generator for DWARF (Linux/MacOS)
+
 use super::debug::*;
 use super::gimli_writer::*;
 use super::*;

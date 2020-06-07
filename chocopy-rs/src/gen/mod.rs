@@ -15,6 +15,9 @@ use std::ffi::OsStr;
 use std::io::Write;
 use std::path::*;
 
+// Names for special symbol
+
+// Prototype symbols for primitive types
 const BOOL_PROTOTYPE: &str = "bool.$proto";
 const INT_PROTOTYPE: &str = "int.$proto";
 const STR_PROTOTYPE: &str = "str.$proto";
@@ -22,6 +25,7 @@ const BOOL_LIST_PROTOTYPE: &str = "[bool].$proto";
 const INT_LIST_PROTOTYPE: &str = "[int].$proto";
 const OBJECT_LIST_PROTOTYPE: &str = "[object].$proto";
 
+// Standard library function symboles
 const BUILTIN_ALLOC_OBJ: &str = "$alloc_obj";
 const BUILTIN_DIV_ZERO: &str = "$div_zero";
 const BUILTIN_OUT_OF_BOUND: &str = "$out_of_bound";
@@ -31,8 +35,10 @@ const BUILTIN_INPUT: &str = "$input";
 const BUILTIN_PRINT: &str = "$print";
 const BUILTIN_INIT: &str = "$init";
 
+// Program entry point symbol
 const BUILTIN_CHOCOPY_MAIN: &str = "$chocopy_main";
 
+// Special data section symbols
 const GLOBAL_SECTION: &str = "$global";
 const INIT_PARAM: &str = "$init_param";
 
@@ -43,18 +49,26 @@ pub enum Platform {
     Macos,
 }
 
+/// Type for debug info
+///
+/// Example: `[[[str]]]` will be `TypeDebug { core_name: "str", array_level: 3 }`
 #[derive(PartialEq, Eq, Hash, Clone)]
 struct TypeDebug {
     core_name: String,
     array_level: u32,
 }
 
+/// Represents a group of types for debug info
+///
+/// Example: `TypeDebug { core_name: "str", max_array_levell: 3 }` represents
+/// `str`, `[str]`, `[[str]]` and `[[[str]]]`.
 struct TypeDebugRepresentive<'a> {
     core_name: &'a str,
     max_array_level: u32,
 }
 
 impl TypeDebug {
+    /// Construct a non-list type
     fn class_type(name: &str) -> TypeDebug {
         TypeDebug {
             core_name: name.to_owned(),
@@ -89,31 +103,39 @@ impl std::fmt::Display for TypeDebug {
     }
 }
 
+// Variable info for debug info
 #[derive(Clone)]
 struct VarDebug {
+    // Offset relative to some base address. The base address is
+    //  - for global variable: global section start.
+    //  - for local variable: rbp.
+    //  - for class attribute: object address.
     offset: i32,
-    line: u32,
+    line: u32, // Line number in source code that defines the variable
     name: String,
     var_type: TypeDebug,
 }
 
+// Relates machine code with source code
 struct LineMap {
-    code_pos: usize,
-    line_number: u32,
+    code_pos: usize,  // Location in machine code
+    line_number: u32, // Line number in source code
 }
 
+// Procedure info for debug info
 struct ProcedureDebug {
-    decl_line: u32,
-    artificial: bool,
-    parent: Option<String>,
-    lines: Vec<LineMap>,
+    decl_line: u32,         // Line number is source code that defines the function
+    artificial: bool,       // true if the procedure is not defined in source code
+    parent: Option<String>, // Name of parent function
+    lines: Vec<LineMap>,    // Maps machine code and source code
     return_type: TypeDebug,
     params: Vec<VarDebug>,
     locals: Vec<VarDebug>,
-    frame_size: u32,
+    frame_size: u32, // Stack frame size, excluding saved ret and rbp.
 }
 
 impl ProcedureDebug {
+    // Collect all types appeared in this function
     fn used_types(&self) -> impl Iterator<Item = &TypeDebug> {
         std::iter::once(&self.return_type)
             .chain(self.params.iter().map(|param| &param.var_type))
@@ -121,76 +143,89 @@ impl ProcedureDebug {
     }
 }
 
+// Extra info for a chunk
 enum ChunkExtra {
-    Procedure(ProcedureDebug),
-    Data { writable: bool },
+    Procedure(ProcedureDebug), // An executable chunk with debug info
+    Data { writable: bool },   // A data chunk that can be writable or read-only
 }
 
+// The target of a relocation
 enum ChunkLinkTarget {
-    Symbol(String),
-    Data(Vec<u8>),
+    Symbol(String), // Relocation by symbol name
+    Data(Vec<u8>),  // Create an ad hoc small chunk and make it the target
 }
 
+// Relocation between chunks
 struct ChunkLink {
-    pos: usize,
+    pos: usize, // Relocation source location
     to: ChunkLinkTarget,
 }
 
+// A piece of data with a symbol name
 struct Chunk {
-    name: String,
-    code: Vec<u8>,
-    links: Vec<ChunkLink>,
+    name: String,          // Symbol name
+    code: Vec<u8>,         // Data content
+    links: Vec<ChunkLink>, // Relocations from this chunk
     extra: ChunkExtra,
 }
 
+// Relocation type for debug chunk
 enum DebugChunkLinkType {
     Absolute,
+    // The types below are Windows-specific
     SectionRelative,
     SectionId,
     ImageRelative,
 }
 
+// Relocation between chunks, specifically when the source chunk is debug info
 struct DebugChunkLink {
     link_type: DebugChunkLinkType,
-    pos: usize,
-    to: String,
-    size: u8,
+    pos: usize, // Source location
+    to: String, // Target symbol
+    size: u8,   // in bytes
 }
 
+// Chunk for debug info
 struct DebugChunk {
-    name: String,
-    code: Vec<u8>,
-    links: Vec<DebugChunkLink>,
-    discardable: bool,
+    name: String,               // Section name
+    code: Vec<u8>,              // Data content
+    links: Vec<DebugChunkLink>, // Relocations from this chunk
+    discardable: bool,          // true in general but false for exception handling info.
 }
 
+// Method type info for debug info
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct MethodDebug {
     params: Vec<TypeDebug>,
     return_type: TypeDebug,
 }
 
+// Class info for debug info
 #[derive(Clone)]
 struct ClassDebug {
-    size: u32,
+    size: u32, // Object size, excluding the object header
     attributes: Vec<VarDebug>,
-    methods: BTreeMap<u32, (String, MethodDebug)>,
+    methods: BTreeMap<u32, (String, MethodDebug)>, // Map from prototype offset to (name, type)
 }
 
 impl ClassDebug {
+    // Collect all types appeared in this class
     fn used_types(&self) -> impl Iterator<Item = &TypeDebug> {
         self.attributes.iter().map(|attribute| &attribute.var_type)
     }
 }
 
+// The generated ChocoPy program, without linking to other libraries
 struct CodeSet {
     chunks: Vec<Chunk>,
-    global_size: u64,
-    globals_debug: Vec<VarDebug>,
+    global_size: u64,             // Section size reserved for all global variables
+    globals_debug: Vec<VarDebug>, // Debug info for global variables
     classes_debug: HashMap<String, ClassDebug>,
 }
 
 impl CodeSet {
+    // Collect all types appeared in the program
     fn used_types(&self) -> impl Iterator<Item = &TypeDebug> {
         self.chunks
             .iter()
@@ -210,6 +245,8 @@ impl CodeSet {
             )
     }
 
+    // Collects all types appeared in the program, and returns representives
+    // that have the highest array level.
     fn used_types_representive(&self) -> impl Iterator<Item = TypeDebugRepresentive> {
         let mut array_level_map = HashMap::<&str, u32>::new();
         for type_used in self.used_types() {
@@ -258,6 +295,7 @@ impl std::fmt::Display for PathError {
 
 impl std::error::Error for PathError {}
 
+// Encode path string for Windows command line argument
 fn windows_path_escape(path: &Path) -> std::result::Result<String, Box<dyn std::error::Error>> {
     let path = path.to_str().ok_or(PathError)?;
 
@@ -274,6 +312,7 @@ fn windows_path_escape(path: &Path) -> std::result::Result<String, Box<dyn std::
     Ok(path.to_owned())
 }
 
+// Generate object file
 pub fn gen_object(
     source_path: &str,
     ast: Program,
@@ -288,6 +327,7 @@ pub fn gen_object(
         .flatten()
         .unwrap_or("");
 
+    // Debug section generator
     let mut debug: Box<dyn DebugWriter> = match platform {
         Platform::Windows => Box::new(codeview::Codeview::new(
             source_path,
@@ -311,8 +351,11 @@ pub fn gen_object(
         Platform::Linux => BinaryFormat::Elf,
         Platform::Macos => BinaryFormat::MachO,
     };
+
+    // Object file generator
     let mut obj = Object::new(binary_format, Architecture::X86_64, Endianness::Little);
 
+    // Import standard library functions
     let import_function = |obj: &mut Object, name: &str| {
         obj.add_symbol(Symbol {
             name: name.into(),
@@ -335,8 +378,10 @@ pub fn gen_object(
     import_function(&mut obj, BUILTIN_INPUT);
     import_function(&mut obj, BUILTIN_INIT);
 
+    // Generate machine code and debug info
     let code_set = x64::gen_code_set(ast, platform);
 
+    // Feed type/class debug info to debug section generator
     for t in code_set.used_types_representive() {
         debug.add_type(t);
     }
@@ -345,6 +390,7 @@ pub fn gen_object(
         debug.add_class(class_name, classes_debug);
     }
 
+    // Allocate section for global variables
     let bss_section = obj.section_id(StandardSection::UninitializedData);
 
     let global_symbol = obj.add_symbol(Symbol {
@@ -360,18 +406,26 @@ pub fn gen_object(
 
     obj.add_symbol_bss(global_symbol, bss_section, code_set.global_size, 8);
 
+    // Feed global variable debug info to debug section generator
     for global_debug in code_set.globals_debug {
         debug.add_global(global_debug);
     }
 
+    // Feed chunks to object file
+
+    // Map between section name and location for use in relocation later
     let mut section_map = HashMap::new();
+
+    // Sections that chunks can feed to
     let text_section = obj.section_id(StandardSection::Text);
     let data_section = obj.section_id(StandardSection::Data);
     let ro_section = obj.section_id(StandardSection::ReadOnlyData);
     let ro_reloc_section = obj.section_id(StandardSection::ReadOnlyDataWithRel);
 
     for chunk in &code_set.chunks {
-        debug.add_chunk(&chunk);
+        debug.add_chunk(&chunk); // Feed the chunk debug info to debug section generator
+
+        // Select section attributes for this chunk
         let section;
         let align;
         let kind;
@@ -394,6 +448,7 @@ pub fn gen_object(
             }
         }
 
+        // Only the entry point is exposed in linkage scope for linking with external entry point
         let scope = if chunk.name == BUILTIN_CHOCOPY_MAIN {
             SymbolScope::Linkage
         } else {
@@ -413,6 +468,8 @@ pub fn gen_object(
         });
         section_map.insert(&chunk.name, (section, offset));
     }
+
+    // Add relocations
 
     let mut data_id = 0;
 
@@ -467,6 +524,8 @@ pub fn gen_object(
         }
     }
 
+    // Finalize debug section generation and feed them to the object file
+
     let debug_chunks = debug.finalize();
     let mut debug_section_map = HashMap::new();
     for chunk in &debug_chunks {
@@ -483,6 +542,8 @@ pub fn gen_object(
         obj.append_section_data(section, &chunk.code, 8);
         debug_section_map.insert(chunk.name.clone(), section);
     }
+
+    // .. as well as their relocations
 
     for chunk in debug_chunks {
         for link in chunk.links {
@@ -509,18 +570,21 @@ pub fn gen_object(
         }
     }
 
+    // Output the object file
     let mut obj_file = std::fs::File::create(&obj_path)?;
     obj_file.write_all(&obj.write()?)?;
 
     Ok(())
 }
 
+// Link the object file with libraries to produce an executable
 pub fn link(
     obj_path: &Path,
     path: &str,
-    static_lib: bool,
+    static_lib: bool, // prefer static library instead of dynamic library
     platform: Platform,
 ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    // Find the standard library
     let lib_file = match platform {
         Platform::Windows => "chocopy_rs_std.lib",
         Platform::Linux | Platform::Macos => "libchocopy_rs_std.a",
@@ -529,6 +593,7 @@ pub fn link(
     let mut lib_path = std::env::current_exe()?;
     lib_path.set_file_name(lib_file);
 
+    // Invoke the linker
     let ld_output = match platform {
         Platform::Windows => {
             let vcvarsall = (|| -> Option<PathBuf> {
@@ -615,6 +680,7 @@ pub fn link(
     Ok(())
 }
 
+// Generates object file or executable
 pub fn gen(
     source_path: &str,
     ast: Program,

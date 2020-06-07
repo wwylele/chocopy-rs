@@ -1,3 +1,5 @@
+// Machine code generator for x86-64
+
 use super::*;
 use chocopy_rs_common::*;
 
@@ -16,21 +18,21 @@ type StorageEnv = LocalEnv<FuncSlot, VarSlot>;
 #[derive(Clone)]
 struct AttributeSlot {
     offset: u32,
-    source_type: ValueType,
-    target_type: ValueType,
-    init: LiteralContent,
+    source_type: ValueType, // Type of the initial value
+    target_type: ValueType, // Actual type in declaration
+    init: LiteralContent,   // Initial value
 }
 
 #[derive(Clone)]
 struct MethodSlot {
-    offset: u32,
+    offset: u32, // Offset into prototype
     link_name: String,
 }
 
 #[derive(Clone)]
 struct ClassSlot {
     attributes: HashMap<String, AttributeSlot>,
-    object_size: u32,
+    object_size: u32, // excluding the object header
     methods: HashMap<String, MethodSlot>,
     prototype_size: u32,
 }
@@ -50,24 +52,28 @@ struct Emitter<'a> {
 }
 
 impl Platform {
+    // Extra stack space reservation according to system ABI, in qwords (8 bytes)
     fn stack_reserve(self) -> usize {
         match self {
-            Platform::Windows => 4,
+            Platform::Windows => 4, // "Shadow space" in Microsoft ABI
             Platform::Linux | Platform::Macos => 0,
         }
     }
 }
 
+// Label generator for forward branching
 #[must_use]
 struct ForwardJumper {
     from: usize,
 }
 
+// Label generator for backward branching
 #[must_use]
 struct BackwardJumper {
     to: usize,
 }
 
+// A reserved slot on the current stack frame
 #[must_use]
 struct StackTicket {
     offset: i32, // relative to rbp
@@ -80,11 +86,14 @@ impl Drop for StackTicket {
 }
 
 impl StackTicket {
+    // Leak this slot and don't explicitly free it
+    // It will be freed on function exit.
     fn free_on_exit(self) {
         std::mem::forget(self);
     }
 }
 
+// Whether a stack frame slot is a reference or not. GC use this info
 #[derive(PartialEq, Eq)]
 enum TicketType {
     Plain,
@@ -106,17 +115,21 @@ impl ValueType {
 }
 
 impl<'a> Emitter<'a> {
+    // Construct a simple machine code emitter for auto-generated functions
     pub fn new_simple(name: &str, platform: Platform) -> Emitter<'a> {
         Emitter::new(name, None, None, None, vec![], 0, platform)
     }
 
+    // Construct a full machine code emitter
     pub fn new(
         name: &str,
         return_type: Option<&'a ValueType>,
         storage_env: Option<&'a StorageEnv>,
         classes: Option<&'a HashMap<String, ClassSlot>>,
+        // A list of offsets relative to rbp
+        // where references are passed in as parameter and GC should be aware
         ref_list: Vec<i32>,
-        level: u32,
+        level: u32, // Nesting level. 0 = global function / class method / main procedure
         platform: Platform,
     ) -> Emitter<'a> {
         Emitter {
@@ -143,6 +156,7 @@ impl<'a> Emitter<'a> {
         self.classes.as_ref().unwrap()
     }
 
+    // Emit raw machine code
     pub fn emit(&mut self, instruction: &[u8]) {
         self.code.extend_from_slice(&instruction);
     }
@@ -151,6 +165,7 @@ impl<'a> Emitter<'a> {
         self.code.len()
     }
 
+    // Reserve a slot from the current stack frame and get a ticket for it
     pub fn alloc_stack(&mut self, ticket_type: TicketType) -> StackTicket {
         self.current_stack_top -= 8;
         self.max_stack_top = std::cmp::min(self.max_stack_top, self.current_stack_top);
@@ -162,6 +177,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    // Return the ticket and free the reserved stack frame slot
     pub fn free_stack(&mut self, ticket: StackTicket) {
         assert!(ticket.offset == self.current_stack_top);
         if self.ref_list.last() == Some(&self.current_stack_top) {
@@ -171,11 +187,16 @@ impl<'a> Emitter<'a> {
         std::mem::forget(ticket);
     }
 
+    // Emit machine code that does something with the reserved stack frame slot.
+    // This will append the ticket value (offset to rbp) to the instruction.
+    // This should be used with instructions like `mov [rbp+ticket],rax`
     pub fn emit_with_stack(&mut self, instruction: &[u8], ticket: &StackTicket) {
         self.emit(instruction);
         self.emit(&ticket.offset.to_le_bytes());
     }
 
+    // Emit a map for GC describing which stack frame slots are currently references.
+    // This should be called after each function invocation that can lead to GC.
     pub fn emit_ref_map(&mut self) {
         let min_index = self.ref_list.iter().min().cloned().unwrap_or(0) / 8;
         let max_index = self.ref_list.iter().max().cloned().unwrap_or(0) / 8;
@@ -196,12 +217,14 @@ impl<'a> Emitter<'a> {
         self.emit(&[0; 4]);
     }
 
+    // Append the address to a forward branching instruction, which will be filled later
     pub fn jump_from(&mut self) -> ForwardJumper {
         let from = self.pos();
         self.emit(&[0; 4]);
         ForwardJumper { from }
     }
 
+    // Mark the current position as the destination of the forward branching instruction
     #[allow(clippy::wrong_self_convention)] // No, this is not a to_type function
     pub fn to_here(&mut self, jump: ForwardJumper) {
         let from = jump.from;
@@ -209,20 +232,24 @@ impl<'a> Emitter<'a> {
         self.code[from..from + 4].copy_from_slice(&delta.to_le_bytes());
     }
 
+    // Mark the current position as the destination of a backward branching instruction
     pub fn jump_to(&self) -> BackwardJumper {
         BackwardJumper { to: self.pos() }
     }
 
+    // Append the address to a backward branching instruction
     pub fn from_here(&mut self, jump: BackwardJumper) {
         let delta = -((self.pos() - jump.to + 4) as i32);
         self.emit(&delta.to_le_bytes());
     }
 
+    // Emit code that exits from the procedure
     pub fn end_proc(&mut self) {
         // leave; ret
         self.emit(&[0xc9, 0xc3])
     }
 
+    // Allocate stack space for parameters
     pub fn prepare_call(&mut self, stack_reserve: usize) {
         self.max_stack_top = std::cmp::min(
             self.max_stack_top,
@@ -230,6 +257,7 @@ impl<'a> Emitter<'a> {
         );
     }
 
+    // Append instruction with an address that links to an external symbol
     pub fn emit_link(&mut self, name: impl Into<String>, offset: i32) {
         self.links.push(ChunkLink {
             pos: self.pos(),
@@ -238,11 +266,13 @@ impl<'a> Emitter<'a> {
         self.emit(&offset.to_le_bytes());
     }
 
+    // Call a function
     pub fn call(&mut self, name: &str) {
         self.emit(&[0xe8]);
         self.emit_link(name, 0);
     }
 
+    // Call a class method. Offset is into the prototype
     pub fn call_virtual(&mut self, offset: u32) {
         // mov rdi,[rsp]
         self.emit(&[0x48, 0x8B, 0x3C, 0x24]);
@@ -253,12 +283,16 @@ impl<'a> Emitter<'a> {
         self.emit(&offset.to_le_bytes());
     }
 
+    // Finalize code generation for this chunk
     pub fn finalize(mut self, mut procedure_debug: ProcedureDebug) -> Chunk {
+        // Calculate the total stack frame needed
         let mut frame_size = -self.max_stack_top;
+        // Align it as per ABI requirement
         if frame_size % 16 == 8 {
             frame_size += 8;
         }
         procedure_debug.frame_size = frame_size as u32;
+        // Patch the prologue to allocate the stack frame
         self.code[7..11].copy_from_slice(&frame_size.to_le_bytes());
         Chunk {
             name: self.name,
@@ -268,6 +302,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    // Call into standard library to allocate object
     pub fn call_builtin_alloc(&mut self, prototype: &str) {
         match self.platform {
             Platform::Windows => {
@@ -295,6 +330,7 @@ impl<'a> Emitter<'a> {
         self.emit_ref_map();
     }
 
+    // Ensure rax is not None
     pub fn emit_check_none(&mut self) {
         // test rax,rax
         self.emit(&[0x48, 0x85, 0xC0]);
@@ -306,6 +342,9 @@ impl<'a> Emitter<'a> {
         self.to_here(ok);
     }
 
+    // All function below puts the result in rax
+
+    // Box the int value in rax and return in rax
     pub fn emit_box_int(&mut self) {
         let value = self.alloc_stack(TicketType::Plain);
         // mov [rbp+{}],rax
@@ -320,6 +359,7 @@ impl<'a> Emitter<'a> {
         self.emit(&[0x89, 0x48, OBJECT_ATTRIBUTE_OFFSET as u8]);
     }
 
+    // Box the bool value in rax and return in rax
     pub fn emit_box_bool(&mut self) {
         let value = self.alloc_stack(TicketType::Plain);
         // mov [rbp+{}],rax
@@ -351,6 +391,9 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn emit_string_literal(&mut self, s: &str) {
+        // TODO: instead of allocating the object and copying the string on fly,
+        //       put the string object in constant area
+
         // mov rsi,{len}
         self.emit(&[0x48, 0xc7, 0xc6]);
         self.emit(&(s.len() as u32).to_le_bytes());
@@ -780,6 +823,8 @@ impl<'a> Emitter<'a> {
             }
         }
     }
+
+    // Coerce the valie in rax from one type to another
     pub fn emit_coerce(&mut self, from: &ValueType, to: &ValueType) {
         if to == &*TYPE_OBJECT {
             if from == &*TYPE_INT {
@@ -799,6 +844,7 @@ impl<'a> Emitter<'a> {
     ) {
         let mut args_stack = vec![];
 
+        // Evaluate all arguments
         for (i, arg) in args.iter().enumerate() {
             self.emit_expression(arg);
 
@@ -816,8 +862,8 @@ impl<'a> Emitter<'a> {
             args_stack.push(arg_stack);
         }
 
+        // Transfer arguments to parameter slots
         self.prepare_call(args.len());
-
         for (i, arg_stack) in args_stack.into_iter().enumerate().rev() {
             // mov rax,[rbp+{}]
             self.emit_with_stack(&[0x48, 0x8B, 0x85], &arg_stack);
@@ -828,6 +874,7 @@ impl<'a> Emitter<'a> {
             self.free_stack(arg_stack);
         }
 
+        // Call the function
         if virtual_call {
             let offset = if let ValueType::ClassValueType(c) = args[0].get_type() {
                 if matches!(
@@ -853,6 +900,7 @@ impl<'a> Emitter<'a> {
             let link_name = slot.link_name.clone();
             let call_level = slot.level;
 
+            // Pass static link
             if call_level != 0 {
                 // mov r10,rbp
                 self.emit(&[0x49, 0x89, 0xEA]);
@@ -1079,6 +1127,8 @@ impl<'a> Emitter<'a> {
             };
 
         if level == 0 {
+            // Global variable
+
             if target_type == &*TYPE_INT {
                 // mov eax,[rip+{}]
                 self.emit(&[0x8B, 0x05]);
@@ -1093,10 +1143,14 @@ impl<'a> Emitter<'a> {
                 self.emit_link(GLOBAL_SECTION, offset);
             }
         } else if level == self.level + 1 {
+            // Local variable in the same scope
+
             // mov rax,[rbp+{}]
             self.emit(&[0x48, 0x8B, 0x85]);
             self.emit(&offset.to_le_bytes());
         } else {
+            // Local variable in outer scope
+
             // mov rax,[rbp-8]
             self.emit(&[0x48, 0x8B, 0x45, 0xF8]);
             for _ in 0..self.level - level {
@@ -1211,6 +1265,8 @@ impl<'a> Emitter<'a> {
 
         self.emit_coerce(source_type, target_type);
         if level == 0 {
+            // Global variable
+
             if target_type == &*TYPE_INT {
                 // mov [rip+{}],eax
                 self.emit(&[0x89, 0x05]);
@@ -1224,10 +1280,14 @@ impl<'a> Emitter<'a> {
             self.emit_link(GLOBAL_SECTION, offset);
         } else {
             if level == self.level + 1 {
+                // Local variable in the same scope
+
                 // lea rdi,[rbp+{}]
                 self.emit(&[0x48, 0x8D, 0xBD]);
                 self.emit(&offset.to_le_bytes());
             } else {
+                // Local variable in outer scope
+
                 // mov rdi,[rbp-8]
                 self.emit(&[0x48, 0x8B, 0x7D, 0xF8]);
                 for _ in 0..self.level - level {
@@ -1543,6 +1603,7 @@ impl<'a> Emitter<'a> {
     }
 }
 
+// Generate machine code for a function
 fn gen_function(
     function: &FuncDef,
     storage_env: &mut StorageEnv,
@@ -1558,10 +1619,10 @@ fn gen_function(
     };
 
     let mut locals = HashMap::new();
+
+    // Collects slot and debug info for parameters
     let mut ref_list = vec![];
-
     let mut params_debug = vec![];
-
     for (i, param) in function.params.iter().enumerate() {
         let offset;
         offset = i as i32 * 8 + 16;
@@ -1586,10 +1647,9 @@ fn gen_function(
         })
     }
 
+    // Collect infos for local variables and nested functions
     let mut locals_debug = vec![];
-
     let mut local_offset = if level == 0 { -8 } else { -16 };
-
     for declaration in &function.declarations {
         match declaration {
             Declaration::VarDef(v) => {
@@ -1639,12 +1699,14 @@ fn gen_function(
     );
 
     if level != 0 {
+        // Save static link
         let static_link = code.alloc_stack(TicketType::Plain);
         // mov [rbp+{}],r10
         code.emit_with_stack(&[0x4C, 0x89, 0x95], &static_link);
         static_link.free_on_exit();
     }
 
+    // Initialize local variables
     for declaration in &function.declarations {
         if let Declaration::VarDef(v) = declaration {
             code.emit_local_var_init(v);
@@ -1656,13 +1718,16 @@ fn gen_function(
         line_number: function.base().location.start.row,
     }];
 
+    // Generate codes for all statements
     for statement in &function.statements {
         code.emit_statement(statement, &mut lines);
     }
 
+    // Implicit `return None`
     code.emit_none_literal();
     code.end_proc();
 
+    // Package code into a chunk
     let mut chunks = vec![code.finalize(ProcedureDebug {
         decl_line: function.statements[0].base().location.start.row,
         artificial: false,
@@ -1678,6 +1743,7 @@ fn gen_function(
         frame_size: 0,
     })];
 
+    // Recursively generate codes for nested functions
     // Note: put children functions after the parent one
     // so that debug tree can be generated sequentially
     for declaration in &function.declarations {
@@ -1696,9 +1762,11 @@ fn gen_function(
     chunks
 }
 
+// Generate machine code for constructor
 fn gen_ctor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chunk {
     let mut code = Emitter::new(class_name, None, None, None, vec![], 0, platform);
 
+    // Allocate object
     code.prepare_call(platform.stack_reserve());
     match platform {
         Platform::Windows => {
@@ -1730,6 +1798,7 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
     // mov [rbp+{}],rax
     code.emit_with_stack(&[0x48, 0x89, 0x85], &object);
 
+    // Initialize attributes
     for attribute in class_slot.attributes.values() {
         match &attribute.init {
             LiteralContent::NoneLiteral(_) => {
@@ -1763,6 +1832,8 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
         code.emit(&attribute.offset.to_le_bytes());
     }
 
+    // Call __init__()
+
     // mov rax,[rbp+{}]
     code.emit_with_stack(&[0x48, 0x8B, 0x85], &object);
     code.prepare_call(1);
@@ -1787,6 +1858,7 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
     })
 }
 
+// Generate machine code for `int()`
 fn gen_int(platform: Platform) -> Chunk {
     let mut code = Emitter::new_simple("int", platform);
     code.emit_int_literal(0);
@@ -1803,6 +1875,7 @@ fn gen_int(platform: Platform) -> Chunk {
     })
 }
 
+// Generate machine code for `bool()`
 fn gen_bool(platform: Platform) -> Chunk {
     let mut code = Emitter::new_simple("bool", platform);
     code.emit_bool_literal(false);
@@ -1819,6 +1892,7 @@ fn gen_bool(platform: Platform) -> Chunk {
     })
 }
 
+// Generate machine code for `str()`
 fn gen_str(platform: Platform) -> Chunk {
     let mut code = Emitter::new_simple("str", platform);
     code.emit_string_literal("");
@@ -1835,6 +1909,7 @@ fn gen_str(platform: Platform) -> Chunk {
     })
 }
 
+// Generate machine code for `object.__init__()`
 fn gen_object_init(platform: Platform) -> Chunk {
     let mut code = Emitter::new_simple("object.__init__", platform);
     code.emit_none_literal();
@@ -1856,6 +1931,7 @@ fn gen_object_init(platform: Platform) -> Chunk {
     })
 }
 
+// Generate machine code for `len`
 fn gen_len(platform: Platform) -> Chunk {
     let mut code = Emitter::new_simple("len", platform);
     match platform {
@@ -1882,6 +1958,7 @@ fn gen_len(platform: Platform) -> Chunk {
     })
 }
 
+// Generate machine code for `input`
 fn gen_input(platform: Platform) -> Chunk {
     let mut code = Emitter::new_simple("input", platform);
     match platform {
@@ -1914,6 +1991,7 @@ fn gen_input(platform: Platform) -> Chunk {
     })
 }
 
+// Generate machine code for `print`
 fn gen_print(platform: Platform) -> Chunk {
     let mut code = Emitter::new_simple("print", platform);
     match platform {
@@ -1940,6 +2018,7 @@ fn gen_print(platform: Platform) -> Chunk {
     })
 }
 
+// Generate machine code for main procedure
 fn gen_main(
     ast: &Program,
     storage_env: &mut StorageEnv,
@@ -1956,12 +2035,15 @@ fn gen_main(
         platform,
     );
 
+    // Save rdi/rsi according to Windows ABI. Shadow space is used here
     if platform == Platform::Windows {
         // mov [rbp+16],rdi
         main_code.emit(&[0x48, 0x89, 0x7D, 0x10]);
         // mov [rbp+24],rsi
         main_code.emit(&[0x48, 0x89, 0x75, 0x18]);
     }
+
+    // Initialize standard library
 
     // mov [rip+{}],rbp
     main_code.emit(&[0x48, 0x89, 0x2D]);
@@ -1981,6 +2063,7 @@ fn gen_main(
     main_code.emit_link(INIT_PARAM, 0);
     main_code.call(BUILTIN_INIT);
 
+    // Initialize global variables
     for declaration in &ast.declarations {
         if let Declaration::VarDef(v) = declaration {
             main_code.emit_global_var_init(v);
@@ -1989,10 +2072,12 @@ fn gen_main(
 
     let mut lines = vec![];
 
+    // Generate machine code for main procedure statements
     for statement in &ast.statements {
         main_code.emit_statement(statement, &mut lines);
     }
 
+    // Restore rdi/rsi for Windows
     if platform == Platform::Windows {
         // mov rdi,[rbp+16]
         main_code.emit(&[0x48, 0x8B, 0x7D, 0x10]);
@@ -2017,6 +2102,7 @@ fn gen_main(
     })
 }
 
+// Generate configuration data for standard library initialization
 fn gen_init_param(global_size: u64, global_ref_indexs: &[i32]) -> Chunk {
     let mut code = vec![0; INIT_PARAM_SIZE as usize];
     code[GLOBAL_SIZE_OFFSET as usize..][..8].copy_from_slice(&global_size.to_le_bytes());
@@ -2046,6 +2132,7 @@ fn gen_init_param(global_size: u64, global_ref_indexs: &[i32]) -> Chunk {
     }
 }
 
+// Add class info into environment and debug info
 fn add_class(
     globals: &mut HashMap<String, LocalSlot<FuncSlot, VarSlot>>,
     classes: &mut HashMap<String, ClassSlot>,
@@ -2056,6 +2143,7 @@ fn add_class(
     let super_name = &c.super_class.name;
     let mut class_slot = classes.get(super_name).unwrap().clone();
     let mut class_debug = classes_debug.get(super_name).unwrap().clone();
+    // Add constructor function as global function
     globals.insert(
         class_name.clone(),
         LocalSlot::Func(FuncSlot {
@@ -2063,9 +2151,11 @@ fn add_class(
             level: 0,
         }),
     );
+
     for declaration in &c.declarations {
         match declaration {
             Declaration::VarDef(v) => {
+                // Allocate slot for attribute
                 let source_type = v.value.get_type().clone();
                 let target_type = ValueType::from_annotation(&v.var.type_);
                 let size = if target_type == *TYPE_INT {
@@ -2100,6 +2190,7 @@ fn add_class(
                 let method_name = &f.name.name;
                 let link_name = class_name.clone() + "." + method_name;
                 if let Some(method) = class_slot.methods.get_mut(method_name) {
+                    // Override method with new link name
                     method.link_name = link_name;
 
                     let self_type = TypeDebug::from_annotation(&f.params[0].type_);
@@ -2110,6 +2201,7 @@ fn add_class(
                         .1
                         .params[0] = self_type;
                 } else {
+                    // Allocate prototype slot for new method
                     let offset = class_slot.prototype_size;
                     class_slot
                         .methods
@@ -2143,6 +2235,7 @@ fn add_class(
     classes_debug.insert(class_name.clone(), class_debug);
 }
 
+// Generate prototype for primitive types
 fn gen_special_proto(name: &str, size: i32, tag: TypeTag) -> Chunk {
     let mut code = vec![0; OBJECT_PROTOTYPE_SIZE as usize];
     code[PROTOTYPE_SIZE_OFFSET as usize..][..4].copy_from_slice(&size.to_le_bytes());
@@ -2160,11 +2253,14 @@ fn gen_special_proto(name: &str, size: i32, tag: TypeTag) -> Chunk {
     }
 }
 
+// Generate the ChocoPy machine code
 pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
     let mut globals = HashMap::new();
     let mut global_ref_indexs = vec![];
     let mut classes = HashMap::new();
     let mut base_methods = HashMap::new();
+
+    // Add `object` as the root of class tree
     base_methods.insert(
         "__init__".to_owned(),
         MethodSlot {
@@ -2202,9 +2298,12 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
             .collect(),
         },
     );
+
+    // Scan global declarations
     for declaration in &ast.declarations {
         match declaration {
             Declaration::VarDef(v) => {
+                // Allocate global variable
                 let name = &v.var.identifier.name;
                 let target_type = ValueType::from_annotation(&v.var.type_);
                 let size = if target_type == *TYPE_INT {
@@ -2237,6 +2336,7 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
                 global_offset += size;
             }
             Declaration::FuncDef(f) => {
+                // Register function as available for calling
                 let name = &f.name.name;
                 globals.insert(
                     name.clone(),
@@ -2253,6 +2353,7 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
         }
     }
 
+    // Register built-in procedures as available for calling
     let insert_builtin = |globals: &mut HashMap<_, _>, name: &str| {
         globals.insert(
             name.to_owned(),
@@ -2273,8 +2374,10 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
 
     let mut storage_env = StorageEnv::new(globals);
 
+    // Generate machine code for main procedure
     let mut chunks = vec![gen_main(&ast, &mut storage_env, &classes, platform)];
 
+    // Generate machine code for all functions and methods
     for declaration in &ast.declarations {
         match declaration {
             Declaration::FuncDef(f) => {
@@ -2305,6 +2408,7 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
         }
     }
 
+    // Generate prototypes
     for (class_name, class_slot) in &classes {
         chunks.push(gen_ctor(&class_name, &class_slot, platform));
 
@@ -2341,6 +2445,7 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
         });
     }
 
+    // Generate built-in procedures
     chunks.push(gen_int(platform));
     chunks.push(gen_bool(platform));
     chunks.push(gen_str(platform));
@@ -2349,6 +2454,7 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
     chunks.push(gen_input(platform));
     chunks.push(gen_print(platform));
 
+    // Generate prototypes for primitive types
     chunks.push(gen_special_proto(INT_PROTOTYPE, 4, TypeTag::Int));
     chunks.push(gen_special_proto(BOOL_PROTOTYPE, 1, TypeTag::Bool));
     chunks.push(gen_special_proto(STR_PROTOTYPE, -1, TypeTag::Str));
@@ -2368,6 +2474,7 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
         TypeTag::RefList,
     ));
 
+    // Generate configuration data for initialization
     chunks.push(gen_init_param(global_offset as u64, &global_ref_indexs));
 
     CodeSet {

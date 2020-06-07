@@ -1,3 +1,5 @@
+// Debug info generator for CodeView/PDB (Windows)
+
 use super::debug::*;
 use super::*;
 use chocopy_rs_common::*;
