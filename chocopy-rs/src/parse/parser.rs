@@ -176,6 +176,19 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
         Some(())
     }
 
+    fn take_id(&mut self) -> Option<Identifier> {
+        let token = self.take();
+        if let Token::Identifier(name) = token.token {
+            Some(Identifier {
+                base: NodeBase::from_location(token.location),
+                name,
+            })
+        } else {
+            self.errors.push(CompilerError::unexpected(token));
+            None
+        }
+    }
+
     fn parse_expr1(&mut self) -> Option<Expr> {
         let start = self.next_pos();
 
@@ -316,9 +329,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
                 }
                 Token::LeftSquare => {
                     let index = self.parse_expr1()?;
-
                     self.eat(Token::RightSquare)?;
-
                     let end = self.prev_pos().unwrap_or(start);
 
                     expr = Expr::IndexExpr(Box::new(IndexExpr {
@@ -328,17 +339,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
                     }));
                 }
                 Token::Dot => {
-                    let token = self.take();
-                    let member = if let Token::Identifier(name) = token.token {
-                        Identifier {
-                            base: NodeBase::from_location(token.location),
-                            name,
-                        }
-                    } else {
-                        self.errors.push(CompilerError::unexpected(token));
-                        return None;
-                    };
-
+                    let member = self.take_id()?;
                     let end = self.prev_pos().unwrap_or(start);
 
                     expr = Expr::MemberExpr(Box::new(MemberExpr {
@@ -486,24 +487,17 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
         self.eat(Token::Colon)?;
         self.eat(Token::NewLine)?;
         self.eat(Token::Indent)?;
-
         let body = self.parse_stmt_list();
-
         self.eat(Token::Dedent)?;
-
         Some(body)
     }
 
     fn parse_while(&mut self) -> Option<WhileStmt> {
         let start = self.next_pos();
-
         self.eat(Token::While)?;
-
         let condition = self.parse_expr1()?;
         let body = self.parse_block()?;
-
         let end = self.prev_pos().unwrap_or(start);
-
         Some(WhileStmt {
             base: NodeBase::from_positions(start, end),
             condition,
@@ -685,31 +679,9 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
 
         // Parse "class ID ( ID ) : \n {"
         self.eat(Token::Class)?;
-
-        let token = self.take();
-        let name = if let Token::Identifier(name) = token.token {
-            Identifier {
-                base: NodeBase::from_location(token.location),
-                name,
-            }
-        } else {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        };
-
+        let name = self.take_id()?;
         self.eat(Token::LeftPar)?;
-
-        let token = self.take();
-        let super_class = if let Token::Identifier(name) = token.token {
-            Identifier {
-                base: NodeBase::from_location(token.location),
-                name,
-            }
-        } else {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        };
-
+        let super_class = self.take_id()?;
         self.eat(Token::RightPar)?;
         self.eat(Token::Colon)?;
         self.eat(Token::NewLine)?;
@@ -747,18 +719,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
                 }
                 scope @ Token::Global | scope @ Token::Nonlocal => {
                     let start = head.location.start;
-                    let token = self.take();
-                    let variable = if let Token::Identifier(name) = token.token {
-                        Identifier {
-                            base: NodeBase::from_location(token.location),
-                            name,
-                        }
-                    } else {
-                        self.errors.push(CompilerError::unexpected(token));
-                        self.skip_to_next_line();
-                        continue;
-                    };
-
+                    let variable = self.take_id()?;
                     let end = self.prev_pos().unwrap_or(start);
 
                     let token = self.take();
@@ -805,18 +766,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
 
         // Parse "def ID ("
         self.eat(Token::Def)?;
-
-        let token = self.take();
-        let name = if let Token::Identifier(name) = token.token {
-            Identifier {
-                base: NodeBase::from_location(token.location),
-                name,
-            }
-        } else {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        };
-
+        let name = self.take_id()?;
         self.eat(Token::LeftPar)?;
 
         // Parse "typed_var,* )"
@@ -954,19 +904,8 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
         let start = self.next_pos();
 
         // Parse "ID : type"
-        let token = self.take();
-        let identifier = if let Token::Identifier(name) = token.token {
-            Identifier {
-                base: NodeBase::from_location(token.location),
-                name,
-            }
-        } else {
-            self.errors.push(CompilerError::unexpected(token));
-            return None;
-        };
-
+        let identifier = self.take_id()?;
         self.eat(Token::Colon)?;
-
         let type_ = self.parse_type_annotation()?;
 
         let end = self.prev_pos().unwrap_or(start);
