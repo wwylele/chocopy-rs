@@ -4,13 +4,11 @@ use crate::node::*;
 use std::cmp::Ordering;
 use std::collections::vec_deque::VecDeque;
 
-impl CompilerError {
-    pub fn unexpected(token: ComplexToken) -> CompilerError {
-        CompilerError {
-            base: NodeBase::from_location(token.location),
-            message: "unexptected token".to_owned(),
-            syntax: true,
-        }
+fn unexpected(token: ComplexToken) -> CompilerError {
+    CompilerError {
+        base: NodeBase::from_location(token.location),
+        message: "unexptected token".to_owned(),
+        syntax: true,
     }
 }
 
@@ -170,7 +168,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
     fn eat(&mut self, expected_token: Token) -> Option<()> {
         let token = self.take();
         if token.token != expected_token {
-            self.errors.push(CompilerError::unexpected(token));
+            self.errors.push(unexpected(token));
             return None;
         }
         Some(())
@@ -184,7 +182,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
                 name,
             })
         } else {
-            self.errors.push(CompilerError::unexpected(token));
+            self.errors.push(unexpected(token));
             None
         }
     }
@@ -290,7 +288,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
                                 Token::Comma => (),
                                 Token::RightPar => break,
                                 _ => {
-                                    self.errors.push(CompilerError::unexpected(token));
+                                    self.errors.push(unexpected(token));
                                     return None;
                                 }
                             }
@@ -322,7 +320,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
                             }))
                         }
                         _ => {
-                            self.errors.push(CompilerError::unexpected(token));
+                            self.errors.push(unexpected(token));
                             return None;
                         }
                     }
@@ -394,7 +392,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
                             Token::Comma => (),
                             Token::RightSquare => break,
                             _ => {
-                                self.errors.push(CompilerError::unexpected(token));
+                                self.errors.push(unexpected(token));
                                 return None;
                             }
                         }
@@ -406,7 +404,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
                 Expr::ListExpr(ListExpr { base, elements })
             }
             _ => {
-                self.errors.push(CompilerError::unexpected(token));
+                self.errors.push(unexpected(token));
                 return None;
             }
         };
@@ -430,13 +428,13 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
                     | Some(ExprContent::MemberExpr(_))
                     | Some(ExprContent::IndexExpr(_)) => (),
                     _ => {
-                        self.errors.push(CompilerError::unexpected(token));
+                        self.errors.push(unexpected(token));
                         return None;
                     }
                 },
                 Token::NewLine => break,
                 _ => {
-                    self.errors.push(CompilerError::unexpected(token));
+                    self.errors.push(unexpected(token));
                     return None;
                 }
             }
@@ -518,7 +516,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
                 name,
             }
         } else {
-            self.errors.push(CompilerError::unexpected(token));
+            self.errors.push(unexpected(token));
             return None;
         };
 
@@ -542,7 +540,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
 
         let token = self.take();
         if token.token != Token::If && token.token != Token::Elif {
-            self.errors.push(CompilerError::unexpected(token));
+            self.errors.push(unexpected(token));
             return None;
         }
 
@@ -585,7 +583,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
                 Token::Pass => {
                     let token = self.take();
                     if token.token != Token::NewLine {
-                        self.errors.push(CompilerError::unexpected(token));
+                        self.errors.push(unexpected(token));
                         self.skip_to_next_line();
                     }
                 }
@@ -724,7 +722,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
 
                     let token = self.take();
                     if token.token != Token::NewLine {
-                        self.errors.push(CompilerError::unexpected(token));
+                        self.errors.push(unexpected(token));
                         self.skip_to_next_line();
                         continue;
                     }
@@ -783,7 +781,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
                     Token::Comma => (),
                     Token::RightPar => break,
                     _ => {
-                        self.errors.push(CompilerError::unexpected(token));
+                        self.errors.push(unexpected(token));
                         return None;
                     }
                 }
@@ -805,7 +803,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
                 return_type
             }
             _ => {
-                self.errors.push(CompilerError::unexpected(token));
+                self.errors.push(unexpected(token));
                 return None;
             }
         };
@@ -851,7 +849,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
                 Literal::StringLiteral(StringLiteral { base, value })
             }
             _ => {
-                self.errors.push(CompilerError::unexpected(token));
+                self.errors.push(unexpected(token));
                 return None;
             }
         };
@@ -894,7 +892,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
                 })))
             }
             _ => {
-                self.errors.push(CompilerError::unexpected(token));
+                self.errors.push(unexpected(token));
                 None
             }
         }
@@ -973,7 +971,7 @@ impl<F: Iterator<Item = ComplexToken>> Parser<F> {
                             if token.token == Token::Eof {
                                 break;
                             } else {
-                                self.errors.push(CompilerError::unexpected(token));
+                                self.errors.push(unexpected(token));
                             }
                         }
                         break;
