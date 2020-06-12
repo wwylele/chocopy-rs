@@ -95,9 +95,9 @@ fn compute_md5(source_path: &str) -> std::result::Result<[u8; 16], Box<dyn std::
         if len == 0 {
             break;
         }
-        md5.input(&buffer[0..len]);
+        md5.update(&buffer[0..len]);
     }
-    Ok(md5.result().into())
+    Ok(md5.finalize().into())
 }
 
 pub struct Codeview {

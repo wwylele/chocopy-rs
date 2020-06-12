@@ -17,7 +17,7 @@ See [DESIGN.md](DESIGN.md) for some design detail.
 
 ## Build
 
-Requirement: basic Rust environment (`rustc`, `cargo` etc.). Tested version: 1.42
+Requirement: basic Rust environment (`rustc`, `cargo` etc.).
 
 ```bash
 cargo build
