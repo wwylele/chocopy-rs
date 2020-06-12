@@ -56,13 +56,13 @@ For each type with name `C` (including all primitive types), the global symbol `
 
 A prototype object starts with a 4-byte signed integer `$size` that describes the memory layout of objects of type `C`. When it is a positive number, it is the object size without the object header. When it is a negative number, it indicates `C` is an array-like type and the value without the sign is the size of one element.
 
-Following `$size` is a 4-byte signed integer `$tag` for type tag. The type tag value follows the a similar convention to the one in the implementation guide, except that
+Next is a 4-byte signed integer `$tag` for type tag. The type tag value follows the a similar convention to the one in the implementation guide, except that
  - `object` and user-defined classes uses `Other = 0`, and
  - List objects is separated into `PlainList = -1` (for `[int]` or `[bool]`) and `RefList = -2` (for other list), making it easier for the tracing GC to distinguish.
 
-Following `$tag` is the pointer to reference map `$map`, which points to a bit string, indicating whether each 8 bytes in the attribute is a reference for GC tracing.
+Next is the pointer to reference map `$map`, which points to a bit string, indicating whether each 8 bytes in the attribute is a reference for GC tracing.
 
-Following `$map` is the list of function pointers to methods. The first function pointer points to the `__init__` method, and so on for other user-defined methods.
+Next is the list of function pointers to methods. The first function pointer points to the `__init__` method, and so on for other user-defined methods.
 
 #### Constructors
 
@@ -124,4 +124,18 @@ The standard library also provides the program entry point `main`, which directl
 
 ### Garbage collection
 
-chocopy-rs implements tracing garbage collection.
+chocopy-rs implements simple mark-and-sweep tracing garbage collection. When the program allocates new object by calling `$alloc` and a certain threshold is reached, the garbage collector will walk through all objects and free unreachable ones.
+
+`$alloc` uses native system allocator to allocate memory, and chains all objects into a linked list using the `$gc_next` field in the object header. On garbage collection, all live objects are marked as 1 in `$gc_count`, and then all objects with 0 in `$gc_count` are removed from the linked list and deallocated. All live objects resets `$gc_count` to 0 in the end.
+
+To determine live objects, garbage collector walks through the following live reference paths:
+ - Global references
+ - Local references
+ - Member references
+
+Because there are also non-reference (i.e. unboxed) values, the garbage collector needs the information of which variable is a reference. This information is embedded in the program code, know as "reference map". A reference map encodes reference locations by a bit string. The garbage collector finds reference maps by:
+ - For global references, the map is stored in a global section and provided to the library during `$init`.
+ - For local references, the map is attached to after every function call instruction (unless it can be proven the function call can't lead to `$alloc`). It is done by inserting `PREFETCHNTA` instruction, which points to the reference map data. One local reference map only describes the current stack frame. The garbage collector does a full stack backtrace to gather all local reference maps.
+ - For member reference, each class prototype contains a pointer to the reference map `$map`.
+
+
