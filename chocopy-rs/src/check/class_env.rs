@@ -180,7 +180,7 @@ impl ClassEnv {
         }
         if *sub_class == *TYPE_NONE_LIST {
             if let ValueType::ListValueType(ListValueType { element_type }) = super_class {
-                return self.is_compatible(&*TYPE_NONE, element_type);
+                return self.is_compatible(&TYPE_NONE, element_type);
             } else {
                 return false;
             }

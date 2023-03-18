@@ -294,7 +294,7 @@ impl Codeview {
 }
 
 impl DebugWriter for Codeview {
-    fn add_type<'a>(&mut self, representive: TypeDebugRepresentive<'a>) {
+    fn add_type(&mut self, representive: TypeDebugRepresentive<'_>) {
         if !matches!(
             representive.core_name,
             "str" | "int" | "bool" | "<None>" | "<Empty>"
@@ -364,7 +364,7 @@ impl DebugWriter for Codeview {
             let mut arg_list = vec![];
             arg_list.write_u32(method.params.len() as u32);
             for param in &method.params {
-                arg_list.write_u32(self.get_type(&param));
+                arg_list.write_u32(self.get_type(param));
             }
             let arg_list_id = self.write_leaf(LeafType::ArgList, arg_list);
 

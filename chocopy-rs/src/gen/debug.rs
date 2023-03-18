@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) trait DebugWriter {
-    fn add_type<'a>(&mut self, type_repr: TypeDebugRepresentive<'a>);
+    fn add_type(&mut self, type_repr: TypeDebugRepresentive<'_>);
     fn add_class(&mut self, class_name: String, class_debug: ClassDebug);
     fn add_chunk(&mut self, chunk: &Chunk);
     fn add_global(&mut self, global_debug: VarDebug);
@@ -11,7 +11,7 @@ pub(super) trait DebugWriter {
 pub struct DummyDebug;
 
 impl DebugWriter for DummyDebug {
-    fn add_type<'a>(&mut self, _: TypeDebugRepresentive<'a>) {}
+    fn add_type(&mut self, _: TypeDebugRepresentive<'_>) {}
     fn add_class(&mut self, _: String, _: ClassDebug) {}
     fn add_chunk(&mut self, _: &Chunk) {}
     fn add_global(&mut self, _: VarDebug) {}

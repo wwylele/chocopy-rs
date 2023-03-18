@@ -109,7 +109,7 @@ fn test_one_case(
     let stdout = process.stdout.as_mut().unwrap();
 
     let mut actual_output = vec![];
-    stdin.write_all(&input)?;
+    stdin.write_all(input)?;
     stdout.read_to_end(&mut actual_output)?;
     process.wait()?;
     if expected_output == &actual_output[..] {

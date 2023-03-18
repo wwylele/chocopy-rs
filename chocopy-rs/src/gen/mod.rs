@@ -423,7 +423,7 @@ pub fn gen_object(
     let ro_reloc_section = obj.section_id(StandardSection::ReadOnlyDataWithRel);
 
     for chunk in &code_set.chunks {
-        debug.add_chunk(&chunk); // Feed the chunk debug info to debug section generator
+        debug.add_chunk(chunk); // Feed the chunk debug info to debug section generator
 
         // Select section attributes for this chunk
         let section;
@@ -496,7 +496,7 @@ pub fn gen_object(
                 ChunkLinkTarget::Data(data) => {
                     let name = format!("$str{}", data_id);
                     data_id += 1;
-                    let offset = obj.append_section_data(ro_section, &data, 1);
+                    let offset = obj.append_section_data(ro_section, data, 1);
 
                     obj.add_symbol(Symbol {
                         name: name.into(),
@@ -571,7 +571,7 @@ pub fn gen_object(
     }
 
     // Output the object file
-    let mut obj_file = std::fs::File::create(&obj_path)?;
+    let mut obj_file = std::fs::File::create(obj_path)?;
     obj_file.write_all(&obj.write()?)?;
 
     Ok(())
@@ -630,7 +630,7 @@ pub fn link(
     kernel32.lib advapi32.lib ws2_32.lib userenv.lib {} \
     /SUBSYSTEM:CONSOLE /DEBUG",
                 windows_path_escape(&vcvarsall)?,
-                windows_path_escape(&obj_path)?,
+                windows_path_escape(obj_path)?,
                 windows_path_escape(&lib_path)?,
                 windows_path_escape(Path::new(path))?,
                 libs
@@ -643,14 +643,14 @@ pub fn link(
             std::fs::write(&bat_path, batch_content)?;
 
             let ld_output = std::process::Command::new("cmd")
-                .args(&[OsStr::new("/c"), bat_path.as_os_str()])
+                .args([OsStr::new("/c"), bat_path.as_os_str()])
                 .output()?;
             std::fs::remove_file(&bat_path)?;
             ld_output
         }
         Platform::Linux | Platform::Macos => {
             let mut command = std::process::Command::new("cc");
-            command.args(&[
+            command.args([
                 OsStr::new("-o"),
                 OsStr::new(path),
                 obj_path.as_os_str(),

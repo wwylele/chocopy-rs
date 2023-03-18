@@ -33,8 +33,8 @@ impl DwarfWriter {
     pub fn take(&mut self) -> (Vec<u8>, Vec<DwarfReloc>, Vec<DwarfSelfReloc>) {
         (
             self.inner.take(),
-            std::mem::replace(&mut self.relocs, vec![]),
-            std::mem::replace(&mut self.self_relocs, vec![]),
+            std::mem::take(&mut self.relocs),
+            std::mem::take(&mut self.self_relocs),
         )
     }
 }

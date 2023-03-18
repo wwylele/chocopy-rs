@@ -206,7 +206,7 @@ impl Dwarf {
 }
 
 impl DebugWriter for Dwarf {
-    fn add_type<'a>(&mut self, type_repr: TypeDebugRepresentive<'a>) {
+    fn add_type(&mut self, type_repr: TypeDebugRepresentive<'_>) {
         for array_level in 0..=type_repr.max_array_level {
             let type_debug = TypeDebug {
                 core_name: type_repr.core_name.to_owned(),
@@ -542,7 +542,7 @@ impl DebugWriter for Dwarf {
             .dwarf
             .unit
             .ranges
-            .add(RangeList(std::mem::replace(&mut self.range_list, vec![])));
+            .add(RangeList(std::mem::take(&mut self.range_list)));
         let root_id = self.dwarf.unit.root();
         self.dwarf
             .unit

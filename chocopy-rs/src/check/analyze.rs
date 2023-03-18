@@ -1,3 +1,5 @@
+#![allow(clippy::ptr_arg)]
+
 use super::class_env::*;
 use super::error::*;
 use crate::local_env::*;
@@ -268,7 +270,7 @@ impl BinaryExpr {
                     }),
                 ) = (&left, &right)
                 {
-                    let element_type = Box::new(m.join(&left_element, &right_element));
+                    let element_type = Box::new(m.join(left_element, right_element));
                     ValueType::ListValueType(ListValueType { element_type })
                 } else {
                     error = true;
@@ -516,7 +518,7 @@ impl ReturnStmt {
                 let msg = if self.value.is_some() {
                     error_assign(return_expected, &return_type)
                 } else {
-                    error_none_return(&return_expected)
+                    error_none_return(return_expected)
                 };
                 self.add_error(errors, msg);
             }

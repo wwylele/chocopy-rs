@@ -270,7 +270,7 @@ impl Expr {
 
 impl Node for Expr {
     fn base(&self) -> &NodeBase {
-        &self.content.base()
+        self.content.base()
     }
 
     fn base_mut(&mut self) -> &mut NodeBase {
@@ -515,7 +515,7 @@ impl Literal {
 
 impl Node for Literal {
     fn base(&self) -> &NodeBase {
-        &self.content.base()
+        self.content.base()
     }
 
     fn base_mut(&mut self) -> &mut NodeBase {
@@ -542,6 +542,7 @@ impl Literal {
     literal_init!(StringLiteral);
 }
 
+#[allow(clippy::enum_variant_names)]
 #[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind", deny_unknown_fields)]
@@ -628,6 +629,7 @@ pub struct ReturnStmt {
 
 impl_node!(ReturnStmt);
 
+#[allow(clippy::enum_variant_names)]
 #[enum_dispatch(Node)]
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind", deny_unknown_fields)]

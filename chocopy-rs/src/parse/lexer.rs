@@ -213,7 +213,7 @@ async fn lex_line<
                     KEYWORDS
                         .get(&s[..])
                         .cloned()
-                        .unwrap_or_else(|| Token::Identifier(s)),
+                        .unwrap_or(Token::Identifier(s)),
                     start,
                     end,
                 )

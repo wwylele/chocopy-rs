@@ -110,6 +110,6 @@ mod tests {
                 }
             }
         }
-        assert_eq!(passed, true);
+        assert!(passed);
     }
 }

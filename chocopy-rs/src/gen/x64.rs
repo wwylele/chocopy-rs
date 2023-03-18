@@ -158,7 +158,7 @@ impl<'a> Emitter<'a> {
 
     // Emit raw machine code
     pub fn emit(&mut self, instruction: &[u8]) {
-        self.code.extend_from_slice(&instruction);
+        self.code.extend_from_slice(instruction);
     }
 
     pub fn pos(&self) -> usize {
@@ -238,6 +238,7 @@ impl<'a> Emitter<'a> {
     }
 
     // Append the address to a backward branching instruction
+    #[allow(clippy::wrong_self_convention)]
     pub fn from_here(&mut self, jump: BackwardJumper) {
         let delta = -((self.pos() - jump.to + 4) as i32);
         self.emit(&delta.to_le_bytes());
@@ -1025,7 +1026,7 @@ impl<'a> Emitter<'a> {
         let label_else = self.jump_from();
 
         self.emit_expression(&expr.then_expr);
-        self.emit_coerce(&expr.then_expr.get_type(), target_type);
+        self.emit_coerce(expr.then_expr.get_type(), target_type);
 
         // jmp
         self.emit(&[0xe9]);
@@ -1033,7 +1034,7 @@ impl<'a> Emitter<'a> {
         self.to_here(label_else);
 
         self.emit_expression(&expr.else_expr);
-        self.emit_coerce(&expr.else_expr.get_type(), target_type);
+        self.emit_coerce(expr.else_expr.get_type(), target_type);
 
         self.to_here(label_end);
     }
@@ -1215,9 +1216,9 @@ impl<'a> Emitter<'a> {
             }
             ExprContent::IndexExpr(expr) => {
                 if expr.list.get_type() == &*TYPE_STR {
-                    self.emit_str_index(&*expr);
+                    self.emit_str_index(expr);
                 } else {
-                    self.emit_list_index(&*expr);
+                    self.emit_list_index(expr);
                 }
             }
             ExprContent::IfExpr(expr) => self.emit_if_expr(expr, expression.get_type()),
@@ -1442,6 +1443,7 @@ impl<'a> Emitter<'a> {
 
         //// Compute the element
         let iterable_type = stmt.iterable.get_type();
+        #[allow(clippy::needless_late_init)]
         let source_type;
         if iterable_type == &*TYPE_STR {
             // mov rsi,1
@@ -1624,8 +1626,7 @@ fn gen_function(
     let mut ref_list = vec![];
     let mut params_debug = vec![];
     for (i, param) in function.params.iter().enumerate() {
-        let offset;
-        offset = i as i32 * 8 + 16;
+        let offset= i as i32 * 8 + 16;
         let name = &param.identifier.name;
         locals.insert(
             name.clone(),
@@ -1749,7 +1750,7 @@ fn gen_function(
     for declaration in &function.declarations {
         if let Declaration::FuncDef(f) = declaration {
             chunks.append(&mut gen_function(
-                &f,
+                f,
                 handle.inner(),
                 classes,
                 level + 1,
@@ -2382,7 +2383,7 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
         match declaration {
             Declaration::FuncDef(f) => {
                 chunks.append(&mut gen_function(
-                    &f,
+                    f,
                     &mut storage_env,
                     &classes,
                     0,
@@ -2394,7 +2395,7 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
                 for declaration in &c.declarations {
                     if let Declaration::FuncDef(f) = declaration {
                         chunks.append(&mut gen_function(
-                            &f,
+                            f,
                             &mut storage_env,
                             &classes,
                             0,
@@ -2410,7 +2411,7 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
 
     // Generate prototypes
     for (class_name, class_slot) in &classes {
-        chunks.push(gen_ctor(&class_name, &class_slot, platform));
+        chunks.push(gen_ctor(class_name, class_slot, platform));
 
         let mut prototype = vec![0; class_slot.prototype_size as usize];
         prototype[PROTOTYPE_SIZE_OFFSET as usize..][..4]
@@ -2420,8 +2421,8 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
         prototype[PROTOTYPE_MAP_OFFSET as usize..][..8].copy_from_slice(&(0u64).to_le_bytes());
         let mut links: Vec<ChunkLink> = class_slot
             .methods
-            .iter()
-            .map(|(_, method)| ChunkLink {
+            .values()
+            .map(|method| ChunkLink {
                 pos: method.offset as usize,
                 to: ChunkLinkTarget::Symbol(method.link_name.clone()),
             })
