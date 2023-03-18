@@ -151,8 +151,8 @@ enum ChunkExtra {
 
 // The target of a relocation
 enum ChunkLinkTarget {
-    Symbol(String), // Relocation by symbol name
-    Data(Vec<u8>),  // Create an ad hoc small chunk and make it the target
+    Symbol(String, i32), // Relocation by symbol name and addend
+    Data(Vec<u8>),       // Create an ad hoc small chunk and make it the target
 }
 
 // Relocation between chunks
@@ -491,23 +491,28 @@ pub fn gen_object(
             addend = 0;
         };
         for link in &chunk.links {
-            let symbol = match &link.to {
-                ChunkLinkTarget::Symbol(symbol) => obj.symbol_id(symbol.as_bytes()).unwrap(),
+            let (symbol, symbol_addend) = match &link.to {
+                ChunkLinkTarget::Symbol(symbol, addend) => {
+                    (obj.symbol_id(symbol.as_bytes()).unwrap(), *addend)
+                }
                 ChunkLinkTarget::Data(data) => {
                     let name = format!("$str{}", data_id);
                     data_id += 1;
                     let offset = obj.append_section_data(ro_section, data, 1);
 
-                    obj.add_symbol(Symbol {
-                        name: name.into(),
-                        value: offset,
-                        size: 0,
-                        kind: SymbolKind::Data,
-                        scope: SymbolScope::Compilation,
-                        weak: false,
-                        section: SymbolSection::Section(ro_section),
-                        flags: SymbolFlags::None,
-                    })
+                    (
+                        obj.add_symbol(Symbol {
+                            name: name.into(),
+                            value: offset,
+                            size: 0,
+                            kind: SymbolKind::Data,
+                            scope: SymbolScope::Compilation,
+                            weak: false,
+                            section: SymbolSection::Section(ro_section),
+                            flags: SymbolFlags::None,
+                        }),
+                        0,
+                    )
                 }
             };
             obj.add_relocation(
@@ -518,7 +523,7 @@ pub fn gen_object(
                     kind,
                     encoding,
                     symbol,
-                    addend,
+                    addend: addend + symbol_addend as i64,
                 },
             )?;
         }

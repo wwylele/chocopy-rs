@@ -262,9 +262,9 @@ impl<'a> Emitter<'a> {
     pub fn emit_link(&mut self, name: impl Into<String>, offset: i32) {
         self.links.push(ChunkLink {
             pos: self.pos(),
-            to: ChunkLinkTarget::Symbol(name.into()),
+            to: ChunkLinkTarget::Symbol(name.into(), offset),
         });
-        self.emit(&offset.to_le_bytes());
+        self.emit(&[0; 4]);
     }
 
     // Call a function
@@ -2120,7 +2120,7 @@ fn gen_init_param(global_size: u64, global_ref_indexs: &[i32]) -> Chunk {
         links: vec![
             ChunkLink {
                 pos: GLOBAL_SECTION_OFFSET as usize,
-                to: ChunkLinkTarget::Symbol(GLOBAL_SECTION.to_owned()),
+                to: ChunkLinkTarget::Symbol(GLOBAL_SECTION.to_owned(), 0),
             },
             ChunkLink {
                 pos: GLOBAL_MAP_OFFSET as usize,
@@ -2128,7 +2128,7 @@ fn gen_init_param(global_size: u64, global_ref_indexs: &[i32]) -> Chunk {
             },
             ChunkLink {
                 pos: STR_PROTOTYPE_OFFSET as usize,
-                to: ChunkLinkTarget::Symbol(STR_PROTOTYPE.to_owned()),
+                to: ChunkLinkTarget::Symbol(STR_PROTOTYPE.to_owned(), 0),
             },
         ],
         extra: ChunkExtra::Data { writable: true },
@@ -2246,7 +2246,7 @@ fn gen_special_proto(name: &str, size: i32, tag: TypeTag) -> Chunk {
     code[PROTOTYPE_MAP_OFFSET as usize..][..8].copy_from_slice(&(0u64).to_le_bytes());
     let links = vec![ChunkLink {
         pos: PROTOTYPE_INIT_OFFSET as usize,
-        to: ChunkLinkTarget::Symbol("object.__init__".to_owned()),
+        to: ChunkLinkTarget::Symbol("object.__init__".to_owned(), 0),
     }];
     Chunk {
         name: name.to_owned(),
@@ -2426,7 +2426,7 @@ pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
             .values()
             .map(|method| ChunkLink {
                 pos: method.offset as usize,
-                to: ChunkLinkTarget::Symbol(method.link_name.clone()),
+                to: ChunkLinkTarget::Symbol(method.link_name.clone(), 0),
             })
             .collect();
         let mut ref_map = vec![0u8; ((class_slot.object_size as usize / 8) + 7) / 8];
