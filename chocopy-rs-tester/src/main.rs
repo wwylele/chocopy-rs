@@ -85,11 +85,15 @@ fn get_cases(file_path: &std::path::Path) -> Box<dyn Iterator<Item = (Vec<u8>, V
 }
 
 #[derive(Debug)]
-struct TestFail;
+struct TestFail {
+    output: Vec<u8>,
+}
 
 impl std::fmt::Display for TestFail {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Output is wrong")
+        writeln!(f, "Output is wrong. Actual output:")?;
+        writeln!(f, "{}", String::from_utf8_lossy(&self.output))?;
+        Ok(())
     }
 }
 
@@ -115,7 +119,9 @@ fn test_one_case(
     if expected_output == &actual_output[..] {
         Ok(())
     } else {
-        Err(Box::new(TestFail))
+        Err(Box::new(TestFail {
+            output: actual_output,
+        }))
     }
 }
 
