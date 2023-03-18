@@ -33,7 +33,7 @@ struct MethodSlot {
 struct ClassSlot {
     attributes: HashMap<String, AttributeSlot>,
     object_size: u32, // excluding the object header
-    methods: HashMap<String, MethodSlot>,
+    methods: BTreeMap<String, MethodSlot>,
     prototype_size: u32,
 }
 
@@ -41,7 +41,7 @@ struct Emitter<'a> {
     name: String,
     return_type: Option<&'a ValueType>,
     storage_env: Option<&'a StorageEnv>,
-    classes: Option<&'a HashMap<String, ClassSlot>>,
+    classes: Option<&'a BTreeMap<String, ClassSlot>>,
     current_stack_top: i32, // relative to rbp, non-positive
     max_stack_top: i32,     // relative to rbp, non-positive
     ref_list: Vec<i32>,     // offsets relative to rbp
@@ -125,7 +125,7 @@ impl<'a> Emitter<'a> {
         name: &str,
         return_type: Option<&'a ValueType>,
         storage_env: Option<&'a StorageEnv>,
-        classes: Option<&'a HashMap<String, ClassSlot>>,
+        classes: Option<&'a BTreeMap<String, ClassSlot>>,
         // A list of offsets relative to rbp
         // where references are passed in as parameter and GC should be aware
         ref_list: Vec<i32>,
@@ -152,7 +152,7 @@ impl<'a> Emitter<'a> {
         self.storage_env.as_ref().unwrap()
     }
 
-    pub fn classes(&self) -> &'a HashMap<String, ClassSlot> {
+    pub fn classes(&self) -> &'a BTreeMap<String, ClassSlot> {
         self.classes.as_ref().unwrap()
     }
 
@@ -1609,7 +1609,7 @@ impl<'a> Emitter<'a> {
 fn gen_function(
     function: &FuncDef,
     storage_env: &mut StorageEnv,
-    classes: &HashMap<String, ClassSlot>,
+    classes: &BTreeMap<String, ClassSlot>,
     level: u32,
     parent: Option<&str>,
     platform: Platform,
@@ -1626,7 +1626,7 @@ fn gen_function(
     let mut ref_list = vec![];
     let mut params_debug = vec![];
     for (i, param) in function.params.iter().enumerate() {
-        let offset= i as i32 * 8 + 16;
+        let offset = i as i32 * 8 + 16;
         let name = &param.identifier.name;
         locals.insert(
             name.clone(),
@@ -1800,7 +1800,9 @@ fn gen_ctor(class_name: &str, class_slot: &ClassSlot, platform: Platform) -> Chu
     code.emit_with_stack(&[0x48, 0x89, 0x85], &object);
 
     // Initialize attributes
-    for attribute in class_slot.attributes.values() {
+    let mut attributes: Vec<_> = class_slot.attributes.values().collect();
+    attributes.sort_by_key(|a| a.offset);
+    for attribute in attributes {
         match &attribute.init {
             LiteralContent::NoneLiteral(_) => {
                 code.emit_none_literal();
@@ -2023,7 +2025,7 @@ fn gen_print(platform: Platform) -> Chunk {
 fn gen_main(
     ast: &Program,
     storage_env: &mut StorageEnv,
-    classes: &HashMap<String, ClassSlot>,
+    classes: &BTreeMap<String, ClassSlot>,
     platform: Platform,
 ) -> Chunk {
     let mut main_code = Emitter::new(
@@ -2136,7 +2138,7 @@ fn gen_init_param(global_size: u64, global_ref_indexs: &[i32]) -> Chunk {
 // Add class info into environment and debug info
 fn add_class(
     globals: &mut HashMap<String, LocalSlot<FuncSlot, VarSlot>>,
-    classes: &mut HashMap<String, ClassSlot>,
+    classes: &mut BTreeMap<String, ClassSlot>,
     classes_debug: &mut HashMap<String, ClassDebug>,
     c: &ClassDef,
 ) {
@@ -2258,8 +2260,8 @@ fn gen_special_proto(name: &str, size: i32, tag: TypeTag) -> Chunk {
 pub(super) fn gen_code_set(ast: Program, platform: Platform) -> CodeSet {
     let mut globals = HashMap::new();
     let mut global_ref_indexs = vec![];
-    let mut classes = HashMap::new();
-    let mut base_methods = HashMap::new();
+    let mut classes = BTreeMap::new();
+    let mut base_methods = BTreeMap::new();
 
     // Add `object` as the root of class tree
     base_methods.insert(
