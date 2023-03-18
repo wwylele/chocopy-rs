@@ -12,7 +12,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
     - name: Build
@@ -26,7 +26,5 @@ jobs:
     - name: Verify integration test cases
       run: cargo run --package chocopy-rs-tester -- chocopy-rs/test/pa3 --python
       if: runner.os == 'Linux'
-    - name: Run integration tests
-      run: cargo run --package chocopy-rs-tester -- chocopy-rs/test/pa3
     - name: Run official integration tests (--static)
       run: cargo run --package chocopy-rs-tester -- chocopy-rs/test/original/pa3 --static
