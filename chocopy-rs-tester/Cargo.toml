@@ -5,4 +5,4 @@ authors = ["Weiyi Wang <wwylele@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-rand = "0.7"
+rand = "0.8"
