@@ -269,6 +269,17 @@ impl<'a> Emitter<'a> {
 
     // Call a function
     pub fn call(&mut self, name: &str) {
+        /*
+                mov r11,rsp
+        and r11,0xf
+        jz ok
+        ud2
+        ok:
+                 */
+        self.emit(&[
+            0x49, 0x89, 0xE3, 0x49, 0x83, 0xE3, 0x0F, 0x74, 0x02, 0x0F, 0x0B,
+        ]);
+
         self.emit(&[0xe8]);
         self.emit_link(name, 0);
     }
@@ -1626,7 +1637,7 @@ fn gen_function(
     let mut ref_list = vec![];
     let mut params_debug = vec![];
     for (i, param) in function.params.iter().enumerate() {
-        let offset= i as i32 * 8 + 16;
+        let offset = i as i32 * 8 + 16;
         let name = &param.identifier.name;
         locals.insert(
             name.clone(),
