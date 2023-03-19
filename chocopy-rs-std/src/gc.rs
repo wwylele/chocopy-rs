@@ -85,12 +85,8 @@ pub unsafe fn collect(rbp: *const u64, rsp: *const u64) {
         } else {
             *cur = (*object).gc_next;
 
-            let prototype = (*object).prototype;
-            let size = divide_up(if (*prototype).size > 0 {
-                size_of::<Object>() + (*prototype).size as usize
-            } else {
-                let len = (*(object as *mut ArrayObject)).len;
-                size_of::<ArrayObject>() + (-(*prototype).size as u64 * len) as usize
+            let size = calculate_size((*object).prototype, || {
+                unsafe{(*(object as *mut ArrayObject)).len}
             });
 
             drop(Box::from_raw(std::slice::from_raw_parts_mut(

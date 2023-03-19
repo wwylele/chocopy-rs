@@ -17,7 +17,7 @@ thread_local! {
     static THRESHOLD_SPACE: Cell<usize> = Cell::new(1024);
 }
 
-pub fn divide_up(value: usize) -> usize {
+fn divide_up(value: usize) -> usize {
     let align = size_of::<AllocUnit>();
     if value == 0 {
         0
@@ -26,11 +26,21 @@ pub fn divide_up(value: usize) -> usize {
     }
 }
 
+/// # Safety
+///  - `prototype` satisfies all safety rules from alloc_obj
+pub(crate) unsafe fn calculate_size<F: FnOnce() -> u64>(prototype: *const Prototype, len: F) -> usize {
+    let size = (*prototype).size;
+    divide_up(if size >= 0 {
+        size_of::<Object>() + size as usize
+    } else {
+        size_of::<ArrayObject>() + (-size as u64 * len()) as usize
+    })
+}
+
 /// Allocates a ChocoPy object
 ///
 /// # Safety
 ///  - `init` already called
-///  - `prototype.size` is not 0.
 ///  - `prototype.tag` is Str or List if and only if `prototype.size < 0`.
 ///  - `prototype.map` points to a valid object reference map
 ///  - `rbp` and `rsp` points to the bottom and the top of the top stack frame
@@ -50,12 +60,7 @@ pub unsafe extern "C" fn alloc_obj(
         THRESHOLD_SPACE.with(|threshold_space| threshold_space.set(threshold));
     }
 
-    let size = divide_up(if (*prototype).size > 0 {
-        assert!(len == 0);
-        size_of::<Object>() + (*prototype).size as usize
-    } else {
-        size_of::<ArrayObject>() + (-(*prototype).size as u64 * len) as usize
-    });
+    let size = calculate_size(prototype, ||len);
 
     let pointer =
         Box::into_raw(vec![AllocUnit(0); size].into_boxed_slice()) as *mut AllocUnit as *mut Object;
@@ -70,7 +75,7 @@ pub unsafe extern "C" fn alloc_obj(
         gc_next,
     };
 
-    if (*prototype).size > 0 {
+    if (*prototype).size >= 0 {
         pointer.write(object);
     } else {
         let object = ArrayObject { object, len };
