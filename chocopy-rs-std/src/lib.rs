@@ -1,7 +1,7 @@
 use chocopy_rs_common::*;
 use std::cell::*;
 use std::mem::*;
-use std::process::exit;
+use std::process::{abort, exit};
 use std::ptr::*;
 
 mod gc;
@@ -27,8 +27,12 @@ fn divide_up(value: usize) -> usize {
 }
 
 /// # Safety
-///  - `prototype` satisfies all safety rules from alloc_obj
-pub(crate) unsafe fn calculate_size<F: FnOnce() -> u64>(prototype: *const Prototype, len: F) -> usize {
+///  - `*prototype` is not null.
+///  - Safety requirement for `Prototype`.
+pub(crate) unsafe fn calculate_size<F: FnOnce() -> u64>(
+    prototype: *const Prototype,
+    len: F,
+) -> usize {
     let size = (*prototype).size;
     divide_up(if size >= 0 {
         size_of::<Object>() + size as usize
@@ -40,10 +44,15 @@ pub(crate) unsafe fn calculate_size<F: FnOnce() -> u64>(prototype: *const Protot
 /// Allocates a ChocoPy object
 ///
 /// # Safety
-///  - `init` already called
-///  - `prototype.tag` is Str or List if and only if `prototype.size < 0`.
-///  - `prototype.map` points to a valid object reference map
-///  - `rbp` and `rsp` points to the bottom and the top of the top stack frame
+///  - `init` already called.
+///  - `prototype` is not null.
+///  - `*prototype` content never changes after calling this function.
+///  - Other safety requirement for `Prototype`.
+///  - `rbp` and `rsp` points to the bottom and the top of the top stack frame.
+///  - For the returned object, any fields in Object (header) must never be changed.
+///  - If the `prototype` indicates an array object,
+///    for the returned object, any fields in ArrayObject (header) must never be changed.
+///  - All attributes in the object must maintain valid values according to the type tag and reference map.
 #[export_name = "$alloc_obj"]
 pub unsafe extern "C" fn alloc_obj(
     prototype: *const Prototype,
@@ -60,7 +69,7 @@ pub unsafe extern "C" fn alloc_obj(
         THRESHOLD_SPACE.with(|threshold_space| threshold_space.set(threshold));
     }
 
-    let size = calculate_size(prototype, ||len);
+    let size = calculate_size(prototype, || len);
 
     let pointer =
         Box::into_raw(vec![AllocUnit(0); size].into_boxed_slice()) as *mut AllocUnit as *mut Object;
@@ -88,10 +97,8 @@ pub unsafe extern "C" fn alloc_obj(
 /// Gets the array length of a ChocoPy object
 ///
 /// # Safety
-///  - `init` already called
+///  - `init` is already called.
 ///  - `pointer` must be previously returned by `alloc_obj`.
-///  - The `prototype` field must be intact.
-///  - For `ArrayObject`, the `len` field must be intact.
 #[export_name = "$len"]
 pub unsafe extern "C" fn len(pointer: *mut Object) -> i32 {
     if pointer.is_null() {
@@ -111,9 +118,8 @@ pub unsafe extern "C" fn len(pointer: *mut Object) -> i32 {
 /// Prints a ChocoPy object
 ///
 /// # Safety
-///  - `init` already called
+///  - `init` is already called.
 ///  - `pointer` must be previously returned by `alloc_obj`.
-///  - The `prototype` field must be intact.
 #[export_name = "$print"]
 pub unsafe extern "C" fn print(pointer: *mut Object) -> *mut u8 {
     if pointer.is_null() {
@@ -140,7 +146,7 @@ pub unsafe extern "C" fn print(pointer: *mut Object) -> *mut u8 {
                 object.offset(1) as *const u8,
                 (*object).len as usize,
             ))
-            .unwrap();
+            .unwrap_or_else(|e| fatal(&e.to_string()));
             println!("{}", slice);
         }
         _ => {
@@ -154,23 +160,22 @@ pub unsafe extern "C" fn print(pointer: *mut Object) -> *mut u8 {
 /// Creates a new str object that holds a line of user input
 ///
 /// # Safety
-///  - `init` already called
-///  - `rbp` and `rsp` points to the bottom and the top of the top stack frame
+///  - `init` is already called.
+///  - `rbp` and `rsp` points to the bottom and the top of the top stack frame.
+///  - For the returned object, any fields in ArrayObject (header) must never be changed.
 #[export_name = "$input"]
 pub unsafe extern "C" fn input(rbp: *const u64, rsp: *const u64) -> *mut Object {
     let mut input = String::new();
-    std::io::stdin().read_line(&mut input).unwrap();
-    let input = input.as_bytes();
-    let mut len = input.len();
-    while len > 0 {
-        if input[len - 1] != b'\n' && input[len - 1] != b'\r' {
-            break;
-        }
-        len -= 1;
+    std::io::stdin()
+        .read_line(&mut input)
+        .unwrap_or_else(|e| fatal(&e.to_string()));
+    let mut input = input.as_bytes();
+    while let Some((b'\n' | b'\r', rest)) = input.split_last() {
+        input = rest;
     }
-    let len = len as u64;
+
     let str_proto = INIT_PARAM.with(|init_param| (*init_param.get()).str_prototype);
-    let pointer = alloc_obj(str_proto, len, rbp, rsp);
+    let pointer = alloc_obj(str_proto, input.len() as u64, rbp, rsp);
     std::ptr::copy_nonoverlapping(
         input.as_ptr(),
         (pointer as *mut u8).add(size_of::<ArrayObject>()),
@@ -182,11 +187,17 @@ pub unsafe extern "C" fn input(rbp: *const u64, rsp: *const u64) -> *mut Object 
 /// Initialize runtime
 ///
 /// # Safety
-///  - `*init_param` never changes after calling this function
-///  - Other safety requirements on `InitParam`
+///  - `init_param` is not null.
+///  - `*init_param` content never changes after calling this function.
+///  - Other safety requirements on `InitParam`.
 #[export_name = "$init"]
 pub unsafe extern "C" fn init(init_param: *const InitParam) {
     INIT_PARAM.with(|i| i.set(init_param));
+}
+
+pub(crate) fn fatal(message: &str) -> ! {
+    eprintln!("Fatal error: {}", message);
+    abort();
 }
 
 fn exit_code(code: i32) -> ! {

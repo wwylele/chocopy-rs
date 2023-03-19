@@ -44,7 +44,7 @@ unsafe fn walk(var: *const u64) {
 }
 
 pub unsafe fn collect(rbp: *const u64, rsp: *const u64) {
-    let init_param = INIT_PARAM.with(|init_param| init_param.get().as_ref().unwrap());
+    let init_param = INIT_PARAM.with(|init_param| &*init_param.get());
     let mut rip = *rsp.offset(-1) as *const u8;
     let mut current_frame = rbp;
     loop {
@@ -85,8 +85,8 @@ pub unsafe fn collect(rbp: *const u64, rsp: *const u64) {
         } else {
             *cur = (*object).gc_next;
 
-            let size = calculate_size((*object).prototype, || {
-                unsafe{(*(object as *mut ArrayObject)).len}
+            let size = calculate_size((*object).prototype, || unsafe {
+                (*(object as *mut ArrayObject)).len
             });
 
             drop(Box::from_raw(std::slice::from_raw_parts_mut(

@@ -5,9 +5,12 @@ pub const FUNCTION_POINTER_SIZE: u32 = 8;
 
 #[repr(i32)]
 pub enum TypeTag {
+    // Normal objects
     Other = 0,
     Int = 1,
     Bool = 2,
+
+    // Array objects
     Str = 3,
     PlainList = -1,
     RefList = -2,
@@ -15,7 +18,7 @@ pub enum TypeTag {
 
 #[repr(C)]
 pub struct Prototype {
-    pub size: i32,
+    pub size: i32, // >= 0 for normal object. < 0 for array object
     pub tag: TypeTag,
     pub map: *const u8,
     // followed by other method pointers
