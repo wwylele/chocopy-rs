@@ -1,7 +1,7 @@
 use crate::location::*;
 use enum_dispatch::*;
 use once_cell::sync::Lazy;
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
