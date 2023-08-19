@@ -632,7 +632,7 @@ pub fn link(
     call \"{}\" amd64
     link /NOLOGO /NXCOMPAT /OPT:REF,NOICF \
     \"{}\" \"{}\" /OUT:\"{}\" \
-    kernel32.lib advapi32.lib ws2_32.lib userenv.lib Bcrypt.lib {} \
+    kernel32.lib advapi32.lib ws2_32.lib userenv.lib Bcrypt.lib ntdll.lib {} \
     /SUBSYSTEM:CONSOLE /DEBUG",
                 windows_path_escape(&vcvarsall)?,
                 windows_path_escape(obj_path)?,
